@@ -1,0 +1,2642 @@
+#!/bin/bash
+
+#
+. /etc/environment
+export PATH
+
+## -------------------- colourful print --------------------
+## ANSI Foreground color codes:
+## 30=black 31=red 32=green 33=yellow 34=blue 35=magenta 36=cyan 37=white 39=default
+## ANSI Background color codes:
+## 40=black 41=red 42=green 43=yellow 44=blue 45=magenta 46=cyan 47=white 49=default
+COLOR_RED=$(    echo -e "\e[31;49m" )
+COLOR_GREEN=$(  echo -e "\e[32;49m" )
+COLOR_YELLO=$(  echo -e "\e[33;49m" )
+COLOR_BLUE=$(   echo -e "\e[34;49m" )
+COLOR_MAGENTA=$(echo -e "\e[35;49m" )
+COLOR_CYAN=$(   echo -e "\e[36;49m" )
+COLOR_WHILE=$(   echo -e "\033[1m" )
+COLOR_RESET=$(  echo -e "\e[0m"     )
+      
+## *msg argv: "$str"
+msg()  { echo "$@";                               }
+rmsg() { echo "${COLOR_RED}$*${COLOR_RESET}";     }
+gmsg() { echo "${COLOR_GREEN}$*${COLOR_RESET}";   }
+ymsg() { echo "${COLOR_YELLO}$*${COLOR_RESET}";   }
+bmsg() { echo "${COLOR_BLUE}$*${COLOR_RESET}";    }
+mmsg() { echo "${COLOR_MAGENTA}$*${COLOR_RESET}"; }
+cmsg() { echo "${COLOR_CYAN}$*${COLOR_RESET}";    }
+wmsg() { echo "${COLOR_WHILE}$*${COLOR_RESET}";   }
+					
+# colourful print without "\n"
+msg_()  {  msg "$@" | tr -d '\n'; }
+rmsg_() { rmsg "$@" | tr -d '\n'; }
+gmsg_() { gmsg "$@" | tr -d '\n'; }
+ymsg_() { ymsg "$@" | tr -d '\n'; }
+bmsg_() { bmsg "$@" | tr -d '\n'; }
+mmsg_() { mmsg "$@" | tr -d '\n'; }
+cmsg_() { cmsg "$@" | tr -d '\n'; }
+wmsg_() { wmsg "$@" | tr -d '\n'; }
+
+#
+# path defines
+YPPATH="/var/ybs"
+YPPATH_LIB="$YPPATH/pbslib"
+YPPATH_SOURCE="$YPPATH/sources"
+YPPATH_SCRIPT="$YPPATH_LIB"
+YPPATH_FIELD="/tmp/ybs"
+
+YPKPATH="/var/ypkg"
+YPPATH_UNI="$YPKPATH/packages/universe"
+YPPATH_LOCAL_UNI="$YPKPATH/local/universe"
+
+YPPATH_DB="$YPKPATH/db"
+YPPATH_WORLD="$YPPATH_DB/world"
+
+#
+PACK_SUFFIX="ypk"
+
+#
+XZ="xz"
+
+#
+pkgdata="pkgdata"
+pkginfo="pkginfo"
+control="control.xml"
+filelist="filelist"
+pkgpbs="pkgpbs"
+
+#
+blank_funcs () {
+	if [ "x$1" = "xpbs" ];then
+		DESCRIPTION=""
+		HOMEPAGE=""
+		REPO=""
+		LICENSE=""
+		PRIORITY=""
+		PACKAGER=""
+		SRC_URI=""
+		RDEPEND=""
+		BDEPEND=""
+		RECOMMENDED=""
+		CONFLICT=""
+		NOTES=""
+
+		pbs_init() {
+			:
+		}
+		pbs_unpack() {
+			:
+		}
+		pbs_config() {
+			:
+		}
+		pbs_build() {
+			:
+		}
+		pbs_check() {
+			:
+		}
+		pbs_install() {
+			:
+		}
+		pbs_postinst() {
+			:
+		}
+		pbs_prerm() {
+			:
+		}
+		pbs_postrm() {
+			:
+		}
+	fi
+	if [ "x$1" = "xdesc" ];then
+		INAME=""
+		CATEGORY=""
+		VERSION=""
+		PRIORITY=""
+		TYPE=""
+		REPO=""
+		INSTALL_SIZE=""
+		BUILD_TIME=""
+		BIN_URI=""
+		RDEPEND=""
+		RECOMMENDED=""
+		CONFLICT=""
+		PACK_SIZE=""
+		DESCRIPTION=""
+		SHA=""
+		NAME=""
+		BRIEF=""
+		SPECIFICATION=""
+	fi
+}
+
+#
+#
+is_exist () {
+	ls -d "$1" >/dev/null 2>&1 && return 0 || return 1
+}
+
+
+#
+# check root
+#
+check_root () {
+	if [ "x$UID" != "x0" ];then
+	        rmsg "* You must be root to run this script, Try: "
+        	ymsg "sudo $0 $*"
+       		exit 1
+	fi
+}
+
+#
+# $@ is digital
+# summation 1 2 3
+summation() {
+        local sum=0
+	while [ "x$1" != "x" ]; do
+		local tmp=$1
+		let "sum=sum+tmp"
+		shift
+	done
+	echo $sum
+	return 0
+}
+
+# $1 - name
+# $2 - version
+# is_installed leafpad 0.8.18.1
+#
+is_installed () {
+        local N=$1
+        local V=$2
+        local listfile
+        if [ "x$V" = "x" ]; then
+	        listfile=$(ls $YPPATH_DB/$N/${N}_*.list 2>/dev/null)
+	else
+	        listfile=$(ls $YPPATH_DB/$N/${N}_$V.list 2>/dev/null)
+	fi
+	[ "x$listfile" != "x" ] && return 0 || return 1
+}
+
+#
+get_abspath () {
+	local file="$1"
+	if [ ! -h "$file" ]; then
+		 file=$(readlink -f "$file")
+	else
+		file=$(cd $(dirname $file) 2>/dev/null; pwd)/${file##*/}
+	fi
+	echo "$file"
+}
+
+#
+#check: if $2 in $1, return 0, else return 1
+str_isIn() {
+	local string=($1)
+	local substring="$2"
+	for i in ${string[@]}; do
+		if [ "x$i" = "x$substring" ]; then
+			return 0
+		fi
+	done
+	return 1
+}
+
+#
+#
+err_check() {
+	if [ $? != 0 ]; then
+		rmsg "$1"
+		exit 1
+	fi
+}
+
+
+#
+atom_parse() {
+	local ATOM
+	local RR
+	case x${1##*.} in
+	xpbs)              ATOM="${1%.pbs}" ;;
+	x$PACK_SUFFIX)     ATOM="${1%.$PACK_SUFFIX}" ;;
+	xlist)		   ATOM="${1%.list}" ;;
+	xdesc)		   ATOM="${1%.desc}" ;;
+	*)                 ATOM="$1"
+	esac
+	N=${ATOM%%_[0-9]*}
+	N=${N%%_}
+	VR=${ATOM#$N}
+	VR=${VR#_}
+	V=${VR%%-[a-zA-z]*}
+	R=${VR##$V}
+}
+
+#
+#return type and name. 
+atom_parse_type() {
+	if echo $1 |grep "/" >/dev/null 2>/dev/null; then
+		T=${1%%/*}
+	else
+		T=
+	fi
+	NV=${1##$T/}
+	atom_parse $NV
+}
+
+#
+#
+atom_parse_path() {
+	local atom
+
+	atom=${1##*/}
+	T=${1%/*}
+	T=${T%/*}
+	T=${T##*/}
+
+	#files dir is with *.pbs, contains patchs and user-defined files 
+	FILES_PATH="${1%/*}"
+	
+	atom_parse "$atom"
+}
+
+#
+#compare 2 versions, such 2.6.9 and 2.6.10
+#return 0 if same. 
+#return 1 if $1 is grater than $2 
+#return 2 if $1 is lesser then $2
+# alpha < beta < gamma  < rc < final (Todo)
+atom_vercmp() {
+	v1=$1
+	v2=$2
+	if [ "x$v1" = "x$v2" ];then
+		return 0
+	fi
+	a=($(echo $v1 |awk -F- '{print $1" "$2" "$3" "$4" "$6" "$7}'))
+	b=($(echo $v2 |awk -F- '{print $1" "$2" "$3" "$4" "$6" "$7}'))
+	maxnum=${#a[@]}
+	[ "1${#a[@]}" -lt "1${#b[@]}" ] && maxnum=${#b[@]}
+	for ((i=0; i<maxnum; i++)); do
+		a=${a[i]} 
+		b=${b[i]}
+		#only alpha
+		aoa=$(echo $a |tr -d '[:digit:]' |tr -d '[:punct:]')
+		boa=$(echo $b |tr -d '[:digit:]' |tr -d '[:punct:]')
+		case $aoa$boa in
+			#1.2.3 3.2.1
+			"")	
+				[ "x$a" = "x$b" ] && continue
+				v1=$a.
+				v2=$b.
+				while true; do
+					a=${v1%%.*}
+					b=${v2%%.*}
+					[ "$a"0 -gt "$b"0 ] && return 1
+					[ "$a"0 -lt "$b"0 ] && return 2
+					v1="${v1#*.}"
+				        v2="${v2#*.}"
+				done
+				continue ;;
+			#"" rc1 
+			rc)
+				[ "x$aoa" = "x" ] && return 1
+				[ "x$boa" = "x" ] && return 2
+				continue ;;
+			#"" ylmf1 
+			ylmf)
+				[ "x$aoa" = "x" ] && return 2
+				[ "x$boa" = "x" ] && return 1
+				continue 	;;
+			#rc1  rc2 
+			#ylmf1 ylmf2
+			rcrc|ylmfylmf)
+				a=${a##rc}
+				b=${b##rc}
+				a=${a##ylmf}
+				b=${b##ylmf}
+				[ "1$a" -gt "1$b" ] && return 1
+				[ "1$a" -lt "1$b" ] && return 2
+				continue 	;;
+			#rc1 ylmf1
+			#ylmf1 rc1
+			rcylmf|ylmfrc)
+				a=${a##rc*}
+				[ "x$a" = "x" ] && return 2
+				a=${a##ylmf*}
+				[ "x$a" = "x" ] && return 1
+				continue	;;
+			#
+			*)
+				[ "x$a" = "x$b" ] && continue
+				v1=$a.
+				v2=$b.
+				while true; do
+					a=${v1%%.*}
+					b=${v2%%.*}
+					a=$(echo $a |tr -d '[:alpha:]')
+					b=$(echo $b |tr -d '[:alpha:]')
+					[ "$a"0 -gt "$b"0 ] && return 1
+					[ "$a"0 -lt "$b"0 ] && return 2
+					v1="${v1#*.}"
+				        v2="${v2#*.}"
+				done
+				continue ;;
+			esac
+		done
+	return 0
+}
+
+#compare 2 atoms, such as linux_2.6.9.pbs and linux_2.6.10.pbs
+#return 0 if same. 
+#return 1 if $1 is grater than $2 
+#return 2 if $1 is lesser then $2
+atom_cmp() {
+	local R1
+	local V1
+	local N1
+
+	#echo "Begin Compare: $1 $2"
+
+	atom_parse $1
+	R1=$R
+	V1=$V
+	N1="$N"
+	#echo "N1="$N"1, V1=$V1, R1=$R1"
+
+	atom_parse $2
+	#echo "N2="$N", V2=$V, R2=$R"
+
+	#compare version
+	atom_vercmp $V1 $V
+}
+
+#compare 2 atoms pth, such as /var/ypkg/sys/linux-2.6.9.pbs and linux-2.6.10.pbs
+#return 0 if same. 
+#return 1 if $1 is grater than $2 
+#return 2 if $1 is lesser then $2
+atom_cmp_path() {
+	local R1
+	local V1
+	local N1
+
+	#echo "Begin Compare: $1 $2"
+	atom_parse_path $1
+	R1=$R
+	V1=$V
+	N1="$N"
+	#echo "N1="$N"1, V1=$V1, R1=$R1"
+
+	atom_parse_path $2
+	R2=$R
+	V2=$V
+	N2=$N
+	#echo "N2="$N", V2=$V, R2=$R"
+
+	#compare version
+	return $(atom_vercmp $V1$R1 $V2$R2)
+}
+
+#
+#split csv line. 
+csv_split() {
+	count=0
+	local retv=$1
+	unset value
+
+	while [ -n "$retv" ]; do
+		value[$count]=${retv%%,*}
+
+		retv=${retv#${value[$count]}}
+		retv=${retv#,}
+		let "count++"
+	done
+}
+
+#
+# search packages
+#
+
+#list all pack types
+ypkg_get_types() {
+	ypkg_types=`ls $YPPATH_LIB 2>/dev/null`
+}
+
+ypkg_get_packages() {
+	ypkg_packs=`ls $YPPATH_LIB/$1 2>/dev/null`
+}
+
+#Get Newest file in dir $1
+#return path of the newest on in $newest
+ypkg_getnewest() {
+	local files file files_ready
+	newest=""
+	#specify $V$R
+	if [ "x$V$R" != "x" ]; then
+		newest=$(ls $1/${N}_$V$R.pbs 2>/dev/null)
+		return 0
+	fi
+	files=$(ls $1/*.pbs 2>/dev/null)
+	for file in $files;do
+		blank_funcs pbs
+		. $file
+		case $REPO in
+		 [Tt]esting)  [ "x$ACCEPT_REPO" = "xtesting" ] && files_ready+="$file " || continue  ;;
+		    	  *)  files_ready+="$file "
+		esac
+	done
+	for file in $files_ready;do
+		if [ -z $newest ]; then
+			newest=$file
+		else
+			#compare 
+			atom_cmp_path $file $newest
+			[ "$?" == "1" ] && newest=$file
+		fi
+	done
+	return 1
+}
+
+#get all pbs versions, ret to $allver
+#$1 is path 
+ypkg_getallpbsver() {
+	local files file repo
+	local tmpfile=$(mktemp)
+	local tmpfile1=$(mktemp)
+	allver=""
+	files="$(ls $1/*.pbs 2>/dev/null) "
+	for file in $files; do
+		blank_funcs pbs
+		blank_funcs desc
+		. $file
+		atom_parse_path $file
+		case $REPO in 
+			[Tt]esting) repo="t" ;;
+			[Ss]table)  repo="s" ;;
+			        *)  repo="s" 
+		esac
+		if [ "x$BUILD_TIME" != "x" ]; then
+			BUILD_TIME=$(date -d "1970-01-01 UTC $BUILD_TIME seconds" +%F,%T 2>/dev/null)
+		fi
+		if [ -z "$allver" ]; then
+			allver="$(mmsg $V$R[$repo]) $BUILD_TIME $INSTALL_SIZE $PACK_SIZE"
+		else
+			if grep -q "$T/${N}_$V$R" $tmpfile1; then
+				continue
+			else
+				allver+=" | $(mmsg $V$R[$repo]) $BUILD_TIME $INSTALL_SIZE $PACK_SIZE"
+			fi
+		fi
+		echo "$T/${N}_$V$R" >>$tmpfile1
+	done
+	rm -r $tmpfile $tmpfile1  2>/dev/null
+}
+
+#
+ypkg_searchInstalled() {
+	local searchpath=$YPPATH_DB/$2	
+	local findcnt=0
+
+	local files=$(ls $searchpath/*.pbs 2>/dev/null)
+	local file
+	local -a value
+	local t1
+	local t2
+	local tsize
+	local tmpfile
+
+	tmpfile=$(mktemp -p $workdir)
+	status=""
+	for file in $files; do
+		atom_parse_path $file
+		. $file
+		#	blank_funcs desc
+		#for install time
+		desc=${file%*.pbs}.desc
+		. $desc
+		if [ "xINSTALL_TIME" != "x" ]; then
+			INSTALL_TIME=$(date -d "1970-01-01 UTC $INSTALL_TIME seconds" +%F,%T 2>/dev/null)
+		fi
+		echo "$(gmsg Installed:) $(ymsg $V$R)    $INSTALL_TIME"
+		let "findcnt++"
+		status="installed"
+	done
+
+	if [ "$findcnt" == "0" ];then
+		#echo -e "\tInstalled:\t None"
+		echo "$(gmsg "Installed:") None"
+		status="uninstall"
+	fi	
+	rm -rf $tmpfile 2>/dev/null
+}
+
+#find one packge $1 is type, $2 is package name, $3 is index
+#
+ypkg_searchOK() {
+	local allver
+	local install_result
+	
+	tmpfile=$(mktemp -p $workdir)
+	#3333	
+	ypkg_searchInstalled $1 $2  >$tmpfile
+	
+	[ "x$status" == "xinstalled" ] && gmsg_ "[I] " || msg_ "[*] "
+	echo "$(wmsg $2)"
+	
+	cat $tmpfile |while read line; do
+		echo -e "\t$line"
+	done
+
+	#get newest version
+	ypkg_getallpbsver $YPPATH_LIB/$1/$2        #$YPPATH_DB/$2
+	echo -e "\t$(gmsg "Available:") $allver"
+	echo -e "\t$(gmsg "Homepage:") $HOMEPAGE"
+	echo -e "\t$(gmsg "Description:") $DESCRIPTION"
+
+	#
+	blank_funcs pbs
+	blank_funcs desc
+	echo 
+	[ -f $tmpfile ] && rm -r $tmpfile
+}
+
+#
+ypkg_search() {
+	local results
+	local pack
+	local count=0
+	local iname
+	local lastiname=""
+	local lastitype=""
+	
+	workdir="$(mktemp -d)"
+	trap "rm -r $workdir; return 1" INT
+
+	#parae input files
+	atom_parse_type $1
+	iname="*"$N"*.pbs"
+	if [ "x$T" != "x" ]; then
+		results=$(find $YPPATH_LIB $YPPATH_DB -iname "$iname" | grep "/$T/")
+	else
+		results=$(find $YPPATH_LIB -iname "$iname")
+	fi
+	#
+	if [ "x$results" = "x" ];then 
+		rmsg "* [Error]: $1 not found."
+		echo 
+		return
+	fi
+	#
+	tempfile=$(mktemp -p $workdir)
+	for pack in $results; do
+		atom_parse_path $pack
+		if [ "x$T" = "x$lastitype" -a "x$N" = "x$lastiname" ]; then
+			#skip.
+			continue
+		fi
+		if grep -q "$T/$N/${N}_$V$R" $tempfile; then
+			continue
+		fi
+		lastitype="$T"
+		lastiname="$N"
+		ypkg_searchOK "$T" "$N" "$pack"
+	done
+	[ -d $workdir ] && rm -r $workdir
+}
+
+#
+# download packeage
+#
+wget_do () {
+	local uri="$1"
+	local fname="$2"
+	msg "* downloading from ${uri}..."
+	if [ "x$(echo $uri |cut -c 1-5)" == "xhttps" ];then	
+		wget --tries=3 --retry-connrefused --wait=2 --no-check-certificate $uri -O ${YPPATH_SOURCE}/${fname}.tmp && return 0
+	else
+		wget --tries=3 --retry-connrefused --wait=2 $uri -O ${YPPATH_SOURCE}/${fname}.tmp && return 0
+	fi
+	return 1
+}
+
+#check and download package, $1 is URL, $2 is local file name.
+check_and_download_raw() {
+	local uri=$1
+	local fname=$2
+	local download
+	#
+	case ${uri%%:*} in
+		svn)	;;
+		git)	
+		name=${fname%*.git}
+		cd ${YPPATH_SOURCE}
+		if [ -d $name ];then
+			cd $name && git pull
+		else
+			git clone ${1} 
+		fi
+		[ "$?" == "0" ] && return 0 ;;
+    http|https|ftp|*)	
+		if [ -f ${YPPATH_SOURCE}/${fname} ]; then
+			#printf "%s exists, Skip.\n" $fname
+			msg "* $YPPATH_SOURCE/$fname exists, Skip."
+			return 0
+		else
+			rm -f ${YPPATH_SOURCE}/${fname}.tmp 2>/dev/null
+			if wget_do $uri $fname; then
+				download="done"
+			else
+				#try ylmfos dist source
+				uri="$YPPATH_DIST_URI/${fname}"
+				wget_do $uri $fname && download="done" || download="error"
+			fi
+			if [ "x$download" = "xdone" ]; then
+				gmsg "* rename ${YPPATH_SOURCE}/${fname}"
+				mv ${YPPATH_SOURCE}/${fname}.tmp ${YPPATH_SOURCE}/${fname}
+				return 0
+			fi
+		fi
+	esac
+	printf "download failed, quit.\n"
+	return 1
+}
+
+#check and download package, $1 is URL.
+check_and_download() {
+	#local fname=${1##*/}
+	local url="$1"
+	local fname=$(basename $url)
+	check_and_download_raw $1 $fname
+}
+
+
+# return specifid pbs files in $newest, with full path
+ypkg_getpbsfile() {
+	local results
+	local pack
+	local count=0
+	local iname
+	local find_dir
+	atom_parse_type $1
+	find_dir=$2
+	case $find_dir in 
+		DB)	find_dir=$YPPATH_DB	;;
+		*)	find_dir=$YPPATH_LIB	
+	esac
+	iname="$N"
+	if [ "x$N" == "x" ]; then
+		echo "No package specified."
+		return 1
+	fi
+	if [ "x$T" != "x" ]; then
+		results=$(find $find_dir -maxdepth 2 -type d -iname "$iname" | grep "/$T/")
+	else
+		results=$(find $find_dir -maxdepth 2 -type d -iname "$iname")
+	fi
+	for pack in $results; do
+		let "count++"
+	done
+	if [ "$count" == "1" ]; then
+		ypkg_getnewest $results
+		return 0
+	fi
+	if [ "$count"0 -gt 10 ]; then
+		#more results
+		rmsg "Too more results: "
+		echo $results
+		return 1
+	fi
+}
+
+#
+ypkg_begin_download() {
+	local url
+
+	#find newest version.
+	atom_parse_path $1
+	ymsg ">> $T/${N}_$V$R begin download..."
+
+	#clear all routines by include template file
+	blank_funcs pbs
+
+	YPB_CONFIG="$YPINST_PREFIX "
+	YPB_CONFIG="--prefix=/usr
+		    --sysconfdir=/etc
+		    --localstatedir=/var
+		    --infodir=/usr/share/info
+		    --mandir=/usr/share/man
+		    --enable-shared "
+		    #--disable-static
+
+	YPPATH_SCRIPT="$YPPATH_LIB/$T/$N"
+
+	#include package build scripts
+	if [ -f "$1" ];then
+		. $1
+		err_check "* [Error]: $1 is invalid! "
+	else
+		err_check "* [Error]: $1 not found"
+	fi
+
+	#init build script file
+	pbs_init
+
+	#create source directory.
+	mkdir -p $YPPATH_SOURCE
+	err_check "* [Error]: Create dir $YPPATH_SOURCE failed."
+
+	#download all files
+	for url in ${SRC_URI}; do
+		#echo $url
+		check_and_download $url
+		err_check "* [Error]: download $url failed."
+	done
+
+	return 0
+}
+
+#
+ypkg_download() {
+	ypkg_getpbsfile "$1"
+	if [ "$?" == "0" ]; then
+		#found, download it
+		ypkg_begin_download $newest
+		return 0
+	fi
+	rmsg "* $1 not found."
+	return 1
+}
+
+
+#
+#strip unnessesary i18n in path $1
+ypkg_strip_i18n() {
+	local ipath="$1/usr/share/locale"
+	local i18ns=$(ls $ipath 2>/dev/null)
+	local name
+
+	for i in $i18ns; do
+		name=${i##*/}
+		str_isIn "$YP_I18N" $name 
+		if [ "$?" == "1" ]; then
+			#not in YP_I18N, remove.
+			#msg ">>> strip i18n $name.."
+			rm -rf $ipath/$name
+		fi
+	done
+}
+
+#strip unnessesary i18n in man path.
+ypkg_strip_mani18n() {
+	local ipath="$1/usr/share/man"
+	local i18ns=$(ls $ipath 2>/dev/null)
+	local name
+
+	for i in $i18ns; do
+		name=${i##*/}
+
+		#skip man1 -- man9
+		str_isIn "$name" "man"
+		if [ "$?" == "1" ]; then
+			continue
+		fi
+
+		str_isIn "$YP_I18N" $name 
+		if [ "$?" == "1" ]; then
+			#not in YP_I18N, remove.
+			#msg ">>> strip man-i18n $name.."
+			rm -rf $ipath/$name
+		fi
+	done
+}
+
+#strip binary in directory $1
+ypkg_strip_bin() {
+	#msg ">>> strip debug info.."
+	find $1/{,usr/}{bin,sbin} -type f -exec strip --strip-all '{}' ';' 2>/dev/null
+
+	find $1/{,usr/}lib -type f -exec strip --strip-debug '{}' ';' 2>/dev/null
+}
+
+#compress man docs
+ypkg_gzip_man() {
+	#msg ">>> compress man.."
+	find $1/usr/{,share/}{man,doc} -type f \
+  		-exec gzip '{}' ';' 2>/dev/null
+}
+
+#compress info docs
+ypkg_gzip_info() {
+	local ipath=""
+
+	[ -d $1/usr/share/info ] && ipath=$1/usr/share/info
+	[ -d $1/usr/share/info ] && ipath=$1/usr/share/info
+
+	#quit if not found
+	[ -z "$ipath" ] && return 0
+
+	ymsg ">>> compress $ipath"
+
+	#first, rename dir.
+	[ -f ${ipath}/dir ] && mv ${ipath}/{dir,dir-"$N".info}
+	find $ipath -type f \
+  		-exec gzip '{}' ';' 2>/dev/null
+}
+
+# System Xorg Desktop Utilities Network Games Graphics Video             
+# Audio Office Development Security Science-education Drivers
+# Multimedia Misc Non-free
+#
+ypkg_get_category() {
+	local type  category
+	type=$1
+	case ${type%%-*} in
+ 	 #	 sys)	category="System"		;;
+	 #       x11)    category="Xorg"		;;
+#gnome|kde|lxde|xfce)    category="Desktop"		;;
+		#app)	category="Utilities"		;;
+sys|x11|gnome|kde|lxde|xfce|app)
+		        category="Utilities"            ;;
+       www|net|mail)	category="Network"		;;
+       		 im)    category="IM"		        ;;
+    	      games)	category="Games" 		;;
+    	   graphics)	category="Graphics" 		;;
+    	      media)	category="Multimedia" 		;;
+    	     office)	category="Office" 		;;
+    	        dev)	category="Development" 		;;
+    	   security)	category="Security" 		;;
+	   drivers)	category="Drivers"		;;
+	        sci)	category="Science-education"    ;;
+		non)	category="Non-free"		;;
+    	       misc)	category="Misc"                 ;;
+    	          *)	category="Misc"                 ;;
+	esac
+	echo $category
+}
+
+#
+split_dev() {
+	local dir="$1"
+	local destdir="$workdir"
+	#*.la *.a
+	devlib=$(find $dir/{usr/lib,lib} -type f -name "*.la" -o -name "*.a" 2>/dev/null)
+	if [ x"$devlib" != "x" ]; then
+		for lib in $devlib; do
+			i=${lib#$dir}
+			libdir=${i%/*}
+			ypkg_domv $lib  $destdir/$N-dev_$V$R/$libdir
+		done
+	fi
+	#pkgconfig
+	pcdir=$(find $dir -type d -name "pkgconfig" 2>/dev/null)
+	if [ x"$pcdir" != "x" ]; then
+		for pc in $pcdir; do
+			i=${pc#$dir}
+			dirpc=${i%/*}
+			ypkg_domv $pc $destdir/$N-dev_$V$R/$dirpc
+		done
+	fi
+	#/usr/include/*.h
+	headers=$(ls -d $dir/usr/include/* 2>/dev/null)
+	if [ x"$headers" != "x" ]; then
+		ypkg_domv $dir/usr/include $destdir/$N-dev_$V$R/usr
+	fi
+	#/usr/share/aclocal/ogg.m4
+	acl=$(ls -d $dir/usr/share/aclocal/* 2>/dev/null)
+	if [ x"$acl" != "x" ]; then
+		ypkg_domv $dir/usr/share/aclocal $destdir/$N-dev_$V$R/usr/share
+	fi
+	#/usr/share/*/include  /usr/lib/*/include
+	headers_extra=$(ls -d $dir/usr/share/*/include $dir/usr/lib/*/include 2>/dev/null)
+	if [ "x$headers_extra" != "x" ]; then
+		ls -1d $dir/usr/share/*/include $dir/usr/lib/*/include 2>/dev/null |while read line;do
+			local tmp=${line##$dir}
+			local tmp=${tmp%%/include}
+			ypkg_domv $line $destdir/$N-dev_$V$R/$tmp
+		done
+	fi
+	[ -d $destdir/$N-dev_$V$R ] && echo $destdir/$N-dev_$V$R && return 0
+	return 1
+}
+
+#
+split_doc() {
+	local dir="$1"
+	local destdir="$workdir"
+	docs=$(ls -d $dir/usr/share/doc/* 2>/dev/null)
+	info=$(ls -d $dir/usr/share/info/* 2>/dev/null)
+	gtk_docs=$(ls -d $dir/usr/share/gtk-doc/html/* 2>/dev/null)
+	if [ x"$docs" != "x" ]; then
+		ypkg_domv $dir/usr/share/doc $destdir/$N-doc_$V$R/usr/share
+	fi
+	if [ x"$info" != "x" ]; then
+		ypkg_domv $dir/usr/share/info $destdir/$N-doc_$V$R/usr/share
+	fi
+	if [ x"$gtk_docs" != "x" ]; then
+		ypkg_domv $dir/usr/share/gtk-doc/html $destdir/$N-doc_$V$R/usr/share/gtk-doc
+	fi
+	#ypkg_gzip_info $destdir/$N-doc_$V$R
+	[ -d $destdir/$N-doc_$V$R ] && echo $destdir/$N-doc_$V$R && return 0
+	return 1
+}
+
+
+#
+split_i18n() {
+	local dir="$1"
+	local localdir="usr/share/locale"
+	if ls -d $dir/$localdir/* >/dev/null 2>/dev/null; then
+		ls -d $dir/$localdir/* |while read line;do
+			lang=${line##*/}
+			ypkg_domv $dir/$localdir/$lang      $workdir/$N-i18n-${lang}_$V$R/$localdir
+			echo $workdir/$N-i18n-${lang}_$V$R
+		done
+		return 0
+	fi
+	return 1
+}
+
+#split customize
+#split_cus $YPPATH_DEST $MYSPLIT
+#
+split_cus() {
+	local dir=($@)
+	let end="${#dir[@]}-1"
+	local name=${dir[$end]}
+	local destdir="$workdir/${name}_$V$R"
+	for ((i=1; i<${#dir[@]}; i++));do 
+		if is_exist "$YPPATH_DEST/${dir[$i]}"; then
+			ypkg_domv "$YPPATH_DEST/${dir[$i]}" $destdir/$(dirname ${dir[$i]})
+		fi
+	done
+	if is_exist $destdir; then
+		echo $destdir
+		return 0
+	fi
+	return 1
+}
+
+#
+find_desktop() {
+	local source_dir=$1
+	[ -f $source_dir/usr/share/applications/$N-gtk.desktop ] && desktop="$source_dir/usr/share/applications/$N-gtk.desktop"
+	[ -f $source_dir/usr/share/applications/$N-[[:digit:]].desktop ] && desktop="$(ls $source_dir/usr/share/applications/$N-[[:digit:]].desktop)"
+	[ -f $source_dir/usr/share/applications/$N.desktop ] && desktop="$source_dir/usr/share/applications/$N.desktop"
+	if [ "x$DESKTOPFILE" != "x" ]; then
+		[ -f "$source_dir/$DESKTOPFILE" ] && desktop="$source_dir/$DESKTOPFILE"
+		[ -f "$source_dir/usr/share/applications/$DESKTOPFILE" ] && desktop="$source_dir/usr/share/applications/$DESKTOPFILE"
+	fi
+	if [ "x$desktop" != "x" ] && [ -f $desktop ]; then
+		echo "$desktop"
+		return 0
+	fi
+	return 1
+}
+
+#
+find_icon() {
+	local desktop=$1 
+	local source_dir=$2
+	icon_name="$(grep ^Icon= $desktop |sed -e 's/Icon=//g')"
+	if [ -f "$source_dir/$icon_name" ]; then
+		icon="$source_dir/$icon_name"
+	else
+		[ -f $source_dir/usr/share/icons/hicolor/scalable/apps/$icon_name.svg ] && \
+		icon="$source_dir/usr/share/icons/hicolor/scalable/apps/$icon_name.svg"
+		icon_name=${icon_name%.svg}
+		icon_name=${icon_name%.png}
+		icon_name=${icon_name%.xpm}
+		icon_name=${icon_name%.jpg}
+		for i in 24x24 22x22 32x32 48x48; do
+			icon="$source_dir/usr/share/icons/hicolor/"$i"/apps/$icon_name.png"
+			[ -f $icon ] && break || continue
+		done
+	fi
+	[ -f $source_dir/usr/share/icons/$icon_name.png ] && icon="$source_dir/usr/share/icons/$icon_name.png"
+	[ -f $source_dir/usr/share/pixmaps/$icon_name.svg ] && icon="$source_dir/usr/share/pixmaps/$icon_name.svg"
+	[ -f $source_dir/usr/share/pixmaps/$icon_name.xpm ] && icon="$source_dir/usr/share/pixmaps/$icon_name.xpm"
+	[ -f $source_dir/usr/share/pixmaps/$icon_name.png ] && icon="$source_dir/usr/share/pixmaps/$icon_name.png"
+	[ -f $source_dir/usr/share/pixmaps/$icon_name ] && icon="$source_dir/usr/share/pixmaps/$icon_name"
+	if [ "x$ICONFILE" != "x" ]; then
+		[ -f "$source_dir/usr/share/pixmaps/$ICONFILE" ] && icon="$source_dir/usr/share/pixmaps/$ICONFILE"
+	fi
+	if [ "x$icon" != "x" ] && [ -f $icon ]; then
+		echo "$icon"
+		return 0
+	fi
+	return 1
+}
+
+#
+mkpackage() {
+	local sha
+	local pbsfile
+	local atom
+	local source_dir="$1"  
+	atom_parse_path $source_dir
+	local dbdir="${YPPATH_DB#/}/$N"
+	
+	#creat pkgdate
+	#
+	cd $source_dir
+	
+	find |sort -r |fileinfo > $workdir/${N}_$V$R.list
+	pbsfile="$(ls $YPPATH_SCRIPT/${N}_$V$R.pbs 2>/dev/null)"
+	pbsfile=$(readlink -f $pbsfile 2>/dev/null)
+	build_date="$(date +%s)"
+	declare -a install_size=($(du $source_dir -sb))
+	install_size=${install_size[0]}
+	mkdir -p $dbdir
+	cp $pbsfile $dbdir  2>/dev/null
+	for i in list config; do
+		if [ -f $workdir/${N}_$V$R.${i} ]; then
+			cp $workdir/${N}_$V$R.${i} $dbdir  2>/dev/null
+		fi
+	done
+	[ -f $dbdir/${N}_$V$R.config ] && gzip $dbdir/${N}_$V$R.config
+	echo $YPB_CONFIG    >$dbdir/${N}_$V$R.para
+
+	#creat pkginfo
+	#
+	cd ..
+
+	pkgdir="${N}_$V$R-pkginfo"
+	mkdir -p $pkgdir
+	if [ "x$pbsfile" != "x" ] && [ -f $pbsfile ]; then
+		TT=
+		. $pbsfile  2>/dev/null
+		atom_parse_path $pbsfile
+		TT=$T
+	fi
+	category=$(ypkg_get_category "$TT")
+	name=$N
+	version=$V$R
+	priority=$PRIORITY
+	[ x"$REPO" = x ] && REPO="stable"
+	repo=$REPO
+	subdir="$(echo $N |cut -b1)"
+	uri="$subdir/${N}_$V$R.$PACK_SUFFIX"
+	license="$LICENSE"
+	homepage="$HOMEPAGE"
+	depend=$(echo $RDEPEND |xargs |tr " " ",")
+	bdepend=$(echo $BDEPEND |xargs |tr " " ",")
+	redepend=$(echo $RECOMMENDED |xargs |tr " " ",")
+	conflict=$(echo $CONFLICT |xargs |tr " " ",")
+	description=$(echo $DESCRIPTION |sed 's/&/and/g')
+	case $name in
+		$nn-i18n-*) 
+			depend=$nn
+			bdepend=
+			redepend=
+			conflict=
+			description="$(echo $DESCRIPTION |sed 's/&/and/g') (langpack)" ;;
+		$nn-dev)
+			depend=
+			bdepend=
+			redepend=
+			conflict=
+			description="$(echo $DESCRIPTION |sed 's/&/and/g') (development files)" ;;
+		$nn-doc)
+			depend=$nn
+			bdepend=
+			redepend=
+			conflict=
+			description="$(echo $DESCRIPTION |sed 's/&/and/g') (document pack)"
+	esac
+	#
+	cd $source_dir
+	cat >$dbdir/${N}_$V$R.desc <<OOO
+NAME="$name"
+DESCRIPTION="$description"
+HOMEPAGE="$HOMEPAGE"
+REPO="$repo"
+LICENSE="$license"
+PRIORITY="$priority"
+PACKAGER="$PACKAGER"
+SRC_URI="$SRC_URI"
+RDEPEND="$depend"
+BDEPEND="$bdepend"
+RECOMMENDED="$redepend"
+CONFLICT="$conflict"
+BUILD_TIME="$build_date"
+INSTALL_SIZE="$install_size"
+OOO
+	find . |cpio --quiet -o -H newc |$XZ -7 >../$pkgdata
+	declare -a size=($(du ../$pkgdata -sb))
+	size=${size[0]}
+	cd ..
+	desktop=
+	icon_name=
+	icon=
+	gname=
+	gdescription=
+	#desktop and icon
+	desktop=$(find_desktop $source_dir)
+	if [ "x$desktop" != "x" ] && [ -f $desktop ]; then
+		cp $desktop  $pkgdir/$N.desktop
+		cp $desktop  /usr/share/app-info/desktop/$N.desktop
+		icon=$(find_icon $desktop $source_dir)
+		if [ "x$icon" != "x" ] && [ -f $icon ]; then		
+			cp $icon  $pkgdir/
+			cp $icon  /usr/share/app-info/icon/
+		fi
+		gname="genericname type=\"desktop\""
+		gdescription="description type=\"desktop\""
+	else
+		gname="genericname"
+		gdescription="description"
+	fi
+	cat >$pkgdir/$control <<OOO
+<?xml version="1.0" encoding="UTF-8"?>
+<PackageInfo>
+ <Package name="$name">
+   <$gname>
+     <keyword lang="en">$name</keyword>
+   </genericname>
+   <category>$category</category>           
+   <arch>i686</arch>                                        
+   <version>$version</version>                            
+   <priority>$priority</priority>                    
+   <license>$license</license>
+   <homepage>$homepage</homepage>
+   <repo>$repo</repo>                                   
+   <build_date>$build_date</build_date>    
+   <uri>$uri</uri>
+   <$gdescription>
+     <keyword lang="en">$description</keyword>
+   </description> 
+   <data id="0">                                                     
+     <name>pkgdata</name>                           
+     <format>xz</format> 
+     <size>$size</size>
+     <install_size>$install_size</install_size>        
+     <depend>$depend</depend>              
+     <bdepend>$bdepend</bdepend>
+     <recommended>$redepend</recommended>      
+     <conflict>$conflict</conflict>      
+   </data>                               
+ </Package>
+</PackageInfo>
+OOO
+	cd $pkgdir
+	cp $workdir/${N}_$V$R.list $filelist
+	is_exist $pbsfile && cp $pbsfile $pkgpbs
+	tar cjf ../$pkginfo *
+
+	#creat ypkg package
+	#
+	cd ..
+	
+	if [ "x$2" != "x" ]; then
+		target="$2"
+		tar cjf $target $pkgdata  $pkginfo && echo $target
+	else
+		mkdir -p $YPPATH_PACKAGE/$subdir
+		tar cjf $YPPATH_PACKAGE/$uri $pkgdata  $pkginfo && echo $YPPATH_PACKAGE/$uri
+		#update YPPATH_LOCAL_UNI
+		mkdir -p ${YPPATH_LOCAL_UNI%/*}
+		touch $YPPATH_LOCAL_UNI
+		sed -i '/# '"$N $V $R"'/d'                                 $YPPATH_LOCAL_UNI
+		ypkg_find_info			                           $YPPATH_LOCAL_UNI  "remove"
+		declare -a size=($(du $YPPATH_PACKAGE/$uri -sb))
+		size=${size[0]}
+		declare -a sha=($(sha1sum $YPPATH_PACKAGE/$uri))
+		sha=${sha[0]}
+		sed -i '/build_date/i\   <size>'"$size"'</size>'            $pkgdir/$control
+		sed -i '/build_date/i\   <sha>'"$sha"'</sha>'               $pkgdir/$control
+		echo "# $N $V $R"				  	    >>$YPPATH_LOCAL_UNI
+		sed -n '/PackageInfo/,/PackageInfo/p' $pkgdir/$control |sed -e '1d' -e '$d' >>$YPPATH_LOCAL_UNI
+	fi
+}
+
+#
+ypkg_mkpackage() {
+	nn=$N
+	#source packages
+	local spacks="$YPPATH_DEST "
+	if [ "x$YP_I18N" != "x" ];then
+		#strip i18n 
+		ypkg_strip_i18n $YPPATH_DEST
+			
+		#strip unnessesary i18n in man path.
+		ypkg_strip_mani18n $YPPATH_DEST
+	fi
+	#strip bin
+	ypkg_strip_bin $YPPATH_DEST
+
+	#split i18n
+	spacks+="$(split_i18n $YPPATH_DEST) "
+
+	#split dev
+	spacks+="$(split_dev $YPPATH_DEST) "
+
+	#split_doc
+	spacks+="$(split_doc $YPPATH_DEST) "
+
+	#split customize
+	if [ "x$MYSPLIT" != "x" ]; then
+		#usr/share xtrans-test-1.2.6
+		spacks+="$(split_cus $YPPATH_DEST $MYSPLIT) "
+	fi
+
+	#compress man 
+	ypkg_gzip_man $YPPATH_DEST
+	
+	#mkpackges one by one
+	for pack in $spacks; do
+		#skip empty dirs
+		local files=$(find $pack -type f)
+		[ "x$files" = "x" ] && continue
+		mkpackage "$pack"
+	done
+	return 0
+}
+
+#
+ypkg_rm_packgeinfo() {
+	local destpath=$YPPATH_DB
+	for i in check check.gz list pbs config.gz para date size desc; do
+		if [ -f $destpath/${N}/${N}_$V$R.${i} ]; then
+			printf "<< file %s\n" "$destpath/${N}/${N}_$V$R.${i}"
+			rm -fr "$destpath/${N}/${N}_$V$R.${i}"
+		fi
+	done
+	#remove directory
+	ypkg_rm_dir_safe $YPPATH_DB/$N
+}
+
+#Check if already insalled. $T/"$N"$V 
+ypkg_checkinst() {
+	local statu tmp
+	#N -- new install
+	#U -- upgrade
+	#D -- downgrade
+	#E -- same version
+	
+	if ! ls $YPKG_ROOT/$YPPATH_DB/$N/${N}_*.list >/dev/null 2>&1;then
+		echo "$V$R N"
+		return 0
+	fi	
+	new=$V$R
+	if [ $(ls -1 $YPKG_ROOT/$YPPATH_DB/$N/${N}_*.list |wc -l) -eq 1 ];then
+		atom_parse_path "$(ls $YPKG_ROOT/$YPPATH_DB/$N/${N}_*.list)"
+		old=$V$R
+		#compare 2 versions, such 2.6.9 and 2.6.10
+		#return 0 if same. 
+		#return 1 if $1 is grater than $2 
+		#return 2 if $1 is lesser then $2
+		atom_vercmp $old $new 
+		case $? in
+			1)   
+			echo $old "D" 
+			return 0   ;;
+			2)
+			echo $old "U" 
+			return 0   ;;
+			0) 
+			echo "$old E"
+			return 0  ;;
+		esac
+	fi
+	return 0
+}
+
+#
+#find_pkg_info_
+#etc:
+#1. ypkg_find_info /var/ypkg/pbslib/universe 
+#2. ypkg_find_info /var/ypkg/pbslib/universe remove
+#3. ypkg_find_info /var/ypkg/pbslib/universe all
+ypkg_find_info() {
+	local file
+	local first
+	local last
+	local action
+	local tempfile=$(mktemp)
+	[ "x$*" = "x" ] && return 1
+	action="$2"
+	file="$1"
+	version=$V$R
+	name=$N
+	if [ "x$2" = "xall" ]; then
+		version=
+	fi
+	ends="$(grep -n \<\/Package\> $file |awk -F: '{print $1}' |xargs)"
+	if grep -q name=\"$name\"  $file; then
+		grep -n name=\"$name\"  $file |awk -F: '{print $1}' |while read start ;do
+			for end in $ends; do
+				[ $end -gt $start ] && break ||continue
+			done
+		        sed -n ''"$start"','"$end"'p'  $file >$tempfile
+			case $action in
+			remove)
+				#be care of <PackageInfo></PackageInfo>
+				#start_sub=$(($start-1))
+				#end_add=$(($end+1))
+				if [ x"$version" != x ];then	
+					if grep $version $tempfile >/dev/null 2>&1 \
+					&& grep ${name}_$version.$PACK_SUFFIX $tempfile >/dev/null 2>&1; then
+						#sed -i -e ''"$start"','"$end"'d' -e ''"$start_sub"'d' -e ''"$end_add"'d'  $file
+						sed -i ''"$start"','"$end"'d' $file
+					fi
+				else
+					sed -i ''"$start"','"$end"'d' $file
+				fi
+				;;
+			*)
+				if [ x"$version" != x ];then	
+					if grep $version $tempfile >/dev/null 2>&1 \
+						&& grep ${name}_$version.$PACK_SUFFIX $tempfile >/dev/null 2>&1; then
+						sed -n ''"$start"','"$end"'p' $file 
+					fi
+				else
+					sed -n ''"$start"','"$end"'p' $file
+				fi
+			esac
+				
+		done
+		rm -f $tempfile 2>/dev/null
+	else
+		return 1
+	fi
+}
+
+#cp desktop file to "$YPPATH_DEST"/usr/share/applications
+ypkg_dodesktop() {
+	local dfile="$1"
+	local picture="$2"
+	is_exist "$FILES_PATH/files/${dfile##*/}"   && dfile="$FILES_PATH/files/${dfile##*/}"
+	is_exist "$FILES_PATH/files/${picture##*/}" && picture="$FILES_PATH/files/${picture##*/}"
+	if [ x"$dfile" != x ] && [ -f "$dfile" ]; then
+		mkdir -p "$YPPATH_DEST"/usr/share/applications
+		install -m755 "$dfile" "$YPPATH_DEST"/usr/share/applications 
+	fi
+	if [ x"$picture" != x ] && [ -f "$picture" ]; then 
+		ypkg_docp "$picture"   "$YPPATH_DEST"/usr/share/pixmaps
+	fi
+}
+
+#add unit for systemd
+ypkg_dounit() {
+	local file="$@"
+	if [ x"$file" != x ]; then
+		for i in $@; do
+			if [ -f "$i" ]; then
+				ypkg_docp "$i" "$YPPATH_DEST"/lib/systemd/system
+			else
+				ypkg_docp "$FILES_PATH"/files/"$i"  "$YPPATH_DEST"/lib/systemd/system
+			fi
+		done
+	fi
+}
+
+#cp script to "$YPPATH_DEST"/etc/init.d
+ypkg_doinit() {
+	local file="$1"
+	mkdir -p "$YPPATH_DEST"/etc/init.d
+	if [ x"$file" != x ]; then
+		if [ -f "$file" ]; then
+       			install -m755 "$file" "$YPPATH_DEST"/etc/init.d
+		else
+       			install -m755 "$FILES_PATH"/files/"$file" "$YPPATH_DEST"/etc/init.d
+		fi
+	fi
+}
+
+#cp
+ypkg_docp() {
+	local end=${!#}
+	mkdir -p "$end"
+	cp -a "$@"
+}
+
+#cp and rename
+ypkg_docp_rename() {
+	local end=${!#}
+	mkdir -p "$(dirname $end)"
+	cp -a "$@"
+}
+
+#mv and rename
+ypkg_domv_rename() {
+	local end=${!#}
+	mkdir -p "$(dirname $end)"
+	mv "$@"
+}
+
+#mv
+ypkg_domv() {
+	local end=${!#}
+	mkdir -p "$end"
+	mv "$@"
+}
+
+#link
+ypkg_doln(){
+	local end=${!#}
+	mkdir -p "$(dirname $end)"
+	ln -sf "$1"  "$2"
+}
+
+#font
+ypkg_dofont() {
+	msg ">>> mkfontscale $1"
+	mkfontscale "$1"
+	msg ">>> mkfontdir $1"
+	mkfontdir  "$1"
+	msg ">>> fc-cache $1"
+	fc-cache -f "$1"
+}
+
+#patch
+ypkg_patch(){
+	local file=""
+	local dir1=""
+	local dir2=""
+	local num=""
+	while [ "x$1" != "x" ]; do
+		file="$1"
+		is_exist "$file" || file=""$FILES_PATH"/files/$1"
+		is_exist "$file" || file=""$FILES_PATH"/files/patches/$1"
+		if ! is_exist "$file"; then
+			rmsg "* Error: \"$1\" not found."
+			exit  1
+		fi
+		dir1="$(grep ^--- "$file" |head -n1 |awk '{print $2}' |awk -F/ '{print $1}' |tr -d '\r')"
+		dir2="$(grep ^+++ "$file" |head -n1 |awk '{print $2}' |awk -F/ '{print $1}' |tr -d '\r')"
+		if ls -d "$dir1" >/dev/null 2>/dev/null || ls -d "$dir2" >/dev/null 2>/dev/null;then
+			num="0"
+		else
+			num="1"
+		fi
+		mmsg ">>> Patching ${file##*/}.."
+		patch -p$num -i "$file" 
+		shift
+	done
+}
+
+#
+ypkg_unpack() {
+	if [ "x$SRC_URI" = "x" ];then
+		for i in tar.bz2 tar.gz bz2 tgz tbz2 rar zip 7z; do
+			is_exist "$YPPATH_SOURCE/$N-$V$R.${i}" && SRC_URI="$YPPATH_SOURCE/$N-$V$R.${i}"
+		done
+	else
+		is_exist "$SRC_URI" && SRC_URI="$SRC_URI"
+		is_exist "$YPPATH_SOURCE/$SRC_URI" && SRC_URI="$YPPATH_SOURCE/$SRC_URI"
+	fi
+	SRC_URI=($SRC_URI)
+	local first_pack=${SRC_URI[0]}
+	local fname=$(basename $first_pack)
+	case $fname in
+		*.tar.*|*.gz|*.tar|*.tgz|*.tbz2)
+			mmsg ">>> tar xf "$YPPATH_SOURCE"/$fname"
+			name=$(tar -tf "$YPPATH_SOURCE"/"$fname" |head -n1 |awk -F/ '{print $1}')
+			if [ "x$name" = "x." ]; then
+				name=$(tar -tf "$YPPATH_SOURCE"/"$fname" |head -n1 |awk -F/ '{print $2}')
+			fi
+			if [ "x$name" != "x" ]; then
+				tar xf "$YPPATH_SOURCE"/"$fname" 
+			else
+				[ -d "$N-$V$R" ] && rm -r "$N-$V$R"
+				mkdir -p "$N-$V$R"
+				tar xf "$YPPATH_SOURCE"/"$fname" -C "$N-$V$R"
+			fi
+			;;
+		*.rar) 
+			mmsg ">>> unrar xf "$YPPATH_SOURCE"/$fname"
+			unrar x "$YPPATH_SOURCE"/"$fname" ;;
+		*.zip)
+			mmsg ">>> unzip xf "$YPPATH_SOURCE"/"$fname""
+			num="$(unzip -l "$YPPATH_SOURCE"/"$fname" |awk '{print $4}' |awk -F/ '{print $1}' \
+				|sort -u |sed -e '/^----$/d' -e '/^$/d' -e '/^Name$/d' |wc -l)"
+			if [ $num -ne 1 ];then
+				unzip "$YPPATH_SOURCE"/"$fname" -d "$N-$V$R"
+				name="$N-$V$R"
+			else
+				name=$(unzip -l "$YPPATH_SOURCE"/"$fname" |sed -n '4p'  |awk '{print $4}')
+				if [ x${name##*/} = x ];then
+					unzip "$YPPATH_SOURCE"/"$fname"
+					name="${name%%/*}"
+				else
+				        unzip "$YPPATH_SOURCE"/"$fname" -d "$N-$V$R"
+				        name="$N-$V$R"
+				fi      
+			fi	;;
+		 *.deb) 
+		 	mmsg ">>> ar x "$YPPATH_SOURCE"/"$fname""
+                    	name=$(ar t "$YPPATH_SOURCE"/"$fname" |grep data)
+			mkdir -p "$N-$V$R" && cd "$N-$V$R"
+			ar x "$YPPATH_SOURCE"/"$fname"
+			mkdir -p data && cd data
+			tar xf ../"$name"  
+			cd ../../  && return 0	 ;;
+		 *.rpm) 
+		 	mmsg ">>> unpack "$YPPATH_SOURCE"/"$fname"" 
+			name=${fname%.rpm}
+			mkdir -p "$N-$V$R" && cd "$N-$V$R"
+		 	rpm2tarbz2 "$YPPATH_SOURCE"/"$fname"
+			mkdir -p data && cd data
+			tar xf ../$name.tar.bz2
+			cd ../../  && return 0	 ;;
+		*.7z)   
+			mmsg ">>> 7z x "$YPPATH_SOURCE"/$fname"
+			name=$(7z l "$YPPATH_SOURCE"/$fname |grep -A2 "Size   Compressed  Name" |tail -n1 |awk '{print $6}')
+			name=${name%%/*}
+			7z x "$YPPATH_SOURCE"/"$fname" 
+			;;
+		 *.ar)  ;;
+	   	    *)
+		    	mmsg ">>> cp -a ${YPPATH_SOURCE}/$name $PWD/"$N-$V$R""
+		        name=${fname%*.git}
+		        cp -a ${YPPATH_SOURCE}/$name .
+	esac
+	if [ x"$name" != x"$N-$V$R" ] && [ x"$name" != x ];then
+		if ls $name/* >/dev/null  2>&1;then
+			[ -d "$N-$V$R" ] && rm -r "$N-$V$R"
+			mv "$name" "$N-$V$R"
+		else
+			mkdir -p "$N-$V$R"
+			mv "$name" "$N-$V$R"
+		fi
+	fi
+}
+
+#configure
+ypkg_config() {
+	local command=""
+	local command1=""
+	local command2=""
+		
+	#waf
+	[ -x waf ] && command="./waf configure $(echo $YPB_CONFIG |xargs)"
+	if [ x"$command" != x ];then
+		mmsg ">>> $command"
+		$command && return 0
+	fi
+	
+	#generic
+	[ -x configure ] && command="./configure $(echo $YPB_CONFIG |xargs)"
+	[ -x Configure ] && command="./Configure $(echo $YPB_CONFIG |xargs)"
+	if [ x"$command" != x ];then
+		mmsg ">>> $command"
+		$command && return 0
+	fi
+
+	#autogen
+	if [ -x autogen.sh ];then
+		command="./autogen.sh" 
+		command1=" ./configure $(echo $YPB_CONFIG |xargs)"
+	fi
+	if [ x"$command" != x ];then
+		mmsg ">>> $command; $command1"
+		$command
+		$command1 && return 0
+	fi
+	
+	#perl module
+	[ -f Makefile.pl ] && mv Makefile.pl Makefile.PL
+	[ -f Makefile.PL ] && command="perl Makefile.PL -y PREFIX=/usr"
+	if [ x"$command" != x ];then
+		mmsg ">>> $command"
+		if ! $command; then
+			command="perl Makefile.PL PREFIX=/usr"
+			mmsg ">>> $command" 
+			$command && return 0
+		else
+			return 0
+		fi
+	fi
+
+	#cmake
+	if [ -f CMakeLists.txt ];then
+		command="mkdir -p build"
+		command1="cd build"
+		command2="cmake ../ -DCMAKE_INSTALL_PREFIX=/usr" # -DCMAKE_SHARED_LIBRARY_PREFIX=lib"
+		mmsg ">>> $command; $command1; $command2"
+		$command
+		$command1
+		$command2 && return 0
+	fi
+
+	#qmake
+	if ls *.pro >/dev/null 2>/dev/null; then
+		command="qmake "$@""
+		mmsg ">>> $command"
+		$command && return 0
+	fi
+
+	#scons
+	if [ -f SConstruct ];then
+		#command="scons --prefix=/usr"
+		command="scons $(echo $YPB_CONFIG |xargs)"
+		mmsg ">>> $command"
+		$command 
+	fi	
+}
+
+#make
+ypkg_make() {
+	local command="make "$MAKEOPTS""
+	if [ -x waf ];then
+		command="./waf build "$MAKEOPTS""
+		mmsg ">>> $command $@"
+		$command && return 0
+	fi
+	if [ -f setup.py ];then
+		if [ "x$1"  = "xmake" ]; then
+			command="make "$MAKEOPTS""
+		else
+			command="python setup.py build"
+		fi
+		mmsg ">>> $command $@"
+		$command && return 0
+	fi
+	if [ -f Makefile ] || [ -f GNUmakefile ];then
+		command="make "$MAKEOPTS"" 
+	fi
+	if [ -f makefile.linux ];then
+                command="make "$MAKEOPTS" -f makefile.linux"
+	fi
+	if [ -f Imakefile ]; then
+		command="make "$MAKEOPTS""
+	fi
+	if [ -f SConstruct ];then
+	        return 0
+	fi
+
+	mmsg ">>> $command $@"
+	$command $@
+}
+
+#make install
+ypkg_mkinstall() {
+	local command="make DESTDIR="$YPPATH_DEST" "$@" install"
+	if [ -x waf ];then
+		command="./waf install --destdir="$YPPATH_DEST""
+		mmsg ">>> $command $@"
+		$command && return 0
+	fi
+	if [ -f setup.py ];then
+		if [ "x$1"  = "xmake" ]; then
+			command="make DESTDIR="$YPPATH_DEST" install"		
+		else
+			command="python setup.py install --prefix=/usr --root="$YPPATH_DEST""
+		fi
+		mmsg ">>> $command $@"
+		$command && return 0
+	fi
+		
+	if [ -f SConstruct ];then
+		if [ x"$@" = x ]; then
+			command="scons --install-sandbox="$YPPATH_DEST" "$@" install"
+		else
+			command="scons "$@" install"
+		fi
+		mmsg ">>> $command"
+		$command && return 0
+	fi	
+
+	if [ -f Makefile ] || [ -f GNUmakefile ] ;then
+		command="make DESTDIR="$YPPATH_DEST" "$@" install"
+	fi	
+	mmsg ">>> $command"
+	$command 
+	ldconfig
+}
+
+#cp doc to specified dir
+ypkg_dodoc() {
+	mmsg ">>> Copy documents: $@"
+	install -m755 -d "$YPPATH_DEST"/usr/share/doc/"$N"/"$V$R"
+	cp -a "$@" "$YPPATH_DEST"/usr/share/doc/"$N"/"$V$R"
+}
+
+#ypkg useradd
+ypkg_useradd() {
+	local end=${!#}
+	local N=$end
+	if ! getent passwd "$N" >/dev/null; then 
+		msg ">>> Creating: user $N"
+		useradd "$@"
+	fi
+}
+
+#ypkg groupadd
+ypkg_groupadd() {
+	local end=${!#}
+	local N=$end
+	if ! getent group "$N" >/dev/null; then
+		msg ">>> Creating: group $N"
+		groupadd "$@"
+fi
+}
+
+#
+ypkg_libtool_finish () {
+	local dir="$@"
+	msg ">>> Libtool finish: $dir"
+	libtool --finish --silent $dir
+}
+
+
+
+# install defaut settings
+gnome2_install_defaut_gconf() {
+	#type
+	local t=$1	
+	#name
+	local n=$2
+	#value
+	local v=$3
+	msg ">>> Setting: \"$n\" \"$v\""
+	if [ -x /usr/bin/gconftool-2 ]; then
+		configfile=$(/usr/bin/gconftool-2 --get-default-source)
+		if [ "x$t" = "xlist" ];then
+			/usr/bin/gconftool-2 --direct --config-source="$configfile" --type list --set "$n" --list-type string "$v"
+		else
+			/usr/bin/gconftool-2 --direct --config-source="$configfile" --type "$t" --set "$n" "$v"
+		fi
+	fi
+}
+
+# Install schemas
+gnome2_install_schema() {
+	#this is this-is-deprecated
+	#return 0
+	local schemas="$@"
+	if [ x"$schemas" != x ] && [ -x /usr/bin/gconftool-2 ];then
+		for schema in $schemas; do
+			msg ">>> Installing: $schema"
+			GCONF_CONFIG_SOURCE="$(gconftool-2 --get-default-source)" gconftool-2 --makefile-install-rule "$schema"  >/dev/null
+		done
+	fi
+}
+
+# unstall schemas
+gnome2_unistall_schema() {
+	#this is this-is-deprecated
+	#return 0
+	local schemas="$@"
+	if [ x"$schemas" != x ] && [ -x /usr/bin/gconftool-2 ];then
+		for schema in $schemas; do
+			msg ">>> Uninstalling: $schema"
+			GCONF_CONFIG_SOURCE="$(gconftool-2 --get-default-source)" gconftool-2 --makefile-uninstall-rule "$schema"  >/dev/null
+		done
+	fi
+}
+
+# Install mine
+gnome2_install_mine() {
+	local mines="$@"
+	if [ x"$mines" != x ] && [ -x /usr/bin/xdg-mime ];then
+		for mine in $mines; do
+			msg ">>> Installing: $mine"
+			xdg-mime install --mode system "$mine"  >/dev/null
+		done
+	fi
+}
+
+# Unstall mine
+gnome2_uninstall_mine() {
+	local mines="$@"
+	if [ x"$mines" != x ] && [ -x /usr/bin/xdg-mime ];then
+		for mine in $mines; do
+			msg ">>> Uninstalling: $mine"
+			xdg-mime uninstall --mode system "$mine"  >/dev/null
+		done
+	fi
+}
+
+# update rarian database
+gnome2_rarian_sk_update() {
+	if [ -x /usr/bin/rarian-sk-update ]; then
+		msg ">>> Updating rarian database.."
+		/usr/bin/rarian-sk-update
+	fi
+}
+
+# update desktop entries
+gnome2_desktop_database_update() {
+	if [ -x /usr/bin/update-desktop-database ]; then
+		msg ">>> Updating desktop database.."
+		/usr/bin/update-desktop-database
+	fi
+}
+
+# Restart gconfd-2 if running to reload new gconf settings
+gnome2_gconfd_reload() {
+	if ps acx | grep -q gconfd-2; then
+		msg ">>> Reloading gconfd settings.."
+		killall -HUP gconfd-2
+	fi
+}
+
+# Update gtk-immodules
+gnome2_gtk_immodules_update() {
+	if [ -x /usr/bin/update-gtk-immodules ]; then
+		msg ">>> Updating gtk immodules.."
+		update-gtk-immodules --verbose
+        fi
+}
+
+#Update gdk pixbuf loaders
+gnome2_gdk_pixbuf_loaders_update() {
+	if [ -d /etc/gtk-2.0 ] && [ -x /usr/bin/update-gdk-pixbuf-loaders ]; then
+		msg ">>> Updating gdk pixbuf loaders.."
+		update-gdk-pixbuf-loaders
+	fi
+}
+
+# Updates Gtk+ icon cache files under /usr/share/icons if the current pbs
+# have installed anything under that location.
+gnome2_icon_cache_update() {
+	local dir=""
+	#gnome2_icon_cache_update /usr/share/icons/titans|titans
+	local updater="$(type -p gtk-update-icon-cache 2> /dev/null)"
+	if [ "x$*" = "x" ]; then
+		dir="/usr/share/icons/hicolor"
+	else
+		while [ "x$1" != "x" ]; do
+			if [ ! -d "$1" ]; then
+				dir+="/usr/share/icons/"$(basename $1)" "
+			else	
+				dir+="$1 "
+			fi
+			shift
+		done
+	fi
+	msg ">>> Updating icons cache: $dir"
+	"$updater" -f -q -t $dir
+}
+
+# Update mime database
+gnome2_mime_database_update() {
+	if [ -x /usr/bin/update-mime-database ]; then
+		/usr/bin/update-mime-database /usr/share/mime/ 
+	fi
+}
+
+
+# return value
+# 0 ok
+# 1 invalid format or file not found
+# 2 missing runtime deps
+# 3 conflicting deps
+# 4 2 and 3 
+ypkg_check_package () {
+	local pack="$(readlink -f $1)"
+	workdir="$(mktemp -d)"
+	trap "rm -r $workdir; return 1" INT
+	if ! is_exist $pack; then
+		echo "* $pack not found" 1>&2
+		rm -rf $workdir
+		return 1
+	fi
+	cd $workdir
+	atom_parse ${pack##*/}
+	tar xf $pack $pkginfo 2>/dev/null && tar xf $pkginfo $control 2>/dev/null
+	if [ "x$?" != "x0" ]; then
+		echo "* $pack invalid ypk format"  1>&2
+		rm -rf $workdir
+		return 1
+	fi
+	depends=($(grep "<depend>" $control |sort -u |sed -e 's/<depend>//g' -e 's/<\/depend>//g' -e 's/,/ /g'))
+	codepends=($(grep "<conflict>" $control |sort -u |sed -e 's/<conflict>//g' -e 's/<\/conflict>//g' -e 's/,/ /g'))
+	missing_deps=
+	for ((i=0; i<${#depends[@]}; i++)); do
+		is_installed ${depends[i]} || missing_deps+="${depends[i]} "
+	done
+	conflict_deps=
+	for ((i=0; i<${#codepends[@]}; i++)); do
+		is_installed ${codepends[i]} || conflict_deps+="${codepends[i]} "
+	done
+	if [ "x$missing_deps" != "x" ]; then
+		echo "missing deps: $missing_deps" 1>&2
+		return_value="2"
+	fi
+	if [ "x$conflict_deps" != "x" ]; then
+		echo "conflicting deps: $conflict_deps" 1>&2			
+		return_value="3"
+	fi
+	if [ "x$missing_deps" != "x" ] && [ "x$conflict_deps" != "x" ]; then
+		return_value="4"
+	fi
+	if [ "x$missing_deps" != "x" ] || [ "x$conflict_deps" != "x" ]; then
+		rm -rf $workdir
+		return $return_value
+	fi
+	rm -rf $workdir
+}
+
+
+#
+install_pack () {
+	local pack="$(readlink -f $1)"
+
+	if [ "x$workdir" = "x" ]; then
+		local myworkdir="$(mktemp -d)"
+		workdir=$myworkdir
+		trap "rm -r $workdir; return 1" INT
+	fi
+	#
+	cd $workdir
+
+	atom_parse ${pack##*/}
+	tar xf $pack $pkgdata $pkginfo
+	if tar xf $pkginfo $pkgpbs 2>/dev/null; then
+		blank_funcs pbs
+		. $pkgpbs 
+		pbs_init
+		err_check "* [Error]: ${N}_$V$R call pbs_init failed"
+	else	
+		blank_funcs  pbs
+	fi
+	cd "$YPKG_ROOT" && $XZ -d -c $workdir/$pkgdata |cpio -idum --quiet
+	err_check "* [Error]: ${N}_$V$R copy binary package to / failed"
+	
+	pbsfile="$(ls $YPPATH_DB/$N/${N}_$V$R.pbs 2>/dev/null)"
+	if [ x"$pbsfile" != x ];then
+		blank_funcs pbs
+		. $pbsfile 
+		pbs_postinst
+		err_check "* [Error]: ${N}_$V$R call pbs_postinst failed"
+	else	
+		blank_funcs  pbs
+	fi
+	#
+	#install time
+	IT=$(date +%s)
+	echo "INSTALL_TIME=\"$IT\""                     >>$YPPATH_DB/$N/${N}_$V$R.desc
+	#
+	cd $workdir
+	tar xf $pkginfo	$control
+	cp $YPPATH_WORLD $YPPATH_WORLD-
+	ypkg_find_info $YPPATH_WORLD remove
+	sed -i '/<\/PackageInfo>/d'                      $YPPATH_WORLD
+	ypkg_find_info $control 		       >>$YPPATH_WORLD
+	echo "</PackageInfo>"                          >>$YPPATH_WORLD
+	
+	#
+	current_name="$N"
+	current_version="$V$R"
+	pre_install_listfile=$(ypkg_getlistfile  all |tr ' ' '\n' |grep -v "${N}_$V$R".list)
+	V=
+	R=
+	atom_parse_path $pre_install_listfile
+	if [ "x$V$R" != "x" ]; then
+		pre_version="$V$R"	
+	fi
+	# remove old version 
+	if [ "x$pre_version" != "x" ] && [ "x$pre_version" != "x$current_version" ]; then
+		msg "* Remove previous packages: ${N}_$pre_version"
+		ypkg_upgrade_remove "${N}_$pre_version" "${N}_$current_version"
+	fi
+	if [ "x$CONFLICT" != "x" ]; then
+		for i in $CONFLICT; do
+			atom_parse_type $i
+			if is_installed $N ; then
+				msg "Remove conflicting packages: ${N} $V$R"
+				ypkg_upgrade_remove "${N}_$V$R" "${current_name}_$current_version"
+			fi
+		done
+	fi
+	[ -d $myworkdir ] && rm -rf $myworkdir
+}
+
+#
+ypkg_begininstall() {
+	local ret=0
+	workdir="$YPPATH_FIELD/$N"
+	mkdir -p $workdir
+	trap "rm -r $workdir; exit 1" INT
+	
+	cd $workdir
+
+	ymsg ">> $T/${N}_$V$R unpacking..."
+	pbs_unpack
+	err_check "* [Error]: $T/${N}_$V$R call pbs_unpack failed"
+
+	ymsg ">> $T/${N}_$V$R configure..."
+	YPPATH_DEST="$workdir/${N}_$V$R"
+	[ -p ${N}_$V$R.pipe ] || mkfifo ${N}_$V$R.pipe
+	cd "$N-$V$R"   2>/dev/null
+	tee ../${N}_$V$R.config < ../${N}_$V$R.pipe & 
+	pbs_config > ../${N}_$V$R.pipe
+	err_check "* [Error]: $T/${N}_$V$R call pbs_config failed"
+
+	#call build
+	ymsg ">> $T/${N}_$V$R compiling..."
+	pbs_build
+	err_check "* [Error]: $T/${N}_$V$R call pbs_build failed"
+
+	ymsg ">> $T/${N}_$V$R make check..."
+	pbs_check 
+	err_check "* [Error]: $T/${N}_$V$R call pbs_check failed"
+
+	ymsg ">> $T/${N}_$V$R make install..."
+	pbs_install
+	err_check "* [Error]: $T/${N}_$V$R call pbs_install failed"
+	
+	#make package
+	ymsg ">> $T/${N}_$V$R make package..."
+	packs=$(ypkg_mkpackage)
+	err_check "* [Error]: $T/${N}_$V$R make binary package failed"
+	
+	#install to root
+	ymsg ">> $T/${N}_$V$R install to system..."
+	for pack in $packs; do
+		case "x$AUTO_INSTALL" in
+		xyes) mmsg ">>> Install: $pack"
+		      install_pack $pack ;;
+		   *) gmsg ">>> $pack"
+		esac
+	done
+	[ -d $workdir ] && rm -r $workdir
+	echo 
+	return 0
+}
+
+#install packge
+ypkg_install() {
+	local ret
+	local itype
+	local iname
+	local iver
+	local irver
+	atom_parse_type $1
+	itype=$T
+	iname="$N"
+	iver=$V
+	irver=$R
+	ypkg_getpbsfile $1
+	if [ $? == 0 ]; then
+		atom_parse_path $newest
+		declare -a tmp=($(ypkg_checkinst))
+		pre_version=${tmp[0]}
+		stat=${tmp[1]}
+		if [ "x$2" != "xforce" ];then
+			gmsg_ "[$stat]"
+		else
+			gmsg_ "["$stat"F]"
+		fi
+		case $stat in
+                	E)	
+				msg " $T/${N}_$V$R "	
+				[ "x$2" != "xforce" ] && return 0    		;;
+			N)      msg " $T/${N}_$V$R "
+				pre_version=  ;;
+			U)      msg " $T/${N}_$pre_version ----> $T/${N}_$V$R " ;;
+			D)      msg " $T/${N}_$pre_version ----> $T/${N}_$V$R " ;;
+		esac
+		#
+		[ "x$PRETEND" = "xyes" ] && return 0
+		#
+		ypkg_begin_download $newest
+		ret=$?
+		if [ $? == 0 ]; then
+			#download ok, install it.
+			ypkg_begininstall $newest
+		else
+			return $ret
+		fi
+	else
+		#not found
+		return 1
+	fi
+}
+
+#
+ypkg_begin_showdep() {
+	local a
+	. "$1"
+	a=${1##*/}
+	msg_ ">> Dependencies of "
+	wmsg "${a%*.pbs}:"
+	gmsg "* Build_time"
+	echo $BDEPEND |xargs
+	gmsg "* Run_time"
+	echo $RDEPEND |xargs
+	gmsg "* Recommend"
+	echo $RECOMMENDED |xargs
+	gmsg "* Conflict"
+	echo $CONFLICT |xargs
+	return 0
+}
+
+ypkg_showdep() {
+	local ret
+	local itype
+	local iname
+	local iver
+	local irver
+
+	#parse input 
+	atom_parse_type $1
+	#get pbs file
+	ypkg_getpbsfile $1
+	if [ $? == 0 ]; then
+		#check if installed.
+		atom_parse_path $newest
+		itype=$T
+		iname="$N"
+		iver=$V
+		irver=$R
+		#ypkg_checkinst && echo ""$N"_$V$R already installed." && return 0
+		#found, include and print deps
+		ypkg_begin_showdep $newest
+	else
+		rmsg "* [Error]: $1 not found!"
+		return 1
+	fi
+}
+
+ypkg_shownotes() {
+	local ret
+	local itype
+	local iname
+	local iver
+	local irver
+	atom_parse_type $1
+	ypkg_getpbsfile $1
+	if [ $? == 0 ]; then
+		atom_parse_path $newest
+		itype=$T
+		iname="$N"
+		iver=$V
+		irver=$R
+		. "${newest}"
+		echo -e "$NOTES"
+	else
+		rmsg "* [Error]: $1 not found!"
+		return 1
+	fi
+}
+
+#
+#operations when read a file.
+# l = list files
+# f = remove files/symbol links
+# d = remove directorys
+YP_CSV_OP="l"
+
+ypkg_csvop_ls() {
+	case "${value[0]}" in
+	D)	#directory
+		printf "%s| %8s| %s\n" "d" "${value[2]}" "${value[1]}"
+		;;
+	S)	#Link
+		printf "%s| %8s| %s\n" "l" "${value[2]}" "${value[1]}"
+		;;
+	F)	#File
+		printf "%s| %8s| %s\n" " " "${value[2]}" "${value[1]}"
+		;;
+
+	*)	#totle
+		printf "\nFile: %s, Dir: %s, Link %d, Size: %dK\n" \
+			"${value[1]}"\
+			"${value[2]}" "${value[3]}" "${value[5]}"
+		;;
+	esac
+	
+}
+
+
+#
+ypkg_csvop_rm() {
+	# ${value[0]} --- filetype
+	# ${value[1]} --- filename
+	# ${value[2]} --- size  
+	# ${value[3]} --- permission
+	# ${value[4]}
+	# ${value[5]} 
+	# ${value[6]} --- mtime
+	# ${value[7]} --- md5sum
+	case "${value[0]}" in
+	F) #file
+		is_exist "${value[1]}" || continue
+		printf "<< file: %s\n" "${value[1]}"
+		unlink "${value[1]}"    ;;
+	S) #symbol.
+		is_exist "${value[1]}" || continue
+		printf "<< link: %s\n" "${value[1]}"
+		unlink "${value[1]}"	;;
+	D) #directory.
+		is_exist "${value[1]}" || continue
+		ypkg_rm_dir_safe "${value[1]}"
+	esac
+}
+
+#
+ypkg_rm_dir_safe() {
+	local files
+	files=$(ls "$1" 2>/dev/null)
+	if [ "x$files" = "x" ]; then
+		printf "<< dir: %s\n"  "$1"
+		rm -rf "$1"
+	fi
+}
+
+# read from stdin
+ypkg_read() {
+	local line
+	local count
+	local -a value
+	while IFS= read -r line; do
+		[ -z "$line" ] && continue
+		csv_split "$line"
+		case "$YP_CSV_OP" in
+		r)	ypkg_csvop_rm	   ;;
+		l|*)	ypkg_csvop_ls	   ;;
+		esac
+	done
+}
+
+#read from a file, $1 is file name, $2 is operation
+ypkg_readfile() {
+	YP_CSV_OP=$2
+	ypkg_read < $1
+}
+
+#
+ypkg_list_all_available() {
+	local pbsfile line pbsdir
+	local tmpfile=$(mktemp)
+	find $YPPATH_LIB/*/ -maxdepth 2 -type f -name "*.pbs" |while read line;do
+		. ${line}
+		T=$(echo $line |awk -F/ '{print $5}')
+		pbsfile=${line##*/}
+		pbsdir=${line%/*}
+		atom_parse $pbsfile
+		if ypkg_find_info $YPPATH_UNI  >$tmpfile; then
+			. $tmpfile
+		else
+			blank_funcs desc
+		fi
+		if [ -f "$YPPATH_DB/$N/$pbsfile" ];then
+			gmsg_ '[I] '  
+			echo -e "$T/${N}_$V$R\t$BUILD_TIME\t$INSTALL_SIZE\t$PACK_SIZE"
+		else	
+			echo -e '[*]' "$T/${N}_$V$R\t$BUILD_TIME\t$INSTALL_SIZE\t$PACK_SIZE" 
+		fi
+		if [ x"$BRIEF" != x ];then
+			echo "Description: $BRIEF"
+		else
+		        echo "Description: $DESCRIPTION"
+		fi
+		echo
+	done
+	rm -rf $tmpfile 2>/dev/null
+}
+
+# List installed packages
+#
+ypkg_list_installed() {
+	local pbsfile line pbsdir
+	local tmpfile=$(mktemp)
+	find $YPPATH_DB/* -maxdepth 2 -type f -name "*.desc" |while read line;do
+		. $line
+		atom_parse_path $line
+		gmsg_ "[I] "
+		echo -e "${N}_$V$R\t$(date -d "1970-01-01 UTC $INSTALL_TIME seconds" +%F,%T 2>/dev/null)\t$INSTALL_SIZE"
+		echo "Description: $DESCRIPTION"
+		blank_funcs desc
+	done
+	rm -rf $tmpfile  2>/dev/null
+}
+
+# List all files
+#
+ypkg_list_showallfile() {
+	local name=$1
+	local version=$2
+	local listfile=$(ls $YPPATH_DB/$name/${name}_$version.list 2>/dev/null)
+	[ "x$listfile" = "x" ] && return 1
+	ypkg_readfile "$listfile" "l"
+}
+
+# 
+ypkg_list_package() {
+	local ypkg_types
+	local type
+	local ypkg_packs
+	local pack
+	local findcount=0
+	local pbsfile
+	local i="$1"
+
+	#get pbs file
+	i=${i##*/}
+	i=${i%%_[[:digit:]]*}
+	listfile=$(find $YPPATH_DB/${i##*/} -maxdepth 2 -type f -name "${i##*/}_*.list" 2>/dev/null)
+
+	if [ "x$listfile" !=  "x" ]; then
+		atom_parse_path $listfile
+	else
+		rmsg "* [Error]: $1 not found." 
+		return 1
+	fi
+	
+	#
+	ymsg "* Contents of ${N}_$V$R:"
+	ypkg_list_showallfile $N $V$R
+	ymsg "--- Contents of ${N}_$V$R ---"
+
+	if [ $? != 0 ];then
+		rmsg "* [Error]: $1 not found."
+		return 1
+	fi
+}
+
+#
+ypkg_do_remove_package() {
+	N=$1
+	V=$2
+	R=$3
+	local files=$(ls $YPPATH_DB/$N/${N}_$V$R.desc 2>/dev/null)
+	local file
+	local count
+	local -a value
+	local t1
+	local t2
+	local tsize
+	local infofile
+	
+	[ "x$files" = "x" ] && return 1
+	for file in $files; do
+		file=${file##*/}
+		atom_parse $file
+		T=$1
+		YPPATH_SCRIPT=$YPPATH_DB/$N
+
+		infofile=$YPPATH_SCRIPT/${N}_$V$R.list
+
+		blank_funcs pbs
+
+		. $YPPATH_SCRIPT/${N}_$V$R.pbs 2>/dev/null
+
+		pbs_init
+		err_check "call pbs_init failed"
+
+		pbs_prerm
+		err_check "call pbs_prerm failed"
+		
+		#remove all files link and directories
+		ypkg_readfile $infofile "r"
+	
+		#
+		pbs_postrm
+		err_check "call pbs_postrm failed"
+
+		#remove infos.
+		ypkg_rm_packgeinfo
+
+		#remove info from word
+		ypkg_find_info $YPPATH_WORLD  "remove"
+	done
+}
+
+#
+#
+# return specifid list files with full path
+# (1) $N and $V$R != none , return $N_$V$R.list 
+# (2) $V$R=none and $N != none  renturn newest version
+# (3) $1=all, return all $N_.list
+ypkg_getlistfile() {
+	local find_dir
+	local pack
+	local count
+	find_dir=$YPPATH_DB/$N
+	declare -a count=($(ls $find_dir/${N}_*.list 2>/dev/null))
+	case "${#count[@]}" in
+	1)	#found 1.
+		if [ "x$V$R" != "x" ]; then
+			ls $find_dir/${N}_$V$R.list 2>/dev/null || return 1
+		else
+			ls $find_dir/${N}_*.list 
+		fi
+		return 0	;;
+	0)	#found none
+		return 1	;;
+	2|*)	#found 2
+		declare -a listfiles=($(ls $find_dir/${N}_*.list))
+		if [ "x$1" = "xall" ]; then
+			echo ${listfiles[@]}
+			return 0
+		fi
+		if [ "x$V$R" != "x" ]; then
+			ls $find_dir/${N}_$V$R.list 2>/dev/null || return 1
+		else
+			local max=${listfiles[0]}
+			for ((i=0; i<=${#listfiles[@]}; i++)); do
+				atom_cmp_path $max ${listfiles[i]}
+				case "$?" in
+				  2) max=${listfiles[i]} ;;
+				  *) continue
+				esac
+			done
+			echo $max
+			return 0
+		fi
+	esac
+	return 1
+}
+
+#
+ypkg_remove_package() {
+	local listfile
+	local i
+	atom_parse_type "$1"
+        declare -a listfile=($(ypkg_getlistfile all))
+        if [ "x$listfile" != "x" ]; then
+		for i in ${listfile[@]}; do
+			atom_parse_path $i
+			if [ -f $YPPATH_DB/$N/${N}_$V$R.pbs ]; then
+				blank_funcs "pbs"
+				. $YPPATH_DB/$N/${N}_$V$R.pbs
+				ymsg "* Call pbs_prerm of ${N}_$V$R:"	
+				pbs_prerm   2>/dev/null
+				blank_funcs "pbs"
+			fi
+			ymsg "* Remove content of ${N}_$V$R:"
+		        ypkg_do_remove_package "$N" "$V" "$R"
+		done
+	else
+	        rmsg "* [Error]: $1 not found."
+		return 1
+	fi
+
+	return 0
+}
+
+#
+ypkg_upgrade_remove() {
+	local old=$1
+	local new=$2
+	atom_parse_type $old
+	old_listfile=$(ypkg_getlistfile)
+	atom_parse_type $new
+	new_listfile=$(ypkg_getlistfile)
+	cat $old_listfile |while read line; do	
+		csv_split "$line"
+	        # ${value[0]} --- filetype
+	        # ${value[1]} --- filename
+		#if ! grep "^${value[0]},${value[1]}," $new_listfile >/dev/null 2>/dev/null; then
+		if ! grep ",${value[1]}," $new_listfile >/dev/null 2>/dev/null; then
+			case "${value[0]}" in
+			F) #file
+		   	   is_exist "${value[1]}" || continue
+			   printf "<< file %s\n" "${value[1]}"
+			   unlink "${value[1]}"    ;;
+			S) #symbol.
+			   is_exist "${value[1]}" || continue
+			   printf "<< link %s\n" "${value[1]}"
+			   unlink "${value[1]}"	;;
+			D) #directory.
+			   is_exist "${value[1]}" || continue
+			   ypkg_rm_dir_safe "${value[1]}" 
+			esac
+		fi
+	done
+	#
+	atom_parse_path $old_listfile
+	#remove infos.
+	ypkg_rm_packgeinfo
+        #remove info from word
+        ypkg_find_info $YPPATH_WORLD  "remove"
+}
+
+#
+ypkg_whatprovides() {
+	local packages
+	local i
+	local name
+	local csv
+	local outcnt=0
+	local count=0
+	local -a value
+	local file
+	file="$1"
+	file=$(get_abspath "$file")
+	if ! is_exist "$file"; then
+		rmsg "* $file No such file or directory"
+		return 1
+	fi
+	findlist=$(find $YPPATH_DB -iname "*.list" |grep -v "\-i18n\-")
+	str_isIn $file /usr/share/locale $file && findlist=$(find $YPPATH_DB -iname "*.list" |grep "\-i18n\-")
+	str_isIn $file /usr/include      $file && findlist=$(find $YPPATH_DB -iname "*.list" |grep "\-dev_")
+	packages=$(grep ",$file," $findlist)
+	for i in $packages; do
+		((outcnt++))
+		name=${i%%:*}
+		name=${name##*/}
+		atom_parse $name
+		csv=${i#*:}
+		csv_split $csv	
+		case ${value[0]} in
+			S) msg "${N}_$V$R: ${value[0]},${value[1]} -> ${value[7]}" ;;
+			*) msg "${N}_$V$R: ${value[0]},${value[1]}"
+		esac	
+	done
+	if [ "$outcnt" == "0" ]; then
+		echo ""
+		rmsg "* $file Not found."
+		echo ""
+		return 1
+	fi
+	if [ "$outcnt" == "1" ]; then
+		return 0
+	fi
+	return 2
+}
+
+#
+ypkg_showpbs() {
+        atom_parse_type $1
+        ypkg_getpbsfile $1
+       	if [ $? == 0 ]; then
+		atom_parse_path $newest
+		echo "$newest"
+		return 0
+	else
+		#rmsg "* [Error]: $1 not found."
+		return 1
+	fi
+}
+
+#
+ypkg_show_binary() {
+	local i bianry
+        atom_parse_type $1
+        ypkg_getpbsfile $1
+       	if [ $? == 0 ]; then
+		atom_parse_path $newest
+		pbsfile="$newest"
+		i=${pbsfile##*/}
+		bianry="${i%*.pbs}".$PACK_SUFFIX
+		absbianry=$YPPATH_PACKAGE/$bianry
+		echo $absbianry
+		return 0
+	else
+		#rmsg "* [Error]: $1 not found."
+		return 1
+	fi
+}
+
+#
+ypkg_whatrequires() {
+	local depend 
+	local ppkg=$1
+	local file
+	local exits
+	atom_parse_type $ppkg
+	pkg="$N"
+	exits=$(find "$YPPATH_LIB" -maxdepth 2 -type d -name "$pkg")
+	if [ "x$exits" = "x" ]; then
+		rmsg "* $pkg not found"
+		return 1
+	else
+		ymsg "* "$i" is related with:"
+	fi
+	find "$YPPATH_DB" -maxdepth 3 -type f -name "*.pbs" |while read file; do
+		atom_parse_path "$file"
+		. "$file"
+		for depend in RDEPEND BDEPEND RECOMMENDED CONFLICT; do
+			if eval "echo \$${depend}" |grep -w $pkg >/dev/null 2>&1; then
+				case $depend in
+				RDEPEND)
+					gmsg_ "[R] "
+					msg "$T/${N}_$V$R"  ;;
+				BDEPEND)
+					ymsg_ "[B] "
+					msg "$T/${N}_$V$R"  ;;
+			    RECOMMENDED) 
+					bmsg_ "[A] "
+					msg "$T/${N}_$V$R"  ;;
+			       CONFLICT)
+					rmsg_ "[C] "
+					rmsg "$T/${N}_$V$R"
+				esac
+			fi
+		done
+		blank_funcs pbs
+		blank_funcs desc
+	done
+	msg ""
+}
+
+#
+ypkg_unpack_binary() {	
+	local source_pack="$1"
+	local target_dir="$2"
+	msg ">> decompress: $source_pack"
+	tar xjpf $source_pack -C $target_dir
+	if cd $target_dir; then
+		msg ">> $pkginfo"
+		tar xjpf $pkginfo 
+		msg ">> $pkgdata"
+		$XZ -d -c $pkgdata |cpio -idum --quiet
+	fi
+}
+
+#end of file

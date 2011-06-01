@@ -1,0 +1,277 @@
+#!/bin/bash
+#
+# ybs -- Ylmf_OS Build System
+# 
+# Maintainer: Ylmf OS Developers <ylmfos@115.com>
+#
+
+#
+# version
+ybs_version=0.8
+
+#
+[ -f /etc/ybs.conf ] && . /etc/ybs.conf
+[ -f /tools/usr/lib/ybs/funcs ] && . /tools/usr/lib/ybs/funcs
+[ -f /usr/lib/ybs/funcs ] && . /usr/lib/ybs/funcs
+#trap clean_up INT
+
+# creat paths
+mkdir -p $YPPATH_LIB $YPPATH_SOURCE $YPPATH_PACKAGE $YPPATH_DB $YPPATH_FIELD
+chmod 777 $YPPATH_FIELD $YPPATH_SOURCE  2>/dev/null
+
+# reload parameters if available
+export CC
+export CXX
+export CFLAGS
+export CXXFLAGS
+export MAKEOPTS
+export YPINST_PREFIX
+export YP_I18N
+export ACCEPT_REPO
+export YPPATH_URI
+
+
+# Support set YPKG_ROOT 
+#
+if [ "x$YPKG_ROOT" = "x" ];then
+   YPKG_ROOT="/"
+else
+   mkdir -p "$YPKG_ROOT"
+   YPKG_ROOT=$(readlink -f "$YPKG_ROOT")
+fi
+#
+
+#
+ypkg_show_usage() {
+	cat <<EOF
+$0 $ybs_version 
+
+Usage: $0 command [options] pkg1 [pkg2 ...]
+
+ybs (ylmfos build system) is a simple command line for downloading/compile/install package from 
+souce codes.
+
+Commands:
+       -v|--version                            show version    
+       -h|--help                               show usage   
+       -s|--search                             search pkg
+       -d|--download                           download source of pkg
+       -C|--remove                             remove pkg
+       -i|--install                            compile and install pkg and dependencies
+      -is|--install-single                     forced install single pkg without checking dependency
+       -n|--notes                              show user notes of pkg
+       -k|--depend                             show dependency of pkg
+       -w|--showpbs                            show avaliable pbsfile of pkg
+      -wr|--whatrequires                       show which pkgs depends on this pkg
+       --sync [path]                           sync pbslib via git to [path]/var/ypkg
+       --info                                  show $0 parameters. to modify parameters, edit /etc/ypkg.conf
+
+Options:
+	-p|--pretend                           instead of actually install, simply display what to do  
+	-F|--force                             force install
+
+Base is at $YPPATH
+EOF
+}
+
+# Support mutipackages
+# 
+i=0
+j=0
+for arg in $@; do
+	case $arg in
+		-*) argvs[${j}]="$arg"
+		    j=$(($j+1))	;;
+		*)  args[${i}]="$arg"
+		    i=$(($i+1))
+	esac
+done
+#echo "packages: ${args[@]}"
+#echo "parameter: ${argvs[@]}"
+
+#
+for i in ${argvs[@]}; do
+	case ${i} in
+		-p|-pv|--pretend) PRETEND="yes" ;;
+		-F|--force) 	  FORCE_INSTALL="yes"
+	esac
+done
+
+#
+case "${1}" in
+-v|--version)
+	#show version.
+	gmsg $ypkg_version
+	;;
+
+-info|--info)
+	#show build info
+	grep -v ^# "/etc/ypkg.conf"
+	;;
+
+-clean|--clean) 
+	#clean packages dirs
+	gmsg "* Use \"yget clean \" instead"
+	;;
+
+-s|--search)
+	#search package.
+	msg_ "* Searching for "
+	wmsg_ "${args[@]} "
+	msg "..."
+	for i in ${args[@]}; do
+		ypkg_search $i
+	done
+	;;
+
+-d|--download)
+	#download source
+	check_root
+	msg_ "* Source downloading "
+	wmsg_ "${args[@]} "
+	msg "..."
+	for i in ${args[@]}; do
+		ypkg_download $i
+	done
+	;;
+
+-i|--install)
+	#install packages and depends
+	check_root
+	ymsg "* Calculating dependencies..."
+	workdir="$(mktemp -d)"
+	trap "rm -r $workdir; exit 1" INT
+	all_packages=
+	for i in ${args[@]};do
+		pbsfile=$(ypkg_showpbs "$i")
+		[ -f "$pbsfile" ] && . "$pbsfile" || (echo; rmsg "* [Error]: ${i} not found."; exit 1)
+		BDEPEND_READY=
+		for i in $BDEPEND; do
+			[ "x${i##*-}" = "xdev" ] && continue || BDEPEND_READY+="$i "
+		done
+		all_packages+="$RDEPEND $BDEPEND_READY "
+		for j in ${all_packages};do
+			case ${j} in
+			*'|'*)	 #ypkg -i ${j%|*} || ypkg -i ${j#*|} || exit ;;
+				 pbsfile=$(ypkg_showpbs "${j%|*}")
+				 if [ "x$pbsfile" = "x" ];then
+				 	pbsfile=$(ypkg_showpbs ${j#*|})
+				 fi
+				 ;;
+			  *)    
+				pbsfile=$(ypkg_showpbs "${j}")
+				;;
+			esac
+			[ -f "$pbsfile" ] && . "$pbsfile" || (echo; rmsg "* [Error]: ${j} not found."; exit 1)
+			BDEPEND_READY=
+			for i in $BDEPEND; do
+				[ "x${i##*-}" = "xdev" ] && continue || BDEPEND_READY+="$i "
+			done
+			all_packages+="$RDEPEND $BDEPEND_READY "
+		done
+		#ypkg_install "$i"
+	done
+	# install
+	tmpfile=$(mktemp -p $workdir)
+	# install dependecies
+  	for file in $(echo $all_packages |tr ' ' '\n' |tac |xargs); do
+		  grep ^${file}$ $tmpfile >/dev/null && continue
+		  ypkg_install ${file} && echo ${file} >>$tmpfile
+      	done
+       	#install specify files
+	for file in ${args[@]}; do
+		grep ^${file}$ $tmpfile >/dev/null && continue
+		[ "x$FORCE_INSTALL" = "xyes" ] && behavior="force"
+		ypkg_install ${file} $behavior && echo ${file} >>$tmpfile
+	done	
+       	[ -d $workdir ] && rm -rf $workdir
+	;;
+
+-is|--install-single) 
+	check_root
+	#install single package
+	msg_ "* Installing "
+	wmsg_ "${args[@]} "
+	msg "..."
+	for i in ${args[@]}; do
+		ypkg_install $i "force"
+	done
+	;;
+
+-C|--remove)
+	check_root
+	#remove package
+	msg_ "* Removing "
+	wmsg_ "${args[@]} "
+	for i in ${args[@]}; do
+		ypkg_remove_package $i
+	done
+	;;
+
+--sync) 
+	#sync pbs libs with git.
+	check_root
+	logfile="/var/log/ypkg.log"
+	ymsg "* Sync pbslibs via git ..."
+	if [ x"$(cat $logfile 2>/dev/null)" != x ];then
+		echo
+		mmsg "* Last update: $(date -d "1970-01-01 UTC $(cat $logfile) seconds" +%F,%T,%z)"
+		echo
+	fi
+	mkdir -p $YPPATH
+	err_check "* [Error]: Create dir $YPPATH failed."
+	mkdir -p $YPPATH_LIB
+	err_check "* [Error]: Create dir $YPPATH_LIB failed."
+	cd $YPPATH_LIB
+	err_check "* [Error]: enter dir $YPPATH_LIB failed."
+	if [ -d .git ]; then
+		#alread exist.
+		git pull && date +%s >$logfile
+	else
+		cd ..
+		#remove an system error.
+		[ -d /etc ] || mkdir /etc
+		[ -f /etc/hosts ] || touch /etc/hosts
+		git config --system --add user.name  ylmfos_user
+		git config --system --add user.email ylmfos_user@115.com
+		git clone git://git.ylmf.com/pbslib.git && date +%s >$logfile
+	fi
+	;;
+
+-n|--notes)
+	#show users notes
+	for i in ${args[@]}; do
+		ypkg_shownotes $i
+	done
+	;;
+
+-k|--depend)
+	#show dependency
+	for i in ${args[@]}; do
+		ypkg_showdep $i
+	done
+	;;
+
+-w|--showpbs)
+	#show pbs file
+	for i in ${args[@]}; do
+		ypkg_showpbs $i
+	done
+	;;
+
+-wr|--whatrequires)
+	#show which package depends on pkg
+	msg "* [R] stand for run time depend, [B] for build, [A] for recommoneded, [C] for conflict."
+	for i in ${args[@]}; do
+		 ypkg_whatrequires $i
+	done
+	;;
+
+*|-h|--help)
+	#show usage 
+	ypkg_show_usage
+	exit 0
+	;;
+esac
+
+#end of file
