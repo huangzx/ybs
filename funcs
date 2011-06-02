@@ -229,7 +229,8 @@ atom_parse() {
 	N=${N%%_}
 	VR=${ATOM#$N}
 	VR=${VR#_}
-	V=${VR%%-[a-zA-z]*}
+	#V=${VR%%-[a-zA-z]*}
+	V=${VR%%-*}
 	R=${VR##$V}
 }
 
