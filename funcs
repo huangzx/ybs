@@ -1418,6 +1418,13 @@ ypkg_docp_rename() {
 	cp -a "$@"
 }
 
+#mv
+ypkg_domv() {
+	local end=${!#}
+	mkdir -p "$end"
+	mv "$@"
+}
+
 #mv and rename
 ypkg_domv_rename() {
 	local end=${!#}
@@ -1425,11 +1432,15 @@ ypkg_domv_rename() {
 	mv "$@"
 }
 
-#mv
-ypkg_domv() {
-	local end=${!#}
-	mkdir -p "$end"
-	mv "$@"
+#cp man to dir
+ypkg_doman() {
+	local name num
+	for i in $@; do
+		name=${i%.[0-9]}
+		num=${i##$name}
+		num=${num##.}
+		ypkg_docp ${i} "$YPPATH_DEST"/usr/share/man/man${num}/
+	done
 }
 
 #link
