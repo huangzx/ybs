@@ -60,7 +60,8 @@ PACK_SUFFIX="ypk"
 XZ="xz"
 
 #
-LOCKFILE="/tmp/.ypkg_lock"
+WORLD_LOCKFILE="/tmp/.ypkg_lock"
+UNI_LOCKFILE="/tmp/.ybs_lock"
 
 #
 pkgdata="pkgdata"
@@ -1200,16 +1201,23 @@ OOO
 		#update YPPATH_LOCAL_UNI
 		mkdir -p ${YPPATH_LOCAL_UNI%/*}
 		touch $YPPATH_LOCAL_UNI
-		sed -i '/# '"$N $V $R"'/d'                                 $YPPATH_LOCAL_UNI
-		ypkg_find_info			                           $YPPATH_LOCAL_UNI  "remove"
-		declare -a size=($(du $YPPATH_PACKAGE/$uri -sb))
-		size=${size[0]}
-		declare -a sha=($(sha1sum $YPPATH_PACKAGE/$uri))
-		sha=${sha[0]}
-		sed -i '/build_date/i\   <size>'"$size"'</size>'            $pkgdir/$control
-		sed -i '/build_date/i\   <sha>'"$sha"'</sha>'               $pkgdir/$control
-		echo "# $N $V $R"				  	    >>$YPPATH_LOCAL_UNI
-		sed -n '/PackageInfo/,/PackageInfo/p' $pkgdir/$control |sed -e '1d' -e '$d' >>$YPPATH_LOCAL_UNI
+		while true; do
+			if [ ! -f "$UNI_LOCKFILE" ]; then
+				touch $UNI_LOCKFILE
+				sed -i '/# '"$N $V $R"'/d'                                 $YPPATH_LOCAL_UNI
+				ypkg_find_info			                           $YPPATH_LOCAL_UNI  "remove"
+				declare -a size=($(du $YPPATH_PACKAGE/$uri -sb))
+				size=${size[0]}
+				declare -a sha=($(sha1sum $YPPATH_PACKAGE/$uri))
+				sha=${sha[0]}
+				sed -i '/build_date/i\   <size>'"$size"'</size>'            $pkgdir/$control
+				sed -i '/build_date/i\   <sha>'"$sha"'</sha>'               $pkgdir/$control
+				echo "# $N $V $R"				  	    >>$YPPATH_LOCAL_UNI
+				sed -n '/PackageInfo/,/PackageInfo/p' $pkgdir/$control |sed -e '1d' -e '$d' >>$YPPATH_LOCAL_UNI
+				rm -f $UNI_LOCKFILE
+				break
+			fi
+		done		
 	fi
 }
 
@@ -1988,13 +1996,13 @@ install_pack () {
 	tar xf $pkginfo	$control || err_check "* [Error]: ${N}_$V$R uncompress $control failed"
 	cp $YPPATH_WORLD $YPPATH_WORLD-
 	while true; do
-		if [ ! -f "$LOCKFILE" ]; then
-			touch $LOCKFILE
+		if [ ! -f "$WORLD_LOCKFILE" ]; then
+			touch $WORLD_LOCKFILE
 			ypkg_find_info $YPPATH_WORLD remove
 			sed -i '/<\/PackageInfo>/d'                      $YPPATH_WORLD
 			ypkg_find_info $control 		       >>$YPPATH_WORLD
 			echo "</PackageInfo>"                          >>$YPPATH_WORLD
-			rm -f $LOCKFILE
+			rm -f $WORLD_LOCKFILE
 			break
 		fi
 	done
@@ -2414,10 +2422,10 @@ ypkg_do_remove_package() {
 
 		#remove info from word
 		while true; do
-			if [ ! -f "$LOCKFILE" ]; then
-				touch $LOCKFILE
+			if [ ! -f "$WORLD_LOCKFILE" ]; then
+				touch $WORLD_LOCKFILE
 				ypkg_find_info $YPPATH_WORLD  "remove"
-				rm -f $LOCKFILE
+				rm -f $WORLD_LOCKFILE
 				break
 			fi
 		done
@@ -2532,10 +2540,10 @@ ypkg_upgrade_remove() {
 	ypkg_rm_packgeinfo
         #remove info from word
 	while true; do
-		if [ ! -f "$LOCKFILE" ]; then
-			touch $LOCKFILE
+		if [ ! -f "$WORLD_LOCKFILE" ]; then
+			touch $WORLD_LOCKFILE
      			ypkg_find_info $YPPATH_WORLD  "remove"
-			rm -f $LOCKFILE
+			rm -f $WORLD_LOCKFILE
 			break
 		fi
 	done
