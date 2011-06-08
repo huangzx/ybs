@@ -182,13 +182,13 @@ case "${1}" in
 	# install dependecies
   	for file in $(echo $all_packages |tr ' ' '\n' |tac |xargs); do
 		  grep ^${file}$ $tmpfile >/dev/null && continue
-		  ypkg_install ${file} && echo ${file} >>$tmpfile
+		  echo -ne "\033]0;ybs work: ${file}\007"; ypkg_install ${file} && echo ${file} >>$tmpfile
       	done
        	#install specify files
 	for file in ${args[@]}; do
 		grep ^${file}$ $tmpfile >/dev/null && continue
 		[ "x$FORCE_INSTALL" = "xyes" ] && behavior="force"
-		ypkg_install ${file} $behavior && echo ${file} >>$tmpfile
+		echo -ne "\033]0;ybs work: ${file}\007"; ypkg_install ${file} $behavior && echo ${file} >>$tmpfile
 	done	
        	[ -d $workdir ] && rm -rf $workdir
 	;;
@@ -200,7 +200,7 @@ case "${1}" in
 	wmsg_ "${args[@]} "
 	msg "..."
 	for i in ${args[@]}; do
-		ypkg_install $i "force"
+		echo -ne "\033]0;ybs work: ${i}\007"; ypkg_install $i "force"
 	done
 	;;
 
