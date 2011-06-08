@@ -147,7 +147,10 @@ case "${1}" in
 		[ -f "$pbsfile" ] && . "$pbsfile" || (echo; rmsg "* [Error]: ${i} not found."; exit 1)
 		BDEPEND_READY=
 		for i in $BDEPEND; do
-			[ "x${i##*-}" = "xdev" ] && continue || BDEPEND_READY+="$i "
+			if [ "x${i##*-}" = "xdev" ]; then
+				i=${i%-dev}
+			 	BDEPEND_READY+="${i} "
+			fi
 		done
 		all_packages+="$RDEPEND $BDEPEND_READY "
 		for j in ${all_packages};do
@@ -165,7 +168,10 @@ case "${1}" in
 			[ -f "$pbsfile" ] && . "$pbsfile" || (echo; rmsg "* [Error]: ${j} not found."; exit 1)
 			BDEPEND_READY=
 			for i in $BDEPEND; do
-				[ "x${i##*-}" = "xdev" ] && continue || BDEPEND_READY+="$i "
+				if [ "x${i##*-}" = "xdev" ]; then
+					i=${i%-dev}
+					BDEPEND_READY+="${i} "
+				fi
 			done
 			all_packages+="$RDEPEND $BDEPEND_READY "
 		done
