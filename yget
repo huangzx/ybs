@@ -370,7 +370,7 @@ do_download () {
 }
 
 #
-install_dep_prepare () {
+install_dev_prepare () {
 	allinfo=$(yget_mktemp f)
 	singleinfo=$(yget_mktemp f)
 	local app="$1"
@@ -395,7 +395,15 @@ install_dep_prepare () {
 		atom_parse ${packname}_$pack_final_ver
 		ypkg_find_info $allinfo  >$singleinfo
 		bdepends="$(get_value bdepend $singleinfo)"
-		echo $bdepends
+		rdepends="$(get_value depend $singleinfo)"
+		#add dev to $rdepends 
+		rdepends_ready=
+		for i in $rdepends; do
+			i=${i}-dev
+			atom_parse ${i}
+			ypkg_find_info $YPPATH_UNI >/dev/null && rdepends_ready+="${i} "
+		done
+		echo $bdepends $rdepends_ready
 	fi
 	rm -rf $allinfo $singleinfo 2>/dev/null
 }
@@ -410,11 +418,13 @@ do_install-dev () {
 			shift
 		        continue
 		fi
-		install_dep_prepare "$1" >>$allpacks
+		install_dev_prepare "$1" >>$allpacks
 	        echo "$1"  >>$record
 	        shift
 	done
 	if [ "x$(cat $allpacks)" != "x" ]; then
+		msg_  "* Install "
+		wmsg "$(cat $allpacks)"
 		yget install $(cat $allpacks)
 	fi
 	rm $allpacks $record $allpacks_ready  2>/dev/null
