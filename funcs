@@ -1458,7 +1458,8 @@ ypkg_doman() {
 ypkg_doln(){
 	local end=${!#}
 	mkdir -p "$(dirname $end)"
-	ln -sf "$1"  "$2"
+	#ln -sf "$1"  "$2"
+	ln -sf $@
 }
 
 #font
