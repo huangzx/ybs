@@ -2069,6 +2069,7 @@ ypkg_begininstall() {
 	err_check "* [Error]: $T/${N}_$V$R call pbs_install failed"
 	
 	ORIG_N=${N}
+	YPPATH_DEST_OLD=$YPPATH_DEST
 	packs=""
 	#make package
 	if [ -d "$YPPATH_DEST" ]; then
@@ -2084,18 +2085,19 @@ ypkg_begininstall() {
 			N=${i}
 			YPPATH_DEST="$workdir/${N}_$V$R"
 			${i}_install
-		        err_check "* [Error]: $T/${ORIG_N}_$V$R ${N} call pbs_install failed"
+		        err_check "* [Error]: $T/${ORIG_N}_$V$R ${N} call ${i}_install failed"
 
 			#make package
 			if [ -d "$YPPATH_DEST" ]; then
-				ymsg ">> $T/$ORIG_NN}_$V$R ${N} make package..."
+				ymsg ">> $T/${ORIG_NN}_$V$R ${N} make package..."
 				packs+="$(ypkg_mkpackage) "
 				err_check "* [Error]: $T/${ORIG_N}_$V$R ${N} make binary package failed"
 			fi
 		done
 	fi
 
-	#install to root
+	#install to /
+	#
 	ymsg ">> $T/${ORIG_N}_$V$R $PROVIDE install to system..."
 	packs=$(echo $packs |tr ' ' '\n' |sort -u |xargs)
 	for pack in $packs; do
