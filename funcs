@@ -961,26 +961,6 @@ split_i18n() {
 	return 1
 }
 
-#split customize
-#split_cus $YPPATH_DEST $MYSPLIT
-#
-split_cus() {
-	local dir=($@)
-	let end="${#dir[@]}-1"
-	local name=${dir[$end]}
-	local destdir="$workdir/${name}_$V$R"
-	for ((i=1; i<${#dir[@]}; i++));do 
-		if is_exist "$YPPATH_DEST/${dir[$i]}"; then
-			ypkg_domv "$YPPATH_DEST/${dir[$i]}" $destdir/$(dirname ${dir[$i]})
-		fi
-	done
-	if is_exist $destdir; then
-		echo $destdir
-		return 0
-	fi
-	return 1
-}
-
 #
 find_desktop() {
 	local source_dir=$1
@@ -1244,12 +1224,6 @@ ypkg_mkpackage() {
 
 	#split_doc
 	spacks+="$(split_doc $YPPATH_DEST) "
-
-	#split customize
-	if [ "x$MYSPLIT" != "x" ]; then
-		#usr/share xtrans-test-1.2.6
-		spacks+="$(split_cus $YPPATH_DEST $MYSPLIT) "
-	fi
 
 	#compress man 
 	ypkg_gzip_man $YPPATH_DEST
@@ -2089,7 +2063,7 @@ ypkg_begininstall() {
 
 			#make package
 			if [ -d "$YPPATH_DEST" ]; then
-				ymsg ">> $T/${ORIG_NN}_$V$R ${N} make package..."
+				ymsg ">> $T/${ORIG_N}_$V$R ${N} make package..."
 				packs+="$(ypkg_mkpackage) "
 				err_check "* [Error]: $T/${ORIG_N}_$V$R ${N} make binary package failed"
 			fi
