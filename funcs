@@ -2068,13 +2068,36 @@ ypkg_begininstall() {
 	pbs_install
 	err_check "* [Error]: $T/${N}_$V$R call pbs_install failed"
 	
+	ORIG_N=${N}
+	packs=""
 	#make package
-	ymsg ">> $T/${N}_$V$R make package..."
-	packs=$(ypkg_mkpackage)
-	err_check "* [Error]: $T/${N}_$V$R make binary package failed"
-	
+	if [ -d "$YPPATH_DEST" ]; then
+		ymsg ">> $T/${N}_$V$R make package..."
+		packs="$(ypkg_mkpackage) "
+		err_check "* [Error]: $T/${N}_$V$R make binary package failed"
+	fi
+
+	#
+	if [ "x$PROVIDE" != "x" ]; then	
+		ymsg ">> $T/${N}_$V$R splite $PROVIDE..."
+		for i in $PROVIDE; do
+			N=${i}
+			YPPATH_DEST="$workdir/${N}_$V$R"
+			${i}_install
+		        err_check "* [Error]: $T/${ORIG_N}_$V$R ${N} call pbs_install failed"
+
+			#make package
+			if [ -d "$YPPATH_DEST" ]; then
+				ymsg ">> $T/$ORIG_NN}_$V$R ${N} make package..."
+				packs+="$(ypkg_mkpackage) "
+				err_check "* [Error]: $T/${ORIG_N}_$V$R ${N} make binary package failed"
+			fi
+		done
+	fi
+
 	#install to root
-	ymsg ">> $T/${N}_$V$R install to system..."
+	ymsg ">> $T/${ORIG_N}_$V$R $PROVIDE install to system..."
+	packs=$(echo $packs |tr ' ' '\n' |sort -u |xargs)
 	for pack in $packs; do
 		case "x$AUTO_INSTALL" in
 		xyes) mmsg ">>> Install: $pack"
