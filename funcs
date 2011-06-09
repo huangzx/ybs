@@ -1935,7 +1935,7 @@ install_pack () {
 	if [ "x$workdir" = "x" ]; then
 		local myworkdir="$(mktemp -d)"
 		workdir=$myworkdir
-		trap "rm -r $workdir; return 1" INT
+		trap "rm -r $workdir $WORLD_LOCKFILE; return 1" INT
 	fi
 	#
 	cd $workdir
@@ -2013,7 +2013,7 @@ ypkg_begininstall() {
 	local ret=0
 	workdir="$YPPATH_FIELD/$N"
 	mkdir -p $workdir
-	trap "rm -r $workdir; exit 1" INT
+	trap "rm -r $workdir $UNI_LOCKFILE; exit 1" INT
 	
 	cd $workdir
 
