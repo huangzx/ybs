@@ -1181,7 +1181,9 @@ OOO
 		#update YPPATH_LOCAL_UNI
 		mkdir -p ${YPPATH_LOCAL_UNI%/*}
 		touch $YPPATH_LOCAL_UNI
+		timeout=5
 		while true; do
+			[ $timeout -eq 0 ] && rm -f "$UNI_LOCKFILE"
 			if [ ! -f "$UNI_LOCKFILE" ]; then
 				touch $UNI_LOCKFILE
 				sed -i '/# '"$N $V $R"'/d'                                 $YPPATH_LOCAL_UNI
@@ -1196,6 +1198,10 @@ OOO
 				sed -n '/PackageInfo/,/PackageInfo/p' $pkgdir/$control |sed -e '1d' -e '$d' >>$YPPATH_LOCAL_UNI
 				rm -f $UNI_LOCKFILE
 				break
+			else
+				rmsg "* $YPPATH_LOCAL_UNI is locked, wait..."
+				sleep 1
+				((timeout--))
 			fi
 		done		
 	fi
@@ -1970,7 +1976,9 @@ install_pack () {
 	cd $workdir
 	tar xf $pkginfo	$control || err_check "* [Error]: ${N}_$V$R uncompress $control failed"
 	cp $YPPATH_WORLD $YPPATH_WORLD-
+	timeout=5
 	while true; do
+		[ $timeout -eq 0 ] && rm -f "$WORLD_LOCKFILE"
 		if [ ! -f "$WORLD_LOCKFILE" ]; then
 			touch $WORLD_LOCKFILE
 			ypkg_find_info $YPPATH_WORLD remove
@@ -1979,6 +1987,10 @@ install_pack () {
 			echo "</PackageInfo>"                          >>$YPPATH_WORLD
 			rm -f $WORLD_LOCKFILE
 			break
+		else
+		        rmsg "* $YPPATH_WORLD is locked, wait..."
+		        sleep 1
+			((timeout--))
 		fi
 	done
 	#
@@ -1993,8 +2005,8 @@ install_pack () {
 	fi
 	# remove old version 
 	if [ "x$pre_version" != "x" ] && [ "x$pre_version" != "x$current_version" ]; then
-		msg "* Remove previous packages: ${N}_$pre_version"
-		ypkg_upgrade_remove "${N}_$pre_version" "${N}_$current_version"
+		msg "* Remove previous packages: ${current_name}_$pre_version"
+		ypkg_upgrade_remove "${current_name}_$pre_version" "${current_name}_$current_version"
 	fi
 	if [ "x$CONFLICT" != "x" ]; then
 		for i in $CONFLICT; do
@@ -2421,12 +2433,18 @@ ypkg_do_remove_package() {
 		ypkg_rm_packgeinfo
 
 		#remove info from word
+		timeout=5
 		while true; do
+			[ $timeout -eq 0 ] && rm -f "$WORLD_LOCKFILE"
 			if [ ! -f "$WORLD_LOCKFILE" ]; then
 				touch $WORLD_LOCKFILE
 				ypkg_find_info $YPPATH_WORLD  "remove"
 				rm -f $WORLD_LOCKFILE
 				break
+			else
+		        	rmsg "* $YPPATH_WORLD is locked, wait..."
+		        	sleep 1
+				((timeout--))
 			fi
 		done
 	done
@@ -2539,12 +2557,18 @@ ypkg_upgrade_remove() {
 	#remove infos.
 	ypkg_rm_packgeinfo
         #remove info from word
+	timeout=5
 	while true; do
+		[ $timeout -eq 0 ] && rm -f "$WORLD_LOCKFILE"
 		if [ ! -f "$WORLD_LOCKFILE" ]; then
 			touch $WORLD_LOCKFILE
      			ypkg_find_info $YPPATH_WORLD  "remove"
 			rm -f $WORLD_LOCKFILE
 			break
+		else	
+			rmsg "$YPPATH_WORLD is locked, wait..."
+			sleep 1
+			((timeout--))
 		fi
 	done
 }
