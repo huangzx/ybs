@@ -1181,7 +1181,7 @@ OOO
 		#update YPPATH_LOCAL_UNI
 		mkdir -p ${YPPATH_LOCAL_UNI%/*}
 		touch $YPPATH_LOCAL_UNI
-		timeout=5
+		timeout=10
 		while true; do
 			[ $timeout -eq 0 ] && rm -f "$UNI_LOCKFILE"
 			if [ ! -f "$UNI_LOCKFILE" ]; then
@@ -1976,7 +1976,7 @@ install_pack () {
 	cd $workdir
 	tar xf $pkginfo	$control || err_check "* [Error]: ${N}_$V$R uncompress $control failed"
 	cp $YPPATH_WORLD $YPPATH_WORLD-
-	timeout=5
+	timeout=10
 	while true; do
 		[ $timeout -eq 0 ] && rm -f "$WORLD_LOCKFILE"
 		if [ ! -f "$WORLD_LOCKFILE" ]; then
@@ -2433,7 +2433,7 @@ ypkg_do_remove_package() {
 		ypkg_rm_packgeinfo
 
 		#remove info from word
-		timeout=5
+		timeout=10
 		while true; do
 			[ $timeout -eq 0 ] && rm -f "$WORLD_LOCKFILE"
 			if [ ! -f "$WORLD_LOCKFILE" ]; then
@@ -2557,7 +2557,7 @@ ypkg_upgrade_remove() {
 	#remove infos.
 	ypkg_rm_packgeinfo
         #remove info from word
-	timeout=5
+	timeout=10
 	while true; do
 		[ $timeout -eq 0 ] && rm -f "$WORLD_LOCKFILE"
 		if [ ! -f "$WORLD_LOCKFILE" ]; then
