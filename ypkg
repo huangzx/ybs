@@ -45,7 +45,7 @@ EOF
 ###main
 
 #
-if [ $# -lt 2 ]; then
+if [ $# -lt 2 ] && [ "x$1" != "x-L" ]; then
 	ypkg_show_usage
 	exit 0
 fi
