@@ -1743,7 +1743,12 @@ ypkg_libtool_finish () {
 	libtool --finish --silent $dir
 }
 
-
+#
+perl_cleanup () {
+	msg ">>> Delete: .packlist *.pod files"
+	find "$YPPATH_DEST" -name '.packlist' -delete
+	find "$YPPATH_DEST" -name '*.pod' -delete
+}
 
 # install defaut settings
 gnome2_install_defaut_gconf() {
