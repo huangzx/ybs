@@ -34,7 +34,7 @@ and install.
 Commands:
 	install               install packages and dependencies (pkg is leafpad not leafpad_0.8.17.ypk)
 	install-dev           install build-dependencies for packages (pkg is leafpad not leafpad_0.8.17.ypk)
-	remove                remove single package
+	remove                remove package and orphaned dependencies
 	search                search packages
 	clean                 remove all downloaded packages
 	upgrade               upgrade system
