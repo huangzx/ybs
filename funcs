@@ -823,30 +823,14 @@ ypkg_strip_bin() {
 	find $1/{,usr/}lib -type f -exec strip --strip-debug '{}' ';' 2>/dev/null
 }
 
-#compress man docs
-ypkg_gzip_man() {
-	#msg ">>> compress man.."
-	find $1/usr/{,share/}{man,doc} -type f \
+#compress man doc info 
+ypkg_gzip_extra() {
+	#msg ">>> compress man doc info"
+	[ -f $1/usr/share/info/dir ] && rm $1/usr/share/info/dir 2>/dev/null
+	find $1/usr/{,share/}{man,doc,info} -type f \
   		-exec gzip '{}' ';' 2>/dev/null
 }
 
-#compress info docs
-ypkg_gzip_info() {
-	local ipath=""
-
-	[ -d $1/usr/share/info ] && ipath=$1/usr/share/info
-	[ -d $1/usr/share/info ] && ipath=$1/usr/share/info
-
-	#quit if not found
-	[ -z "$ipath" ] && return 0
-
-	ymsg ">>> compress $ipath"
-
-	#first, rename dir.
-	[ -f ${ipath}/dir ] && mv ${ipath}/{dir,dir-"$N".info}
-	find $ipath -type f \
-  		-exec gzip '{}' ';' 2>/dev/null
-}
 
 # System Xorg Desktop Utilities Network Games Graphics Video             
 # Audio Office Development Security Science-education Drivers
@@ -929,14 +913,14 @@ split_doc() {
 	local dir="$1"
 	local destdir="$workdir"
 	docs=$(ls -d $dir/usr/share/doc/* 2>/dev/null)
-	info=$(ls -d $dir/usr/share/info/* 2>/dev/null)
+	#info=$(ls -d $dir/usr/share/info/* 2>/dev/null)
 	gtk_docs=$(ls -d $dir/usr/share/gtk-doc/html/* 2>/dev/null)
 	if [ x"$docs" != "x" ]; then
 		ypkg_domv $dir/usr/share/doc $destdir/$N-doc_$V$R/usr/share
 	fi
-	if [ x"$info" != "x" ]; then
-		ypkg_domv $dir/usr/share/info $destdir/$N-doc_$V$R/usr/share
-	fi
+	#if [ x"$info" != "x" ]; then
+	#	ypkg_domv $dir/usr/share/info $destdir/$N-doc_$V$R/usr/share
+	#fi
 	if [ x"$gtk_docs" != "x" ]; then
 		ypkg_domv $dir/usr/share/gtk-doc/html $destdir/$N-doc_$V$R/usr/share/gtk-doc
 	fi
@@ -1223,17 +1207,17 @@ ypkg_mkpackage() {
 	ypkg_strip_bin $YPPATH_DEST
 
 	#split i18n
-	spacks+="$(split_i18n $YPPATH_DEST) "
+	#spacks+="$(split_i18n $YPPATH_DEST) "
 
 	#split dev
 	spacks+="$(split_dev $YPPATH_DEST) "
 
 	#split_doc
-	spacks+="$(split_doc $YPPATH_DEST) "
+	#spacks+="$(split_doc $YPPATH_DEST) "
 
-	#compress man 
-	ypkg_gzip_man $YPPATH_DEST
-	
+	#compress man doc info
+	ypkg_gzip_extra $YPPATH_DEST
+
 	#mkpackges one by one
 	for pack in $spacks; do
 		#skip empty dirs
