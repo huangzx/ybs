@@ -2419,7 +2419,7 @@ ypkg_do_remove_package() {
 		if grep -wq post_remove $YPPATH_SCRIPT/$install; then
 			msg "* Call post_remove "
 			post_remove   
-			rr_check "* [Error]: Call post_remove failed"
+			err_check "* [Error]: Call post_remove failed"
 		fi
 
 		#remove infos.
