@@ -1939,8 +1939,11 @@ install_pack () {
 		install="$(get_value install $control)"
 		if [ "x$install" != "x" ] && is_exist $install; then
 			. $install
-			msg "* Call pre_install..."
-			pre_install
+			if grep -wq pre_install $install; then
+				msg "* Call pre_install..."
+				pre_install
+				err_check "* [Error]: ${N}_$V$R call pre_install failed"
+			fi
 		fi
 	fi
 	tar xf $pack $pkgdata
@@ -1950,8 +1953,10 @@ install_pack () {
 	if [ "x$install" != "x" ] && is_exist $YPPATH_DB/$N/$install; then
 		msg "* Call post_install..."
 		. $YPPATH_DB/$N/$install
-		post_install
-		err_check "* [Error]: ${N}_$V$R call post_install failed"
+		if grep -wq post_install $install; then
+			post_install
+			err_check "* [Error]: ${N}_$V$R call post_install failed"
+		fi
 	fi
 	#
 	#install time
@@ -2395,16 +2400,22 @@ ypkg_do_remove_package() {
 		. $file
 		install=$INSTALL
 		if [ "x$install" != "x" ] && is_exist $YPPATH_SCRIPT/$install; then
-			msg "* Call pre_remove "
-			pre_remove  2>/dev/null
+			if grep -wq pre_remove $YPPATH_SCRIPT/$install; then
+				msg "* Call pre_remove "
+				pre_remove 
+				err_check "* [Error]: Call pre_remove failed"
+			fi
 		fi	
 
 		#remove all files link and directories
 		ypkg_readfile $infofile "r"
 	
 		#
-		msg "* Call pre_remove "
-		post_remove   2>/dev/null
+		if grep -wq post_remove $YPPATH_SCRIPT/$install; then
+			msg "* Call post_remove "
+			post_remove   
+			rr_check "* [Error]: Call post_remove failed"
+		fi
 
 		#remove infos.
 		ypkg_rm_packgeinfo
@@ -2486,14 +2497,17 @@ ypkg_remove_package() {
 				blank_funcs "pbs"
 				. $YPPATH_DB/$N/${N}_$V$R.desc
 				install=$INSTALL
-				. $YPPATH_DB/$N/$install
-				ymsg "* Call pre_remove of ${N}_$V$R:"	
-				pre_remove 
+				if [ "x$install" != "x" ] && is_exist $YPPATH_DB/$N/$install; then
+					. $YPPATH_DB/$N/$install
+					if grep -wq pre_remove YPPATH_DB/$N/$install; then
+						ymsg "* Call pre_remove of ${N}_$V$R:"	
+						pre_remove 
+						err_check "* [Error]: Call pre_remove failed"
+					fi
+				fi
 			fi
 			ymsg "* Remove content of ${N}_$V$R:"
 		        ypkg_do_remove_package "$N" "$V" "$R"
-			ymsg "* Call pre_remove of ${N}_$V$R:"
-			post_remove
 		done
 	else
 	        rmsg "* [Error]: $1 not found."
