@@ -1953,7 +1953,7 @@ install_pack () {
 	if [ "x$install" != "x" ] && is_exist $YPPATH_DB/$N/$install; then
 		msg "* Call post_install..."
 		. $YPPATH_DB/$N/$install
-		if grep -wq post_install $install; then
+		if grep -wq post_install $YPPATH_DB/$N/$install; then
 			post_install
 			err_check "* [Error]: ${N}_$V$R call post_install failed"
 		fi
@@ -2499,7 +2499,7 @@ ypkg_remove_package() {
 				install=$INSTALL
 				if [ "x$install" != "x" ] && is_exist $YPPATH_DB/$N/$install; then
 					. $YPPATH_DB/$N/$install
-					if grep -wq pre_remove YPPATH_DB/$N/$install; then
+					if grep -wq pre_remove $YPPATH_DB/$N/$install; then
 						ymsg "* Call pre_remove of ${N}_$V$R:"	
 						pre_remove 
 						err_check "* [Error]: Call pre_remove failed"
