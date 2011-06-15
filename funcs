@@ -1956,9 +1956,9 @@ install_pack () {
 	err_check "* [Error]: ${N}_$V$R copy binary package to / failed"
 	
 	if [ "x$install" != "x" ] && is_exist $YPPATH_DB/$N/$install; then
-		msg "* Call post_install..."
 		. $YPPATH_DB/$N/$install
 		if grep -wq post_install $YPPATH_DB/$N/$install; then
+			msg "* Call post_install..."
 			post_install
 			err_check "* [Error]: ${N}_$V$R call post_install failed"
 		fi
