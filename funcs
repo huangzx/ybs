@@ -1023,7 +1023,10 @@ mkpackage() {
 		TT=$T
 		. $pbsfile
 		install=$INSTALL
-		cp ${pbsfile%/*}/files/$install $pbsfile $dbdir
+		if [ "x$install" != "x" ] && is_exist ${pbsfile%/*}/files/$install; then
+			cp ${pbsfile%/*}/files/$install  $dbdir
+		fi
+		cp $pbsfile $dbdir
 	fi
 	build_date="$(date +%s)"
 	declare -a install_size=($(du $source_dir -sb))
@@ -1139,7 +1142,9 @@ OOO
 OOO
 	cd $pkgdir
 	cp $workdir/${N}_$V$R.list $filelist
-	is_exist $FILES_PATH/files/$install && cp $FILES_PATH/files/$install .
+	if [ "x$install" != "x" ] && is_exist $FILES_PATH/files/$install; then
+		cp $FILES_PATH/files/$install .
+	fi
 	tar cjf ../$pkginfo *
 
 	#creat ypkg package
