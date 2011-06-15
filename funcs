@@ -1344,6 +1344,7 @@ ypkg_find_info() {
 ypkg_dodesktop() {
 	local dfile="$1"
 	local picture="$2"
+	local icon=""
 	is_exist "$FILES_PATH/files/${dfile##*/}"   && dfile="$FILES_PATH/files/${dfile##*/}"
 	is_exist "$FILES_PATH/files/${picture##*/}" && picture="$FILES_PATH/files/${picture##*/}"
 	if [ x"$dfile" != x ] && [ -f "$dfile" ]; then
@@ -1353,6 +1354,12 @@ ypkg_dodesktop() {
 	if [ x"$picture" != x ] && [ -f "$picture" ]; then 
 		ypkg_docp "$picture"   "$YPPATH_DEST"/usr/share/pixmaps
 	fi
+	dfile="${dfile##*/}"
+	picture="${picture##*/}"
+	icon=$(grep ^Icon= "$YPPATH_DEST"/usr/share/applications/"$dfile" |sed 's/Icon=//g')
+	name=${icon%.*}
+	type=${picture##*.}
+	mv "$YPPATH_DEST"/usr/share/pixmaps/"$picture" "$YPPATH_DEST"/usr/share/pixmaps/"$name"."$type"
 }
 
 #add unit for systemd
@@ -1703,6 +1710,7 @@ ypkg_dodoc() {
 	cp -a "$@" "$YPPATH_DEST"/usr/share/doc/"$N"/"$V$R"
 }
 
+#
 #ypkg useradd
 ypkg_useradd() {
 	local end=${!#}
@@ -1713,6 +1721,18 @@ ypkg_useradd() {
 	fi
 }
 
+#
+#ypkg userdel
+ypkg_userdel() {
+	local end=${!#}
+	local N=$end
+	if getent passwd "$N" >/dev/null; then 
+		msg ">>> Deleting: user $N"
+		userdel "$@"
+	fi
+}
+
+#
 #ypkg groupadd
 ypkg_groupadd() {
 	local end=${!#}
@@ -1720,9 +1740,22 @@ ypkg_groupadd() {
 	if ! getent group "$N" >/dev/null; then
 		msg ">>> Creating: group $N"
 		groupadd "$@"
-fi
+	fi
 }
 
+#
+#
+#ypkg groupdel
+ypkg_groupdel() {
+	local end=${!#}
+	local N=$end
+	if getent group "$N" >/dev/null; then
+		msg ">>> Deleting: group $N"
+		groupdel "$@"
+	fi
+}
+
+#
 #
 ypkg_libtool_finish () {
 	local dir="$@"
