@@ -1179,7 +1179,7 @@ OOO
 			fi
 		done		
 	fi
-	blank_funcs "desc"
+	INSTALL=""
 }
 
 #
