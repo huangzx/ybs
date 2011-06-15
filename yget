@@ -64,23 +64,6 @@ yget_mktemp(){
 }
 
 #
-# get_value depend file
-get_value () {
-	local element=$1
-	local file=$2
-	local value=
-	case $element in
-		size) value="$(grep "<$element>" $file |head -n1)" ;;
-		   *) value="$(grep "<$element>" $file |sort -u)" 
-	esac
-	value=${value//<$element>/}
-	value=${value//<\/$element>/}
-	value=${value//,/ }
-	echo $value
-
-}
-
-#
 do_update() {
 	local universe="universe.tar.bz2"
 	local appinfo_dir="/usr/share/app-info"

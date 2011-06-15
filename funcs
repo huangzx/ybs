@@ -1,6 +1,4 @@
-#!/bin/bash
 
-#
 . /etc/environment
 export PATH
 
@@ -68,7 +66,6 @@ pkgdata="pkgdata"
 pkginfo="pkginfo"
 control="control.xml"
 filelist="filelist"
-pkgpbs="pkgpbs"
 
 #
 blank_funcs () {
@@ -85,10 +82,10 @@ blank_funcs () {
 		RECOMMENDED=""
 		CONFLICT=""
 		NOTES=""
+		OPIONAL=""
+		PROVIDE=""
+		INSTALL=""
 
-		pbs_init() {
-			:
-		}
 		pbs_unpack() {
 			:
 		}
@@ -102,15 +99,6 @@ blank_funcs () {
 			:
 		}
 		pbs_install() {
-			:
-		}
-		pbs_postinst() {
-			:
-		}
-		pbs_prerm() {
-			:
-		}
-		pbs_postrm() {
 			:
 		}
 	fi
@@ -129,6 +117,7 @@ blank_funcs () {
 		CONFLICT=""
 		PACK_SIZE=""
 		DESCRIPTION=""
+		INSTALL=""
 		SHA=""
 		NAME=""
 		BRIEF=""
@@ -183,6 +172,24 @@ is_installed () {
 	fi
 	[ "x$listfile" != "x" ] && return 0 || return 1
 }
+
+#
+#
+# get_value from xml file
+get_value () {
+	local element=$1
+	local file=$2
+	local value=
+	case $element in
+		size) value="$(grep "<$element>" $file |head -n1)" ;;
+		   *) value="$(grep "<$element>" $file |sort -u)"
+	esac
+	value=${value//<$element>/}
+	value=${value//<\/$element>/}
+	value=${value//,/ }
+	echo $value
+}
+
 
 #
 get_abspath () {
@@ -743,9 +750,6 @@ ypkg_begin_download() {
 		err_check "* [Error]: $1 not found"
 	fi
 
-	#init build script file
-	pbs_init
-
 	#create source directory.
 	mkdir -p $YPPATH_SOURCE
 	err_check "* [Error]: Create dir $YPPATH_SOURCE failed."
@@ -1009,34 +1013,30 @@ mkpackage() {
 	#
 	cd $source_dir
 	
+	mkdir -p $dbdir
+	
 	find |sort -r |fileinfo > $workdir/${N}_$V$R.list
-	pbsfile="$(ls $YPPATH_SCRIPT/${N}_$V$R.pbs 2>/dev/null)"
-	pbsfile=$(readlink -f $pbsfile 2>/dev/null)
+	install=$INSTALL
+	if is_exist $YPPATH_SCRIPT/${N}_$V$R.pbs; then
+		pbsfile="$(ls $YPPATH_SCRIPT/${N}_$V$R.pbs)"
+		atom_parse_path $pbsfile
+		TT=$T
+		. $pbsfile
+		install=$INSTALL
+		cp ${pbsfile%/*}/files/$install $pbsfile $dbdir
+	fi
 	build_date="$(date +%s)"
 	declare -a install_size=($(du $source_dir -sb))
 	install_size=${install_size[0]}
-	mkdir -p $dbdir
-	cp $pbsfile $dbdir  2>/dev/null
-	for i in list config; do
-		if [ -f $workdir/${N}_$V$R.${i} ]; then
-			cp $workdir/${N}_$V$R.${i} $dbdir  2>/dev/null
-		fi
-	done
-	[ -f $dbdir/${N}_$V$R.config ] && gzip $dbdir/${N}_$V$R.config
-	echo $YPB_CONFIG    >$dbdir/${N}_$V$R.para
-
+	is_exist $workdir/${N}_$V$R.list &&  cp $workdir/${N}_$V$R.list $dbdir
+	
 	#creat pkginfo
 	#
 	cd ..
 
 	pkgdir="${N}_$V$R-pkginfo"
 	mkdir -p $pkgdir
-	if [ "x$pbsfile" != "x" ] && [ -f $pbsfile ]; then
-		TT=
-		. $pbsfile  2>/dev/null
-		atom_parse_path $pbsfile
-		TT=$T
-	fi
+
 	category=$(ypkg_get_category "$TT")
 	name=$N
 	version=$V$R
@@ -1047,31 +1047,19 @@ mkpackage() {
 	uri="$subdir/${N}_$V$R.$PACK_SUFFIX"
 	license="$LICENSE"
 	homepage="$HOMEPAGE"
+	install="$INSTALL"
 	depend=$(echo $RDEPEND |xargs |tr " " ",")
 	bdepend=$(echo $BDEPEND |xargs |tr " " ",")
 	redepend=$(echo $RECOMMENDED |xargs |tr " " ",")
 	conflict=$(echo $CONFLICT |xargs |tr " " ",")
 	description=$(echo $DESCRIPTION |sed 's/&/and/g')
-	case $name in
-		$nn-i18n-*) 
-			depend=$nn
-			bdepend=
-			redepend=
-			conflict=
-			description="$(echo $DESCRIPTION |sed 's/&/and/g') (langpack)" ;;
-		$nn-dev)
-			depend=
-			bdepend=
-			redepend=
-			conflict=
-			description="$(echo $DESCRIPTION |sed 's/&/and/g') (development files)" ;;
-		$nn-doc)
-			depend=$nn
-			bdepend=
-			redepend=
-			conflict=
-			description="$(echo $DESCRIPTION |sed 's/&/and/g') (document pack)"
-	esac
+	if [ "x$name" = "x$nn-dev" ]; then
+		depend=
+		bdepend=
+		redepend=
+		conflict=
+		description="$(echo $DESCRIPTION |sed 's/&/and/g') (development files)" 
+	fi
 	#
 	cd $source_dir
 	cat >$dbdir/${N}_$V$R.desc <<OOO
@@ -1089,6 +1077,7 @@ RECOMMENDED="$redepend"
 CONFLICT="$conflict"
 BUILD_TIME="$build_date"
 INSTALL_SIZE="$install_size"
+INSTALL="$INSTALL"
 OOO
 	find . |cpio --quiet -o -H newc |$XZ -7 >../$pkgdata
 	declare -a size=($(du ../$pkgdata -sb))
@@ -1128,7 +1117,8 @@ OOO
    <priority>$priority</priority>                    
    <license>$license</license>
    <homepage>$homepage</homepage>
-   <repo>$repo</repo>                                   
+   <repo>$repo</repo>
+   <install>$install</install>
    <build_date>$build_date</build_date>    
    <uri>$uri</uri>
    <$gdescription>
@@ -1149,7 +1139,7 @@ OOO
 OOO
 	cd $pkgdir
 	cp $workdir/${N}_$V$R.list $filelist
-	is_exist $pbsfile && cp $pbsfile $pkgpbs
+	is_exist $FILES_PATH/files/$install && cp $FILES_PATH/files/$install .
 	tar cjf ../$pkginfo *
 
 	#creat ypkg package
@@ -1189,6 +1179,7 @@ OOO
 			fi
 		done		
 	fi
+	blank_funcs "desc"
 }
 
 #
@@ -1231,12 +1222,19 @@ ypkg_mkpackage() {
 #
 ypkg_rm_packgeinfo() {
 	local destpath=$YPPATH_DB
-	for i in check check.gz list pbs config.gz para date size desc; do
+	for i in list pbs date size; do
 		if [ -f $destpath/${N}/${N}_$V$R.${i} ]; then
 			printf "<< file %s\n" "$destpath/${N}/${N}_$V$R.${i}"
 			rm -fr "$destpath/${N}/${N}_$V$R.${i}"
 		fi
 	done
+	if [ -f $destpath/${N}/${N}_$V$R.desc ]; then
+		install=$INSTALL
+		if [ -f $destpath/${N}/$install ]; then
+			printf "<< file %s\n" "$destpath/${N}/$install"
+			rm -fr "$destpath/${N}/$install"
+		fi
+	fi
 	#remove directory
 	ypkg_rm_dir_safe $YPPATH_DB/$N
 }
@@ -1934,28 +1932,26 @@ install_pack () {
 	fi
 	#
 	cd $workdir
-
+	
 	atom_parse ${pack##*/}
-	tar xf $pack $pkgdata $pkginfo
-	if tar xf $pkginfo $pkgpbs 2>/dev/null; then
-		blank_funcs pbs
-		. $pkgpbs 
-		pbs_init
-		err_check "* [Error]: ${N}_$V$R call pbs_init failed"
-	else	
-		blank_funcs  pbs
+	tar xf $pack $pkginfo
+	if tar xf $pkginfo 2>/dev/null; then
+		install="$(get_value install $control)"
+		if [ "x$install" != "x" ] && is_exist $install; then
+			. $install
+			msg "* Call pre_install..."
+			pre_install
+		fi
 	fi
+	tar xf $pack $pkgdata
 	cd "$YPKG_ROOT" && $XZ -d -c $workdir/$pkgdata |cpio -idum --quiet
 	err_check "* [Error]: ${N}_$V$R copy binary package to / failed"
 	
-	pbsfile="$(ls $YPPATH_DB/$N/${N}_$V$R.pbs 2>/dev/null)"
-	if [ x"$pbsfile" != x ];then
-		blank_funcs pbs
-		. $pbsfile 
-		pbs_postinst
-		err_check "* [Error]: ${N}_$V$R call pbs_postinst failed"
-	else	
-		blank_funcs  pbs
+	if [ "x$install" != "x" ] && is_exist $YPPATH_DB/$N/$install; then
+		msg "* Call post_install..."
+		. $YPPATH_DB/$N/$install
+		post_install
+		err_check "* [Error]: ${N}_$V$R call post_install failed"
 	fi
 	#
 	#install time
@@ -1963,7 +1959,6 @@ install_pack () {
 	echo "INSTALL_TIME=\"$IT\""                     >>$YPPATH_DB/$N/${N}_$V$R.desc
 	#
 	cd $workdir
-	tar xf $pkginfo	$control || err_check "* [Error]: ${N}_$V$R uncompress $control failed"
 	cp $YPPATH_WORLD $YPPATH_WORLD-
 	timeout=10
 	while true; do
@@ -2024,10 +2019,10 @@ ypkg_begininstall() {
 
 	ymsg ">> $T/${N}_$V$R configure..."
 	YPPATH_DEST="$workdir/${N}_$V$R"
-	[ -p ${N}_$V$R.pipe ] || mkfifo ${N}_$V$R.pipe
+	#[ -p ${N}_$V$R.pipe ] || mkfifo ${N}_$V$R.pipe
 	cd "$N-$V$R"   2>/dev/null
-	tee ../${N}_$V$R.config < ../${N}_$V$R.pipe & 
-	pbs_config > ../${N}_$V$R.pipe
+	#tee ../${N}_$V$R.config < ../${N}_$V$R.pipe & 
+	pbs_config #> ../${N}_$V$R.pipe
 	err_check "* [Error]: $T/${N}_$V$R call pbs_config failed"
 
 	#call build
@@ -2394,29 +2389,22 @@ ypkg_do_remove_package() {
 	
 	[ "x$files" = "x" ] && return 1
 	for file in $files; do
-		file=${file##*/}
-		atom_parse $file
-		T=$1
+		atom_parse_path $file
 		YPPATH_SCRIPT=$YPPATH_DB/$N
-
 		infofile=$YPPATH_SCRIPT/${N}_$V$R.list
+		. $file
+		install=$INSTALL
+		if [ "x$install" != "x" ] && is_exist $YPPATH_SCRIPT/$install; then
+			msg "* Call pre_remove "
+			pre_remove  2>/dev/null
+		fi	
 
-		blank_funcs pbs
-
-		. $YPPATH_SCRIPT/${N}_$V$R.pbs 2>/dev/null
-
-		pbs_init
-		err_check "call pbs_init failed"
-
-		pbs_prerm
-		err_check "call pbs_prerm failed"
-		
 		#remove all files link and directories
 		ypkg_readfile $infofile "r"
 	
 		#
-		pbs_postrm
-		err_check "call pbs_postrm failed"
+		msg "* Call pre_remove "
+		post_remove   2>/dev/null
 
 		#remove infos.
 		ypkg_rm_packgeinfo
@@ -2494,15 +2482,18 @@ ypkg_remove_package() {
         if [ "x$listfile" != "x" ]; then
 		for i in ${listfile[@]}; do
 			atom_parse_path $i
-			if [ -f $YPPATH_DB/$N/${N}_$V$R.pbs ]; then
+			if [ -f $YPPATH_DB/$N/${N}_$V$R.desc ]; then
 				blank_funcs "pbs"
-				. $YPPATH_DB/$N/${N}_$V$R.pbs
-				ymsg "* Call pbs_prerm of ${N}_$V$R:"	
-				pbs_prerm   2>/dev/null
-				blank_funcs "pbs"
+				. $YPPATH_DB/$N/${N}_$V$R.desc
+				install=$INSTALL
+				. $YPPATH_DB/$N/$install
+				ymsg "* Call pre_remove of ${N}_$V$R:"	
+				pre_remove 
 			fi
 			ymsg "* Remove content of ${N}_$V$R:"
 		        ypkg_do_remove_package "$N" "$V" "$R"
+			ymsg "* Call pre_remove of ${N}_$V$R:"
+			post_remove
 		done
 	else
 	        rmsg "* [Error]: $1 not found."
@@ -2578,9 +2569,8 @@ ypkg_whatprovides() {
 		rmsg "* $file No such file or directory"
 		return 1
 	fi
-	findlist=$(find $YPPATH_DB -iname "*.list" |grep -v "\-i18n\-")
-	str_isIn $file /usr/share/locale $file && findlist=$(find $YPPATH_DB -iname "*.list" |grep "\-i18n\-")
-	str_isIn $file /usr/include      $file && findlist=$(find $YPPATH_DB -iname "*.list" |grep "\-dev_")
+	findlist=$(find $YPPATH_DB -iname "*.list")
+	str_isIn $file "/usr/include" && findlist=$(find $YPPATH_DB -iname "*-dev_*.list")
 	packages=$(grep ",$file," $findlist)
 	for i in $packages; do
 		((outcnt++))
