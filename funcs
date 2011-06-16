@@ -1449,6 +1449,29 @@ ypkg_dofont() {
 	fc-cache -f "$1"
 }
 
+#
+ypkg_install_info () {
+	msg ">>> install info: $@"
+	[ -x /usr/bin/install-info ] || return 0
+	infodir=/usr/share/info
+	for i in $@; do
+		install-info "$infodir"/"$i" $infodir/dir 2>/dev/null
+	done	
+	return 0
+}
+
+#
+ypkg_remove_info () {
+	msg ">>> remove info: $@"
+	[ -x /usr/bin/install-info ] || return 0
+	infodir=/usr/share/info
+	for i in $@; do
+		install-info --delete "$infodir"/"$i" $infodir/dir 2>/dev/null
+	done
+	return 0
+}
+
+
 #patch
 ypkg_patch(){
 	local file=""
