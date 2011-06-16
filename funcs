@@ -1013,9 +1013,8 @@ mkpackage() {
 	#
 	cd $source_dir
 	
-	mkdir -p $dbdir
-	
 	find |sort -r |fileinfo > $workdir/${N}_$V$R.list
+	mkdir -p $dbdir
 	install=$INSTALL
 	if is_exist $YPPATH_SCRIPT/${N}_$V$R.pbs; then
 		pbsfile="$(ls $YPPATH_SCRIPT/${N}_$V$R.pbs)"
