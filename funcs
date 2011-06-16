@@ -1358,7 +1358,11 @@ ypkg_dodesktop() {
 	icon=$(grep ^Icon= "$YPPATH_DEST"/usr/share/applications/"$dfile" |sed 's/Icon=//g')
 	name=${icon%.*}
 	type=${picture##*.}
-	mv "$YPPATH_DEST"/usr/share/pixmaps/"$picture" "$YPPATH_DEST"/usr/share/pixmaps/"$name"."$type"
+	if [ x"$picture" != x"$name.$type" ]; then 
+		mv "$YPPATH_DEST"/usr/share/pixmaps/"$picture" "$YPPATH_DEST"/usr/share/pixmaps/"$name"."$type" 
+	else
+		return 0
+	fi
 }
 
 #add unit for systemd
