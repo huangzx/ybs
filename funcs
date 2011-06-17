@@ -2118,6 +2118,7 @@ ypkg_begininstall() {
 	fi
 
 	#
+	INSTALL=""
 	if [ "x$PROVIDE" != "x" ]; then	
 		ymsg ">> $T/${N}_$V$R splite $PROVIDE..."
 		for i in $PROVIDE; do
