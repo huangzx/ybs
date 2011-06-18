@@ -282,25 +282,6 @@ install_prepare () {
 		done
 		echo $packname $pack_final_ver $uri $sha $size $install_size
 		#
-		. /etc/environment
-		lang=zh_CN
-		case $LANG in 
-			zh_CN.UTF-8) lang=zh_CN ;;
-				*)    lang=$LANG
-		esac
-		if [ "x$LANG" != "x" ]; then
-			atom_parse_type $packname-i18n-${lang}_$pack_final_ver
-			if ! is_installed $N $V$R; then
-				ypkg_find_info $YPPATH_UNI  >$singleinfo
-				if [ "x$(cat $singleinfo)" != "x" ]; then
-					         languri="$(get_value   uri        $singleinfo)"
-					         langsha="$(get_value   sha        $singleinfo)"
-					        langsize="$(get_value   size       $singleinfo)"
-					langinstall_size="$(get_value install_size $singleinfo)"
-					echo $packname-i18n-$lang $pack_final_ver $languri $langsha $langsize $langinstall_size
-				fi
-			fi	
-		fi
 		for redepend in $redepends; do
 			atom_parse_type $redepend
 			redepend_name=$N
@@ -581,7 +562,7 @@ do_upgrade () {
 	fi
 	ymsg "* Searching ..."
 	upgrade_file=$(mktemp)
-	find $YPPATH_DB/ -maxdepth 2 -type f -name "*.desc" |grep -v "\-i18n\-" |while read line;do
+	find $YPPATH_DB/ -maxdepth 2 -type f -name "*.desc" |while read line;do
 		atom_parse_path $line
 		. $line
 		#buildtime_old=$BUILD_TIME
@@ -664,7 +645,7 @@ do_remove () {
 			 . ${listfile%.list}.desc
 			 [ "x$INSTALL_SIZE" = "x" ] && INSTALL_SIZE=$(cat ${listfile%.list}.size 2>/dev/null)
 			 echo app: $N $V$R $INSTALL_SIZE  >>$allpacks
-			 find_command='find $YPPATH_DB -maxdepth 2 -name "*.desc" |grep -v "\-i18n\-" |grep -v "\-dev_"'
+			 find_command='find $YPPATH_DB -maxdepth 2 -name "*.desc" |grep -v "\-dev_"'
 			 eval $find_command |while read line; do
 				. $line
 				atom_parse_path $line
@@ -672,11 +653,6 @@ do_remove () {
 				RDEPEND="${RDEPEND//,/ }"
 				str_isIn "$RDEPEND" "$app" && echo remove: $N $V$R $INSTALL_SIZE >>$allpacks
 			 done
-			 find $YPPATH_DB -maxdepth 2 -name "$N-i18n-*.desc" |while read line; do
-				. $line
-				atom_parse_path $line
-				echo remove: $N $V$R $INSTALL_SIZE >>$allpacks
-			 done	
 		fi
 		echo "$1"  >>$record
 		shift
