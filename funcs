@@ -1226,7 +1226,7 @@ ypkg_mkpackage() {
 #
 ypkg_rm_packgeinfo() {
 	local destpath=$YPPATH_DB
-	for i in list pbs date size; do
+	for i in config.gz para list pbs date size; do
 		if [ -f $destpath/${N}/${N}_$V$R.${i} ]; then
 			printf "<< file %s\n" "$destpath/${N}/${N}_$V$R.${i}"
 			rm -fr "$destpath/${N}/${N}_$V$R.${i}"
