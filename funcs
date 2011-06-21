@@ -2069,7 +2069,7 @@ install_pack () {
 			atom_parse_type $i
 			if is_installed $N ; then
 				msg "Remove conflicting packages: ${N} $V$R"
-				ypkg_upgrade_remove "${N}_$V$R" "${current_name}_$current_version"
+				ypkg_conflict_remove "${N}_$V$R" "${current_name}_$current_version"
 			fi
 		done
 	fi
@@ -2586,7 +2586,7 @@ ypkg_remove_package() {
 }
 
 #
-ypkg_upgrade_remove() {
+ypkg_conflict_remove() {
 	local old=$1
 	local new=$2
 	atom_parse_type $old
@@ -2633,6 +2633,78 @@ ypkg_upgrade_remove() {
 			((timeout--))
 		fi
 	done
+}
+
+#
+ypkg_upgrade_remove() {
+	local old=$1
+	local new=$2
+	local operate=""
+	atom_cmp $old $new
+	case "x$?" in
+		x2) operate="upgrade"   ;;
+		x1) operate="downgrade"
+	esac	
+	atom_parse_type $old
+	old_listfile=$(ypkg_getlistfile)
+	atom_parse_type $new
+	new_listfile=$(ypkg_getlistfile)
+	cat $old_listfile |while read line; do	
+		csv_split "$line"
+	        # ${value[0]} --- filetype
+	        # ${value[1]} --- filename
+		#if ! grep "^${value[0]},${value[1]}," $new_listfile >/dev/null 2>/dev/null; then
+		if ! grep ",${value[1]}," $new_listfile >/dev/null 2>/dev/null; then
+			case "${value[0]}" in
+			F) #file
+		   	   is_exist "${value[1]}" || continue
+			   printf "<< file %s\n" "${value[1]}"
+			   unlink "${value[1]}"    ;;
+			S) #symbol.
+			   is_exist "${value[1]}" || continue
+			   printf "<< link %s\n" "${value[1]}"
+			   unlink "${value[1]}"	;;
+			D) #directory.
+			   is_exist "${value[1]}" || continue
+			   ypkg_rm_dir_safe "${value[1]}" 
+			esac
+		fi
+	done
+	#
+	atom_parse_path $old_listfile
+	#remove infos.
+	ypkg_rm_packgeinfo
+        #remove info from word
+	timeout=10
+	while true; do
+		[ $timeout -eq 0 ] && rm -f "$WORLD_LOCKFILE"
+		if [ ! -f "$WORLD_LOCKFILE" ]; then
+			touch $WORLD_LOCKFILE
+     			ypkg_find_info $YPPATH_WORLD  "remove"
+			rm -f $WORLD_LOCKFILE
+			break
+		else	
+			rmsg "$YPPATH_WORLD is locked, wait..."
+			sleep 1
+			((timeout--))
+		fi
+	done
+
+	#
+	if [ "x$operate" != "" ]; then
+		atom_parse_path $new_listfile
+		is_exist $YPPATH_DB/$N/${N}_$V$R.desc && . $YPPATH_DB/$N/${N}_$V$R.desc || return 0
+		install="$INSTALL"
+		if [ "x$install" != "x" ] && is_exist $YPPATH_DB/$N/$install; then
+			. $YPPATH_DB/$N/$install
+			if grep -wq post_"$operate" $YPPATH_DB/$N/$install; then
+				msg "* Call post_"$operate"..."
+				post_"$operate" $old $new
+				err_check "* [Error]: ${N}_$V$R call post_$operate failed"
+			fi	
+			INSTALL=
+		fi
+	fi
 }
 
 #
