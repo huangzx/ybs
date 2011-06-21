@@ -1226,22 +1226,27 @@ ypkg_mkpackage() {
 #
 ypkg_rm_packgeinfo() {
 	local destpath=$YPPATH_DB
+	#delete info files
 	for i in config.gz para list pbs date size; do
 		if [ -f $destpath/${N}/${N}_$V$R.${i} ]; then
 			printf "<< file %s\n" "$destpath/${N}/${N}_$V$R.${i}"
 			rm -fr "$destpath/${N}/${N}_$V$R.${i}"
 		fi
 	done
-	if [ -f $destpath/${N}/${N}_$V$R.desc ]; then
-		. $destpath/${N}/${N}_$V$R.desc
+	#delete install file
+	ls -1 $destpath/${N}/${N}_*.desc |while read i; do
+		. ${i}
 		install=$INSTALL
-		if [ -f $destpath/${N}/$install ]; then
-			printf "<< file %s\n" "$destpath/${N}/$install"
-			rm -fr "$destpath/${N}/$install"
+		if ! grep -wq INSTALL=\"$install\" $(ls -1 $destpath/${N}/${N}_*.desc |grep -v ${i}); then
+			if [ -f $destpath/${N}/$install ]; then
+				printf "<< file %s\n" "$destpath/${N}/$install"
+				rm -fr "$destpath/${N}/$install"
+			fi
 		fi
-		printf "<< file %s\n" "$destpath/${N}/${N}_$V$R.desc"
-		rm -fr "$destpath/${N}/${N}_$V$R.desc"
-	fi
+	done
+	#delete desc file
+	printf "<< file %s\n" "$destpath/${N}/${N}_$V$R.desc"
+	rm -fr "$destpath/${N}/${N}_$V$R.desc"
 	#remove directory
 	ypkg_rm_dir_safe $YPPATH_DB/$N
 }
