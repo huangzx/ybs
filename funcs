@@ -855,11 +855,11 @@ sys|x11|gnome|kde|lxde|xfce|app)
     	      games)	category="Games" 		;;
     	   graphics)	category="Graphics" 		;;
     	      media)	category="Multimedia" 		;;
-    	     office)	category="Office" 		;;
+     printer|office)	category="Office" 		;;
     	        dev)	category="Development" 		;;
     	   security)	category="Security" 		;;
-	   drivers)	category="Drivers"		;;
-	        sci)	category="Science-education"    ;;
+	    drivers)    category="Drivers"		;;
+      education|sci)	category="Science-education"    ;;
 		non)	category="Non-free"		;;
     	       misc)	category="Misc"                 ;;
     	          *)	category="Misc"                 ;;
