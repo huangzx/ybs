@@ -827,12 +827,12 @@ ypkg_strip_bin() {
 	find $1/{,usr/}lib -type f -exec strip --strip-debug '{}' ';' 2>/dev/null
 }
 
-#compress man doc info 
+#compress man and info 
 ypkg_gzip_extra() {
-	#msg ">>> compress man doc info"
+	#msg ">>> compress man info"
 	[ -f $1/usr/share/info/dir ] && rm $1/usr/share/info/dir 2>/dev/null
-	find $1/usr/{,share/}{man,doc,info} -type f \
-  		-exec gzip '{}' ';' 2>/dev/null
+	#find $1/usr/{,share/}{man,doc,info} -type f -exec gzip '{}' ';' 2>/dev/null
+	find $1/usr/{,share/}{man,info} -type f -exec gzip '{}' ';' 2>/dev/null
 }
 
 
