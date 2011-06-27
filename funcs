@@ -2725,7 +2725,7 @@ ypkg_whatprovides() {
 	file="$1"
 	file=$(get_abspath "$file")
 	if ! is_exist "$file"; then
-		rmsg "* $file No such file or directory"
+		rmsg "* $file No such file or directory."
 		return 1
 	fi
 	findlist=$(find $YPPATH_DB -iname "*.list")
@@ -2745,7 +2745,7 @@ ypkg_whatprovides() {
 	done
 	if [ "$outcnt" == "0" ]; then
 		echo ""
-		rmsg "* $file Not found."
+		rmsg "* $file not found at any packages."
 		echo ""
 		return 1
 	fi
