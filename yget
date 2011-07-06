@@ -11,6 +11,9 @@
 [ -f /etc/yget.conf ] && . /etc/yget.conf
 [ -f /usr/lib/ybs/funcs ] && . /usr/lib/ybs/funcs
 
+#
+UNIVERSE="universe"
+
 # creat paths
 mkdir -p $YPPATH_FIELD $YPPATH_DEST $YPPATH_PKGDEST
 TMPDIR="/tmp/yget_work"
@@ -741,7 +744,7 @@ search)
 	       usage
 	       exit 0
 	fi
-	do_update
+	[ -f "$YPPATH_PKGDEST/$UNIVERSE" ] || do_update
 	for ((i=0; i<${#args[@]}; i++)); do
 		do_search ${args[i]}
 	done
@@ -754,7 +757,7 @@ install)
 	       exit 0
 	fi
 	check_root
-	do_update
+	[ -f "$YPPATH_PKGDEST/$UNIVERSE" ] || do_update
 	do_install ${args[@]}
 	;;
 
@@ -765,7 +768,7 @@ install-dev)
 	       exit 0
 	fi
 	check_root
-	do_update
+	[ -f "$YPPATH_PKGDEST/$UNIVERSE" ] || do_update
 	do_install-dev ${args[@]}
 	;;
 
