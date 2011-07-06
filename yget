@@ -727,6 +727,7 @@ for ((i=0; i<${#argvs[@]}; i++)); do
 	esac
 done
 
+
 #
 case "$command" in
 clean) 
@@ -740,6 +741,7 @@ search)
 	       usage
 	       exit 0
 	fi
+	do_update
 	for ((i=0; i<${#args[@]}; i++)); do
 		do_search ${args[i]}
 	done
@@ -752,6 +754,7 @@ install)
 	       exit 0
 	fi
 	check_root
+	do_update
 	do_install ${args[@]}
 	;;
 
@@ -762,6 +765,7 @@ install-dev)
 	       exit 0
 	fi
 	check_root
+	do_update
 	do_install-dev ${args[@]}
 	;;
 

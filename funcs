@@ -1186,11 +1186,30 @@ OOO
 	INSTALL=""
 }
 
+# check /dirs permission
+check_perm_dirs () {
+	local dir="$1"
+	for i in tmp root proc sys; do	
+		[ -d $dir/${i} ] && rm -rf $dir/${i}
+	done
+
+	for i in bin boot dev etc home lib media mnt opt sbin usr var; do
+		if [ -d $dir/${i} ];then
+			chown root:root $dir/${i}
+			chmod 755       $dir/${i}
+		fi
+	done
+}
+
 #
 ypkg_mkpackage() {
 	nn=$N
 	#source packages
 	local spacks="$YPPATH_DEST "
+
+	#check /dirs permission
+	check_perm_dirs "$YPPATH_DEST"
+
 	if [ "x$YP_I18N" != "x" ];then
 		#strip i18n 
 		ypkg_strip_i18n $YPPATH_DEST
@@ -1205,7 +1224,9 @@ ypkg_mkpackage() {
 	#spacks+="$(split_i18n $YPPATH_DEST) "
 
 	#split dev
-	spacks+="$(split_dev $YPPATH_DEST) "
+	if [ x"$OPINION" != x"nodev" ]; then
+		spacks+="$(split_dev $YPPATH_DEST) "
+	fi
 
 	#split_doc
 	#spacks+="$(split_doc $YPPATH_DEST) "
@@ -2022,6 +2043,12 @@ install_pack () {
 	cd "$YPKG_ROOT" && $XZ -d -c $workdir/$pkgdata |cpio -idum --quiet
 	err_check "* [Error]: ${N}_$V$R copy binary package to / failed"
 	
+	#check /dir permissions
+	for i in bin dev etc home run usr var; do
+		chmod 755 "$YPKG_ROOT"/"$i"
+	done
+
+	#
 	if [ "x$install" != "x" ] && is_exist $YPPATH_DB/$N/$install; then
 		. $YPPATH_DB/$N/$install
 		if grep -wq post_install $YPPATH_DB/$N/$install; then
