@@ -1224,7 +1224,7 @@ ypkg_mkpackage() {
 	#spacks+="$(split_i18n $YPPATH_DEST) "
 
 	#split dev
-	if [ x"$OPINION" != x"nodev" ]; then
+	if ! str_isIn "$OPINION" "nodev"; then
 		spacks+="$(split_dev $YPPATH_DEST) "
 	fi
 
