@@ -485,6 +485,7 @@ do_install () {
 			dsize=${line[1]}
 			let "count++"
 			if [ "x$PRETEND" != "xyes" ]; then
+				[ -f $YPPATH_PKGDEST/${duri##*/} ] && rm $YPPATH_PKGDEST/${duri##*/}
 				do_download $duri | { sleep 1
 				while true;do 
 					if [ -f $YPPATH_PKGDEST/${duri##*/} ]; then
