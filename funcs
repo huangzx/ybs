@@ -2034,7 +2034,7 @@ install_pack () {
 			. $install
 			if grep -wq pre_install $install; then
 				msg "* Call pre_install..."
-				pre_install
+				pre_install $N $V$R
 				err_check "* [Error]: ${N}_$V$R call pre_install failed"
 			fi
 		fi
@@ -2053,7 +2053,7 @@ install_pack () {
 		. $YPPATH_DB/$N/$install
 		if grep -wq post_install $YPPATH_DB/$N/$install; then
 			msg "* Call post_install..."
-			post_install
+			post_install $N $V$R
 			err_check "* [Error]: ${N}_$V$R call post_install failed"
 		fi
 	fi
@@ -2502,7 +2502,7 @@ ypkg_do_remove_package() {
 		if [ "x$install" != "x" ] && is_exist $YPPATH_SCRIPT/$install; then
 			if grep -wq pre_remove $YPPATH_SCRIPT/$install; then
 				msg "* Call pre_remove "
-				pre_remove 
+				pre_remove $N $V$R
 				err_check "* [Error]: Call pre_remove failed"
 			fi
 		fi	
@@ -2513,7 +2513,7 @@ ypkg_do_remove_package() {
 		#
 		if grep -wq post_remove $YPPATH_SCRIPT/$install; then
 			msg "* Call post_remove "
-			post_remove   
+			post_remove $N $V$R
 			err_check "* [Error]: Call post_remove failed"
 		fi
 
@@ -2601,7 +2601,7 @@ ypkg_remove_package() {
 					. $YPPATH_DB/$N/$install
 					if grep -wq pre_remove $YPPATH_DB/$N/$install; then
 						ymsg "* Call pre_remove of ${N}_$V$R:"	
-						pre_remove 
+						pre_remove  $N $V$R
 						err_check "* [Error]: Call pre_remove failed"
 					fi
 				fi
