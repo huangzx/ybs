@@ -2772,7 +2772,7 @@ ypkg_whatprovides() {
 	done
 	if [ "$outcnt" == "0" ]; then
 		echo ""
-		rmsg "* $file not found at any packages."
+		rmsg "* $file not owned by any packages."
 		echo ""
 		return 1
 	fi
