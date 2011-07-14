@@ -1423,6 +1423,42 @@ ypkg_doinit() {
 	fi
 }
 
+#ypkg_domk, for modules make/make install automatic
+ypkg_domk() {
+	# $1 action: build delete
+	# $2 name
+	# $3 version
+	# e.g: /usr/src/rtl8101-1.020.00
+	# name=rtl8101
+	# version=1.020.00
+	
+	local action="$1"
+	local name="$2"
+	local version="$3"
+	local record=/var/lib/ypkg_domk/"$name"/"$version"/"$(uname -m)"/
+	mkdir -p $record
+
+	#
+	case "$action" in 
+	build)
+		cd /usr/src/"$name-$version"
+		make
+		make install
+		depmod -a  
+		find -name "*.ko" |sed 's/.*\///g' >$record/modules
+		make clean
+		;;
+	delete)
+		cat $record/modules |while read i; do
+			find /lib/modules/"$(uname -r)" -type f -name "${i}" -exec rm {} \;
+		done
+		rm -r $record
+		ypkg_rm_dir_safe $(dirname record)
+
+	esac		
+}
+
+
 #cp
 ypkg_docp() {
 	local end=${!#}
@@ -1765,6 +1801,13 @@ ypkg_dodoc() {
 	mmsg ">>> Copy documents: $@"
 	install -m755 -d "$YPPATH_DEST"/usr/share/doc/"$N"/"$V$R"
 	cp -a "$@" "$YPPATH_DEST"/usr/share/doc/"$N"/"$V$R"
+}
+
+#cp dkms.conf to specified dir
+ypkg_dodkms() {
+	mmsg ">>> Copy dkms config: $1"
+	install -m755 -d "$YPPATH_DEST"/usr/src/"$N-$V$R"
+	cp -a "$FILES_PATH"/files/"$1" "$YPPATH_DEST"/usr/src/"$N-$V$R"
 }
 
 #
