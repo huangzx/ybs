@@ -1106,6 +1106,7 @@ OOO
 		gname="genericname"
 		gdescription="description"
 	fi
+	data_count="1"
 	cat >$pkgdir/$control <<OOO
 <?xml version="1.0" encoding="UTF-8"?>
 <PackageInfo>
@@ -1126,6 +1127,7 @@ OOO
    <$gdescription>
      <keyword lang="en">$description</keyword>
    </description> 
+   <data_count>$data_count</data_count>
    <data id="0">                                                     
      <name>pkgdata</name>                           
      <format>xz</format> 
