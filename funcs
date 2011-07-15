@@ -1435,7 +1435,7 @@ ypkg_domk() {
 	local action="$1"
 	local name="$2"
 	local version="$3"
-	local record=/var/lib/ypkg_domk/"$name"/"$version"/"$(uname -m)"/
+	local record=/var/lib/ypkg_domk/"$name"/"$version"/"$(uname -m)"/"$(uname -r)"
 	mkdir -p $record
 
 	#
