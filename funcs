@@ -1445,12 +1445,15 @@ ypkg_domk() {
 		local record="$dir"/"$name"/"$version"/"$(uname -m)"/"$(uname -r)"
 		mkdir -p $record
 
-		cd /usr/src/"$name-$version"
-		make $args
-		make install $args
-		depmod -a  
-		find -name "*.ko" |sed 's/.*\///g' |sort -u >$record/modules
-		make clean
+		if cd /usr/src/"$name-$version"; then
+			make $args
+			make install $args
+			depmod -a  
+			find -name "*.ko" |sed 's/.*\///g' |sort -u >$record/modules
+			make clean
+		else
+			rm -r "$dir"/"$name"/"$version"
+		fi
 		;;
 	delete)
 		local record="$dir"/"$name"/"$version"/"$(uname -m)"/"$(uname -r)"
@@ -1458,13 +1461,16 @@ ypkg_domk() {
 			find /lib/modules/"$(uname -r)" -type f -name "${i}" -exec rm {} \;
 		done
 		rm -r $record
-		ypkg_rm_dir_safe $(dirname $record) ;;
+		ypkg_rm_dir_safe $(dirname $record) 
+		;;
+
 	autoinstall)
 		ls -d1 "$dir"/*/* |awk -F\/ '{print $5 " " $6}' |while read name version;do
 			ypkg_domk build $name $version
 		done   ;;
 		*)  :
 	esac	
+
 	return 0
 }
 
