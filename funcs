@@ -1435,7 +1435,7 @@ ypkg_domk() {
 	local action="$1"
 	local name="$2"
 	local version="$3"
-	local dir="/var/lib/ypkg_domk"
+	local dir="$YPKPATH/modules"
 	mkdir -p $dir
 
 	#
