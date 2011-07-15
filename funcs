@@ -1449,7 +1449,13 @@ ypkg_domk() {
 			make $args
 			make install $args
 			depmod -a  
-			find -name "*.ko" |sed 's/.*\///g' |sort -u >$record/modules
+
+			#
+			find -name "*.ko" -exec sha1sum {} \;  |while read sha1 name; do 
+				echo ${name##.*/} $sha1
+			done |sort -u >$record/modules
+
+			#
 			make clean
 		else
 			rm -r "$dir"/"$name"/"$version"
@@ -1457,9 +1463,15 @@ ypkg_domk() {
 		;;
 	delete)
 		local record="$dir"/"$name"/"$version"/"$(uname -m)"/"$(uname -r)"
-		cat $record/modules |while read i; do
-			find /lib/modules/"$(uname -r)" -type f -name "${i}" -exec rm {} \;
+		cat $record/modules |while read name sha1; do
+			sha1_old=${sha1}
+			file=($(find /lib/modules/"$(uname -r)" -type f -name "${name}" -exec sha1sum {} \;))
+			sha1_new=${file[0]}
+			if [ "x$sha1_old" = "x$sha1_new" ]; then
+				rm -f ${file[1]}
+			fi
 		done
+
 		rm -r $record
 		ypkg_rm_dir_safe $(dirname $record) 
 		;;
@@ -2709,6 +2721,20 @@ ypkg_conflict_remove() {
 	done
 	#
 	atom_parse_path $old_listfile
+
+	#
+	is_exist $YPPATH_DB/$N/${N}_$V$R.desc && . $YPPATH_DB/$N/${N}_$V$R.desc
+	install="$INSTALL"
+	if [ "x$install" != "x" ] && is_exist $YPPATH_DB/$N/$install; then
+		. $YPPATH_DB/$N/$install
+		if grep -wq post_remove $YPPATH_DB/$N/$install; then
+			msg "* Call post_remove..."
+			post_remove $N $V$R
+			err_check "* [Error]: ${N}_$V$R call post_remove failed"
+		fi	
+		INSTALL=
+	fi
+
 	#remove infos.
 	ypkg_rm_packgeinfo
         #remove info from word
@@ -2726,6 +2752,7 @@ ypkg_conflict_remove() {
 			((timeout--))
 		fi
 	done
+
 }
 
 #
