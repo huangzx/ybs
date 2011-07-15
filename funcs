@@ -1452,6 +1452,7 @@ ypkg_domk() {
 		make clean
 		;;
 	delete)
+		local record="$dir"/"$name"/"$version"/"$(uname -m)"/"$(uname -r)"
 		cat $record/modules |while read i; do
 			find /lib/modules/"$(uname -r)" -type f -name "${i}" -exec rm {} \;
 		done
