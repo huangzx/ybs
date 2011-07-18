@@ -1597,7 +1597,7 @@ ypkg_patch(){
 #
 ypkg_unpack() {
 	if [ "x$SRC_URI" = "x" ];then
-		for i in tar.bz2 tar.gz bz2 tgz tbz2 rar zip 7z; do
+		for i in tar.bz2 tar.gz bz2 tgz tbz tbz2 rar zip 7z; do
 			is_exist "$YPPATH_SOURCE/$N-$V$R.${i}" && SRC_URI="$YPPATH_SOURCE/$N-$V$R.${i}"
 		done
 	else
@@ -1608,7 +1608,7 @@ ypkg_unpack() {
 	local first_pack=${SRC_URI[0]}
 	local fname=$(basename $first_pack)
 	case $fname in
-		*.tar.*|*.gz|*.tar|*.tgz|*.tbz2)
+		*.tar.*|*.gz|*.tar|*.tgz|*.tbz2|*.tbz)
 			mmsg ">>> tar xf "$YPPATH_SOURCE"/$fname"
 			name=$(tar -tf "$YPPATH_SOURCE"/"$fname" |head -n1 |awk -F/ '{print $1}')
 			if [ "x$name" = "x." ]; then
