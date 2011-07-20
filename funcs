@@ -1008,7 +1008,7 @@ mkpackage() {
 	local source_dir="$1"  
 	atom_parse_path $source_dir
 	local dbdir="${YPPATH_DB#/}/$N"
-	
+	echo "$YPPATH_SCRIPT/${N}_$V$R.pbs" >/tmp/aaaaaaaaa
 	#creat pkgdate
 	#
 	cd $source_dir
@@ -1022,11 +1022,12 @@ mkpackage() {
 		TT=$T
 		. $pbsfile
 		install=$INSTALL
-		if [ "x$install" != "x" ] && is_exist ${pbsfile%/*}/files/$install; then
-			cp ${pbsfile%/*}/files/$install  $dbdir
-		fi
 		cp $pbsfile $dbdir
 	fi
+	if [ "x$install" != "x" ] && is_exist $YPPATH_SCRIPT/files/$install; then
+		cp $YPPATH_SCRIPT/files/$install  $dbdir
+	fi
+	
 	build_date="$(date +%s)"
 	declare -a install_size=($(du $source_dir -sb))
 	install_size=${install_size[0]}
@@ -1143,8 +1144,8 @@ OOO
 OOO
 	cd $pkgdir
 	cp $workdir/${N}_$V$R.list $filelist
-	if [ "x$install" != "x" ] && is_exist $FILES_PATH/files/$install; then
-		cp $FILES_PATH/files/$install .
+	if [ "x$install" != "x" ] && is_exist $YPPATH_SCRIPT/files/$install; then
+		cp $YPPATH_SCRIPT/files/$install .
 	fi
 	tar cjf ../$pkginfo *
 
