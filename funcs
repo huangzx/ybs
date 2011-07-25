@@ -819,13 +819,14 @@ ypkg_strip_mani18n() {
 	done
 }
 
+
 #strip binary in directory $1
 ypkg_strip_bin() {
 	#msg ">>> strip debug info.."
 	find $1/{,usr/}{bin,sbin} -type f -exec strip --strip-all '{}' ';' 2>/dev/null
-
 	find $1/{,usr/}lib -type f -exec strip --strip-debug '{}' ';' 2>/dev/null
 }
+
 
 #compress man and info 
 ypkg_gzip_extra() {
@@ -1610,7 +1611,7 @@ ypkg_unpack() {
 	local first_pack=${SRC_URI[0]}
 	local fname=$(basename $first_pack)
 	case $fname in
-		*.tar.*|*.gz|*.tar|*.tgz|*.tbz2|*.tbz)
+		*.tar.*|*.gz|*.tar|*.tgz|*.tbz2|*.tbz|*.bz2)
 			mmsg ">>> tar xf "$YPPATH_SOURCE"/$fname"
 			name=$(tar -tf "$YPPATH_SOURCE"/"$fname" |head -n1 |awk -F/ '{print $1}')
 			if [ "x$name" = "x." ]; then
