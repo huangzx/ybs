@@ -1719,12 +1719,12 @@ ypkg_config() {
 	
 	#perl module
 	[ -f Makefile.pl ] && mv Makefile.pl Makefile.PL
-	[ -f Makefile.PL ] && command="perl Makefile.PL -y PREFIX=/usr"
+	[ -f Makefile.PL ] && command="perl Makefile.PL -y PREFIX=/usr $@"
 	if [ x"$command" != x ];then
 		mmsg ">>> $command"
 		if ! $command; then
-			command="perl Makefile.PL PREFIX=/usr"
-			mmsg ">>> $command" 
+			command="perl Makefile.PL PREFIX=/usr $@"
+			mmsg ">>> $command"  
 			$command && return 0
 		else
 			return 0
@@ -1736,7 +1736,7 @@ ypkg_config() {
 		command="mkdir -p build"
 		command1="cd build"
 		command2="cmake ../ -DCMAKE_INSTALL_PREFIX=/usr" # -DCMAKE_SHARED_LIBRARY_PREFIX=lib"
-		mmsg ">>> $command; $command1; $command2"
+		mmsg ">>> $command; $command1; $command2 $@"
 		$command
 		$command1
 		$command2 && return 0
@@ -1744,7 +1744,7 @@ ypkg_config() {
 
 	#qmake
 	if ls *.pro >/dev/null 2>/dev/null; then
-		command="qmake "$@""
+		command="qmake $@"
 		mmsg ">>> $command"
 		$command && return 0
 	fi
@@ -1762,51 +1762,51 @@ ypkg_config() {
 ypkg_make() {
 	local command="make "$MAKEOPTS""
 	if [ -x waf ];then
-		command="./waf build "$MAKEOPTS""
-		mmsg ">>> $command $@"
+		command="./waf build "$MAKEOPTS" $@"
+		mmsg ">>> $command"
 		$command && return 0
 	fi
 	if [ -f setup.py ];then
 		if [ "x$1"  = "xmake" ]; then
-			command="make "$MAKEOPTS""
+			command="make "$MAKEOPTS" $@"
 		else
-			command="python setup.py build"
+			command="python setup.py build $@"
 		fi
-		mmsg ">>> $command $@"
+		mmsg ">>> $command"
 		$command && return 0
 	fi
 	if [ -f Makefile ] || [ -f GNUmakefile ];then
-		command="make "$MAKEOPTS"" 
+		command="make "$MAKEOPTS" $@" 
 	fi
 	if [ -f makefile.linux ];then
-                command="make "$MAKEOPTS" -f makefile.linux"
+                command="make "$MAKEOPTS" -f makefile.linux $@"
 	fi
 	if [ -f Imakefile ]; then
-		command="make "$MAKEOPTS""
+		command="make "$MAKEOPTS" $@"
 	fi
 	if [ -f SConstruct ];then
 	        return 0
 	fi
 
-	mmsg ">>> $command $@"
-	$command $@
+	mmsg ">>> $command"
+	$command
 }
 
 #make install
 ypkg_mkinstall() {
 	local command="make DESTDIR="$YPPATH_DEST" "$@" install"
 	if [ -x waf ];then
-		command="./waf install --destdir="$YPPATH_DEST""
-		mmsg ">>> $command $@"
+		command="./waf install --destdir="$YPPATH_DEST" $@"
+		mmsg ">>> $command"
 		$command && return 0
 	fi
 	if [ -f setup.py ];then
 		if [ "x$1"  = "xmake" ]; then
-			command="make DESTDIR="$YPPATH_DEST" install"		
+			command="make DESTDIR="$YPPATH_DEST" $@ install"		
 		else
-			command="python setup.py install --prefix=/usr --root="$YPPATH_DEST""
+			command="python setup.py install --prefix=/usr --root="$YPPATH_DEST" $@"
 		fi
-		mmsg ">>> $command $@"
+		mmsg ">>> $command"
 		$command && return 0
 	fi
 		
