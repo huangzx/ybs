@@ -1935,7 +1935,7 @@ gnome2_install_schema() {
 }
 
 # unstall schemas
-gnome2_unistall_schema() {
+gnome2_uninstall_schema() {
 	#this is this-is-deprecated
 	#return 0
 	local schemas="$@"
