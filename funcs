@@ -85,6 +85,7 @@ blank_funcs () {
 		OPIONAL=""
 		PROVIDE=""
 		INSTALL=""
+		OPINION=""
 
 		pbs_unpack() {
 			:
@@ -122,6 +123,7 @@ blank_funcs () {
 		NAME=""
 		BRIEF=""
 		SPECIFICATION=""
+		OPINION=""
 	fi
 }
 
@@ -1230,7 +1232,6 @@ ypkg_mkpackage() {
 	#split dev
 	if ! str_isIn "$OPINION" "nodev"; then
 		spacks+="$(split_dev $YPPATH_DEST) "
-		OPINION=""
 	fi
 
 	#split_doc
