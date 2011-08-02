@@ -1011,7 +1011,6 @@ mkpackage() {
 	local source_dir="$1"  
 	atom_parse_path $source_dir
 	local dbdir="${YPPATH_DB#/}/$N"
-	echo "$YPPATH_SCRIPT/${N}_$V$R.pbs" >/tmp/aaaaaaaaa
 	#creat pkgdate
 	#
 	cd $source_dir
@@ -2104,16 +2103,44 @@ install_pack () {
 	cd $workdir
 	
 	atom_parse ${pack##*/}
+	#current_name
+	c_name="$N"
+	#current_version
+	c_version="$V$R"
+	pre_install_listfile=$(ypkg_getlistfile all |tr ' ' '\n' |grep -v "${N}_$V$R".list)
+	atom_parse_path $pre_install_listfile
+	#pre_version
+	if [ "x$V$R" != "x" ]; then
+		p_version="$V$R"	
+		atom_cmp ${N}_$p_version ${N}_$c_version
+		case "x$?" in
+			x2) operate="upgrade"   ;;
+			x1) operate="downgrade" ;;
+			 *) operate=""
+		esac	
+	fi
+
+	#
 	tar xf $pack $pkginfo
 	if tar xf $pkginfo 2>/dev/null; then
 		install="$(get_value install $control)"
 		if [ "x$install" != "x" ] && is_exist $install; then
 			. $install
-			if grep -wq pre_install $install; then
-				msg "* Call pre_install..."
-				pre_install $N $V$R
-				err_check "* [Error]: ${N}_$V$R call pre_install failed"
-			fi
+			case $operate in 
+			upgrade|downgrade)
+				if grep -wq pre_$operate $install; then
+					msg "* Call pre_$operate of ${c_name}_$c_version"
+					pre_$operate $c_name $c_version $p_version
+					err_check "* [Error]: ${c_name}_$c_version call pre_$operate failed"
+				fi	
+					;;
+			     *)
+				if grep -wq pre_install $install; then
+					msg "* Call pre_install of ${c_name}_$c_version"
+					pre_install $c_name $c_version
+					err_check "* [Error]: ${c_name}_$c_version call pre_install failed"
+				fi
+			esac
 		fi
 	fi
 	tar xf $pack $pkgdata
@@ -2126,18 +2153,30 @@ install_pack () {
 	done
 
 	#
-	if [ "x$install" != "x" ] && is_exist $YPPATH_DB/$N/$install; then
-		. $YPPATH_DB/$N/$install
-		if grep -wq post_install $YPPATH_DB/$N/$install; then
-			msg "* Call post_install..."
-			post_install $N $V$R
-			err_check "* [Error]: ${N}_$V$R call post_install failed"
+	if [ "x$install" != "x" ] && is_exist $YPPATH_DB/$c_name/$install; then
+		. $YPPATH_DB/$c_name/$install
+		case $operate in
+		upgrade|downgrade)
+			if grep -wq post_$operate $YPPATH_DB/$c_name/$install; then
+				msg "* Call post_$operate of ${c_name}_$c_version"
+				post_$operate $c_name $c_version $p_version
+				err_check "* [Error]: ${c_name}_$c_version call post_$operate failed"
+			fi	
+				;;
+			*)
+			if grep -wq post_install $YPPATH_DB/$c_name/$install; then
+				msg "* Call post_install of ${c_name}_$c_version"
+				post_install $c_name $c_version
+				err_check "* [Error]: ${c_name}_$c_version call post_install failed"
 		fi
+		esac
 	fi
-	#
+	
 	#install time
+	atom_parse ${c_name}_$c_version
 	IT=$(date +%s)
 	echo "INSTALL_TIME=\"$IT\""                     >>$YPPATH_DB/$N/${N}_$V$R.desc
+	
 	#
 	cd $workdir
 	cp $YPPATH_WORLD $YPPATH_WORLD-
@@ -2158,21 +2197,14 @@ install_pack () {
 			((timeout--))
 		fi
 	done
-	#
-	current_name="$N"
-	current_version="$V$R"
-	pre_install_listfile=$(ypkg_getlistfile  all |tr ' ' '\n' |grep -v "${N}_$V$R".list)
-	V=
-	R=
-	atom_parse_path $pre_install_listfile
-	if [ "x$V$R" != "x" ]; then
-		pre_version="$V$R"	
-	fi
+
 	# remove old version 
-	if [ "x$pre_version" != "x" ] && [ "x$pre_version" != "x$current_version" ]; then
-		msg "* Remove previous packages: ${current_name}_$pre_version"
-		ypkg_upgrade_remove "${current_name}_$pre_version" "${current_name}_$current_version"
+	if [ "x$p_version" != "x" ] && [ "x$p_version" != "x$c_version" ]; then
+		msg "* Remove previous packages: ${c_name}_$p_version"
+		ypkg_upgrade_remove "${c_name}_$p_version" "${c_name}_$c_version" "$operate"
 	fi
+
+	# remove conflict packages 
 	if [ "x$CONFLICT" != "x" ]; then
 		for i in $CONFLICT; do
 			atom_parse_type $i
@@ -2560,58 +2592,40 @@ ypkg_do_remove_package() {
 	N=$1
 	V=$2
 	R=$3
-	local files=$(ls $YPPATH_DB/$N/${N}_$V$R.desc 2>/dev/null)
-	local file
-	local count
-	local -a value
-	local t1
-	local t2
-	local tsize
-	local infofile
+	install=$4
 	
-	[ "x$files" = "x" ] && return 1
-	for file in $files; do
-		atom_parse_path $file
-		YPPATH_SCRIPT=$YPPATH_DB/$N
-		infofile=$YPPATH_SCRIPT/${N}_$V$R.list
-		. $file
-		install=$INSTALL
-		if [ "x$install" != "x" ] && is_exist $YPPATH_SCRIPT/$install; then
-			if grep -wq pre_remove $YPPATH_SCRIPT/$install; then
-				msg "* Call pre_remove "
-				pre_remove $N $V$R
-				err_check "* [Error]: Call pre_remove failed"
-			fi
-		fi	
+	infofile=$YPPATH_DB/$N/${N}_$V$R.list
 
-		#remove all files link and directories
-		ypkg_readfile $infofile "r"
+	#remove all files link and directories
+	ypkg_readfile $infofile "r"
 	
-		#
-		if grep -wq post_remove $YPPATH_SCRIPT/$install; then
-			msg "* Call post_remove "
+	#
+	if [ "x$install" != "x" ]; then
+		if grep -wq post_remove $install; then
+			msg "* Call post_remove of ${N}_$V$R "
+			. $install
 			post_remove $N $V$R
-			err_check "* [Error]: Call post_remove failed"
+			err_check "* [Error]: Call post_remove of ${N}_$V$R failed"
 		fi
+	fi
 
-		#remove infos.
-		ypkg_rm_packgeinfo
+	#remove infos.
+	ypkg_rm_packgeinfo
 
-		#remove info from word
-		timeout=10
-		while true; do
-			[ $timeout -eq 0 ] && rm -f "$WORLD_LOCKFILE"
-			if [ ! -f "$WORLD_LOCKFILE" ]; then
-				touch $WORLD_LOCKFILE
-				ypkg_find_info $YPPATH_WORLD  "remove"
-				rm -f $WORLD_LOCKFILE
-				break
-			else
-		        	rmsg "* $YPPATH_WORLD is locked, wait..."
-		        	sleep 1
-				((timeout--))
-			fi
-		done
+	#remove info from word
+	timeout=10
+	while true; do
+		[ $timeout -eq 0 ] && rm -f "$WORLD_LOCKFILE"
+		if [ ! -f "$WORLD_LOCKFILE" ]; then
+			touch $WORLD_LOCKFILE
+			ypkg_find_info $YPPATH_WORLD  "remove"
+			rm -f $WORLD_LOCKFILE
+			break
+		else
+	        	rmsg "* $YPPATH_WORLD is locked, wait..."
+	        	sleep 1
+			((timeout--))
+		fi
 	done
 }
 
@@ -2627,6 +2641,10 @@ ypkg_getlistfile() {
 	local count
 	find_dir=$YPPATH_DB/$N
 	declare -a count=($(ls $find_dir/${N}_*.list 2>/dev/null))
+	if [ "x$1" = "xall" ]; then
+		echo ${count[@]}
+		return 0
+	fi
 	case "${#count[@]}" in
 	1)	#found 1.
 		if [ "x$V$R" != "x" ]; then
@@ -2638,11 +2656,6 @@ ypkg_getlistfile() {
 	0)	#found none
 		return 1	;;
 	2|*)	#found 2
-		declare -a listfiles=($(ls $find_dir/${N}_*.list))
-		if [ "x$1" = "xall" ]; then
-			echo ${listfiles[@]}
-			return 0
-		fi
 		if [ "x$V$R" != "x" ]; then
 			ls $find_dir/${N}_$V$R.list 2>/dev/null || return 1
 		else
@@ -2665,6 +2678,8 @@ ypkg_getlistfile() {
 ypkg_remove_package() {
 	local listfile
 	local i
+	local install_file=
+
 	atom_parse_type "$1"
         declare -a listfile=($(ypkg_getlistfile all))
         if [ "x$listfile" != "x" ]; then
@@ -2675,16 +2690,17 @@ ypkg_remove_package() {
 				. $YPPATH_DB/$N/${N}_$V$R.desc
 				install=$INSTALL
 				if [ "x$install" != "x" ] && is_exist $YPPATH_DB/$N/$install; then
-					. $YPPATH_DB/$N/$install
-					if grep -wq pre_remove $YPPATH_DB/$N/$install; then
-						ymsg "* Call pre_remove of ${N}_$V$R:"	
+					install_file=$YPPATH_DB/$N/$install
+					. $install_file
+					if grep -wq pre_remove $install_file; then
+						msg "* Call pre_remove of ${N}_$V$R"	
 						pre_remove  $N $V$R
-						err_check "* [Error]: Call pre_remove failed"
+						err_check "* [Error]: Call pre_remove of ${N}_$V$R failed"
 					fi
 				fi
 			fi
 			ymsg "* Remove content of ${N}_$V$R:"
-		        ypkg_do_remove_package "$N" "$V" "$R"
+		        ypkg_do_remove_package "$N" "$V" "$R" "$install_file"
 		done
 	else
 	        rmsg "* [Error]: $1 not found."
@@ -2732,7 +2748,7 @@ ypkg_conflict_remove() {
 	if [ "x$install" != "x" ] && is_exist $YPPATH_DB/$N/$install; then
 		. $YPPATH_DB/$N/$install
 		if grep -wq post_remove $YPPATH_DB/$N/$install; then
-			msg "* Call post_remove..."
+			msg "* Call post_remove of ${N}_$V$R"
 			post_remove $N $V$R
 			err_check "* [Error]: ${N}_$V$R call post_remove failed"
 		fi	
@@ -2761,14 +2777,8 @@ ypkg_conflict_remove() {
 
 #
 ypkg_upgrade_remove() {
-	local old=$1
-	local new=$2
-	local operate=""
-	atom_cmp $old $new
-	case "x$?" in
-		x2) operate="upgrade"   ;;
-		x1) operate="downgrade"
-	esac	
+	local old="$1"
+	local new="$2"
 	atom_parse_type $old
 	old_listfile=$(ypkg_getlistfile)
 	atom_parse_type $new
@@ -2813,22 +2823,6 @@ ypkg_upgrade_remove() {
 			((timeout--))
 		fi
 	done
-
-	#
-	if [ "x$operate" != "" ]; then
-		atom_parse_path $new_listfile
-		is_exist $YPPATH_DB/$N/${N}_$V$R.desc && . $YPPATH_DB/$N/${N}_$V$R.desc || return 0
-		install="$INSTALL"
-		if [ "x$install" != "x" ] && is_exist $YPPATH_DB/$N/$install; then
-			. $YPPATH_DB/$N/$install
-			if grep -wq post_"$operate" $YPPATH_DB/$N/$install; then
-				msg "* Call post_"$operate"..."
-				post_"$operate" $old $new
-				err_check "* [Error]: ${N}_$V$R call post_$operate failed"
-			fi	
-			INSTALL=
-		fi
-	fi
 }
 
 #
