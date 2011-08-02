@@ -2205,6 +2205,7 @@ install_pack () {
 	fi
 
 	# remove conflict packages 
+	. $YPPATH_DB/$c_name/${c_name}_$c_version.pbs 2>/dev/null
 	if [ "x$CONFLICT" != "x" ]; then
 		for i in $CONFLICT; do
 			atom_parse_type $i
