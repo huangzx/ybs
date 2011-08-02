@@ -2210,7 +2210,7 @@ install_pack () {
 			atom_parse_type $i
 			if is_installed $N ; then
 				msg "Remove conflicting packages: ${N} $V$R"
-				ypkg_conflict_remove "${N}_$V$R" "${current_name}_$current_version"
+				ypkg_conflict_remove "${N}_$V$R" "${c_name}_$c_version"
 			fi
 		done
 	fi
