@@ -485,9 +485,10 @@ ypkg_getallpbsver() {
 		. $file
 		atom_parse_path $file
 		case $REPO in 
-			[Tt]esting) repo="t" ;;
-			[Ss]table)  repo="s" ;;
-			        *)  repo="s" 
+			[Tt]esting)  repo="t" ;;
+			[Ss]table)   repo="s" ;;
+			[Uu]nusable) repo="u" ;;
+			        *)   repo="s" 
 		esac
 		if [ "x$BUILD_TIME" != "x" ]; then
 			BUILD_TIME=$(date -d "1970-01-01 UTC $BUILD_TIME seconds" +%F,%T 2>/dev/null)
