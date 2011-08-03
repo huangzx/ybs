@@ -250,7 +250,6 @@ install_prepare () {
 		else
 			pack_final_ver="$V$R"
 		fi
-		set +x
 		packname=$N
 		atom_parse ${packname}_$pack_final_ver
 		ypkg_find_info $allinfo  >$singleinfo
