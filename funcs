@@ -2211,8 +2211,9 @@ install_pack () {
 		for i in $CONFLICT; do
 			atom_parse_type $i
 			if is_installed $N ; then
+				atom_parse_path "$(ypkg_getlistfile)"
 				msg "Remove conflicting packages: ${N} $V$R"
-				ypkg_conflict_remove "${N}_$V$R" "${c_name}_$c_version"
+				ypkg_conflict_remove "${N}" "$V$R" "${c_name}" "$c_version"
 			fi
 		done
 	fi
@@ -2714,12 +2715,29 @@ ypkg_remove_package() {
 
 #
 ypkg_conflict_remove() {
-	local old=$1
-	local new=$2
-	atom_parse_type $old
-	old_listfile=$(ypkg_getlistfile)
-	atom_parse_type $new
-	new_listfile=$(ypkg_getlistfile)
+	local old_name=$1
+	local old_version=$2
+	old_listfile="$YPPATH_DB/$old_name/${old_name}_$old_version.list"
+	
+	local new_name=$3
+	local new_version=$4
+	new_listfile="$YPPATH_DB/$new_name/${new_name}_$new_version.list"
+
+	#
+	atom_parse_path $old_listfile
+	is_exist $YPPATH_DB/$N/${N}_$V$R.desc && . $YPPATH_DB/$N/${N}_$V$R.desc
+	install="$INSTALL"
+	if [ "x$install" != "x" ] && is_exist $YPPATH_DB/$N/$install; then
+		. $YPPATH_DB/$N/$install
+		if grep -wq pre_remove $YPPATH_DB/$N/$install; then
+			msg "* Call pre_remove of ${N}_$V$R"
+			pre_remove $N $V$R
+			err_check "* [Error]: ${N}_$V$R call pre_remove failed"
+		fi	
+		INSTALL=
+	fi
+
+	#
 	cat $old_listfile |while read line; do	
 		csv_split "$line"
 	        # ${value[0]} --- filetype
@@ -2741,10 +2759,9 @@ ypkg_conflict_remove() {
 			esac
 		fi
 	done
+	
 	#
 	atom_parse_path $old_listfile
-
-	#
 	is_exist $YPPATH_DB/$N/${N}_$V$R.desc && . $YPPATH_DB/$N/${N}_$V$R.desc
 	install="$INSTALL"
 	if [ "x$install" != "x" ] && is_exist $YPPATH_DB/$N/$install; then
