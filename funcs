@@ -1828,6 +1828,14 @@ ypkg_mkinstall() {
 	ldconfig
 }
 
+#cp supported to specified dir
+ypkg_dosupported() {
+	mmsg ">>> Copy supported file: $1"
+	mkdir -p "$YPPATH_DEST"/usr/src/"$N-$V$R"
+	install -m755 "$FILES_PATH"/files/"$1" "$YPPATH_DEST"/usr/src/"$N-$V$R"
+}
+
+
 #cp doc to specified dir
 ypkg_dodoc() {
 	mmsg ">>> Copy documents: $@"
