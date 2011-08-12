@@ -1432,7 +1432,7 @@ ypkg_domk() {
 	# $1 action: build delete
 	# $2 name
 	# $3 version
-	# e.g: /usr/src/rtl8101-1.020.00
+	# e.g: /usr/src/rtl8101_1.020.00
 	# name=rtl8101
 	# version=1.020.00
 	
@@ -1449,7 +1449,7 @@ ypkg_domk() {
 		local record="$dir"/"$name"/"$version"/"$(uname -m)"/"$(uname -r)"
 		mkdir -p $record
 
-		if cd /usr/src/"$name-$version"; then
+		if cd /usr/src/"${name}_$version"; then
 			make $args
 			make install $args
 			depmod -a  
@@ -1828,11 +1828,18 @@ ypkg_mkinstall() {
 	ldconfig
 }
 
+#cp src file to specified dir
+ypkg_dosrc() {
+	mmsg ">>> Copy source files: /usr/src/"${N}_$V$R""
+	mkdir -p "$YPPATH_DEST"/usr/src/"${N}_$V$R"
+	cp -a "$@" "$YPPATH_DEST"/usr/src/"${N}_$V$R"/
+}
+
 #cp supported to specified dir
 ypkg_dosupported() {
 	mmsg ">>> Copy supported file: $1"
-	mkdir -p "$YPPATH_DEST"/usr/src/"$N-$V$R"
-	install -m755 "$FILES_PATH"/files/"$1" "$YPPATH_DEST"/usr/src/"$N-$V$R"
+	mkdir -p "$YPPATH_DEST"/usr/src/"${N}_$V$R"
+	install -m755 "$FILES_PATH"/files/"$1" "$YPPATH_DEST"/usr/src/"${N}_$V$R"
 }
 
 
@@ -1846,8 +1853,8 @@ ypkg_dodoc() {
 #cp dkms.conf to specified dir
 ypkg_dodkms() {
 	mmsg ">>> Copy dkms config: $1"
-	install -m755 -d "$YPPATH_DEST"/usr/src/"$N-$V$R"
-	cp -a "$FILES_PATH"/files/"$1" "$YPPATH_DEST"/usr/src/"$N-$V$R"
+	install -m755 -d "$YPPATH_DEST"/usr/src/"${N}_$V$R"
+	cp -a "$FILES_PATH"/files/"$1" "$YPPATH_DEST"/usr/src/"${N}_$V$R"
 }
 
 #
