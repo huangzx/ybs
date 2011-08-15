@@ -990,11 +990,13 @@ find_icon() {
 		done
 	fi
 	[ -f $source_dir/usr/share/icons/$icon_name.png ] && icon="$source_dir/usr/share/icons/$icon_name.png"
+	[ -f $source_dir/usr/share/icons/$icon_name.xpm ] && icon="$source_dir/usr/share/icons/$icon_name.xpm"
 	[ -f $source_dir/usr/share/pixmaps/$icon_name.svg ] && icon="$source_dir/usr/share/pixmaps/$icon_name.svg"
 	[ -f $source_dir/usr/share/pixmaps/$icon_name.xpm ] && icon="$source_dir/usr/share/pixmaps/$icon_name.xpm"
 	[ -f $source_dir/usr/share/pixmaps/$icon_name.png ] && icon="$source_dir/usr/share/pixmaps/$icon_name.png"
 	[ -f $source_dir/usr/share/pixmaps/$icon_name ] && icon="$source_dir/usr/share/pixmaps/$icon_name"
 	if [ "x$ICONFILE" != "x" ]; then
+		[ -f "$source_dir/$ICONFILE" ] && icon="$source_dir/$ICONFILE"
 		[ -f "$source_dir/usr/share/pixmaps/$ICONFILE" ] && icon="$source_dir/usr/share/pixmaps/$ICONFILE"
 	fi
 	if [ "x$icon" != "x" ] && [ -f $icon ]; then
