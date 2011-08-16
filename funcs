@@ -366,23 +366,22 @@ atom_vercmp() {
 #return 1 if $1 is grater than $2 
 #return 2 if $1 is lesser then $2
 atom_cmp() {
-	local R1
-	local V1
-	local N1
-
-	#echo "Begin Compare: $1 $2"
+	local R1 R2
+	local V1 V2 
+	local N1 N2
 
 	atom_parse $1
 	R1=$R
 	V1=$V
 	N1="$N"
-	#echo "N1="$N"1, V1=$V1, R1=$R1"
 
 	atom_parse $2
-	#echo "N2="$N", V2=$V, R2=$R"
+	N2="$N"
+	V2=$V
+	R2=$R
 
 	#compare version
-	atom_vercmp $V1 $V
+	return $(atom_vercmp $V1$R1 $V2$R2)
 }
 
 #compare 2 atoms pth, such as /var/ypkg/sys/linux-2.6.9.pbs and linux-2.6.10.pbs
