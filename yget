@@ -284,7 +284,6 @@ install_prepare () {
 				echo $depend_name $depend_final_ver $depuri $depsha $depsize $depinstall_size
 			fi
 		done
-		echo $packname $pack_final_ver $uri $sha $size $install_size
 		#
 		for redepend in $redepends; do
 			atom_parse_type $redepend
@@ -319,6 +318,7 @@ install_prepare () {
 			fi
 		done
 	fi
+	echo $packname $pack_final_ver $uri $sha $size $install_size
 	rm -rf $allinfo $singleinfo 2>/dev/null
 }
 
@@ -524,8 +524,7 @@ do_install () {
 		return 1
 	fi
 
-	psum="$(grep -v "not found" $allpacks |grep -v "remove")"
-	local pall="$(grep -v "not found" $allpacks |grep -v "remove" |wc -l)"
+	local pall="$(grep -v "not found" $allpacks |sort -u |grep -v "remove" |wc -l)"
 	#ymsg "* Installing ..."
 	echo
 	count=
