@@ -275,10 +275,12 @@ install_prepare () {
 				else	
 					depend_final_ver="$V$R"
 				fi
-				         depuri="$(get_value   uri        $allinfo)"
-				         depsha="$(get_value   sha        $allinfo)"
-				        depsize="$(get_value   size       $allinfo)"
-				depinstall_size="$(get_value install_size $allinfo)"
+					 atom_parse_type ${depend_name}_${depend_final_ver}
+					 ypkg_find_info $YPPATH_UNI >$singleinfo
+				         depuri="$(get_value   uri        $singleinfo)"
+				         depsha="$(get_value   sha        $singleinfo)"
+				        depsize="$(get_value   size       $singleinfo)"
+				depinstall_size="$(get_value install_size $singleinfo)"
 				echo $depend_name $depend_final_ver $depuri $depsha $depsize $depinstall_size
 			fi
 		done
@@ -297,10 +299,12 @@ install_prepare () {
 				else	
 					redepend_final_ver="$V$R"
 				fi
-				         redepuri="$(get_value   uri        $allinfo)"
-				         redepsha="$(get_value   sha        $allinfo)"
-				        redepsize="$(get_value   size       $allinfo)"
-				redepinstall_size="$(get_value install_size $allinfo)"
+					 atom_parse_type ${redepend_name}_${redepend_final_ver}
+					 ypkg_find_info $YPPATH_UNI >$singleinfo
+				         redepuri="$(get_value   uri        $singleinfo)"
+				         redepsha="$(get_value   sha        $singleinfo)"
+				        redepsize="$(get_value   size       $singleinfo)"
+				redepinstall_size="$(get_value install_size $singleinfo)"
 				echo $redepend_name $redepend_final_ver $redepuri $redepsha $redepsize $redepinstall_size
 			fi
 		done
@@ -663,7 +667,7 @@ do_remove () {
 	sum_remove_size=$(summation $(awk '{print $4}' $allpacks |tr '\n' ' '))
 	remove=($(grep ^app: $allpacks |awk '{print $2}' |tr '\n' ' '))
 	remove_count=${#remove[@]}
-	autoremove=($(grep ^remove: $allpacks |awk '{print $2}' |tr '\n' ' '))
+	autoremove=($(grep ^remove: $allpacks |awk '{print $2}' |sort -u |tr '\n' ' '))
 	autoremove_count=${#autoremove[@]}
 	echo "Remove: ${remove[@]}"
 	echo "Auto-remove: ${autoremove[@]}"
