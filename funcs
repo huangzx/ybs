@@ -1225,7 +1225,9 @@ ypkg_mkpackage() {
 		ypkg_strip_mani18n $YPPATH_DEST
 	fi
 	#strip bin
-	ypkg_strip_bin $YPPATH_DEST
+	if ! str_isIn "$OPINION" "nostrip"; then
+		ypkg_strip_bin $YPPATH_DEST
+	fi
 
 	#split i18n
 	#spacks+="$(split_i18n $YPPATH_DEST) "
@@ -1761,15 +1763,15 @@ ypkg_config() {
 
 #make
 ypkg_make() {
-	local command="make "$MAKEOPTS""
+	local command="make $MAKEOPTS $@"
 	if [ -x waf ];then
-		command="./waf build "$MAKEOPTS" $@"
+		command="./waf build $MAKEOPTS $@"
 		mmsg ">>> $command"
 		$command && return 0
 	fi
 	if [ -f setup.py ];then
 		if [ "x$1"  = "xmake" ]; then
-			command="make "$MAKEOPTS" $@"
+			command="make $MAKEOPTS $@"
 		else
 			command="python setup.py build $@"
 		fi
@@ -1777,13 +1779,13 @@ ypkg_make() {
 		$command && return 0
 	fi
 	if [ -f Makefile ] || [ -f GNUmakefile ];then
-		command="make "$MAKEOPTS" $@" 
+		command="make $MAKEOPTS $@" 
 	fi
 	if [ -f makefile.linux ];then
-                command="make "$MAKEOPTS" -f makefile.linux $@"
+                command="make $MAKEOPTS -f makefile.linux $@"
 	fi
 	if [ -f Imakefile ]; then
-		command="make "$MAKEOPTS" $@"
+		command="make $MAKEOPTS $@"
 	fi
 	if [ -f SConstruct ];then
 	        return 0
