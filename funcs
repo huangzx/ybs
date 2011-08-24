@@ -277,10 +277,10 @@ atom_parse_path() {
 
 #
 #compare 2 versions, such 2.6.9 and 2.6.10
-#return 0 if same. 
-#return 1 if $1 is grater than $2 
-#return 2 if $1 is lesser then $2
-# alpha < beta < gamma  < rc < final (Todo)
+#same: return 0 
+#$1 is greater than $2: return 1
+#$2 is greater then $1: return 2
+# alpha < beta < rc 
 atom_vercmp() {
 	v1=$1
 	v2=$2
@@ -313,29 +313,100 @@ atom_vercmp() {
 				done
 				continue ;;
 			#"" rc1 
-			rc)
+			#"" beta1
+			#"" alpha1
+			rc|RC|beta|BETA|alpha|ALPHA)
 				[ "x$aoa" = "x" ] && return 1
 				[ "x$boa" = "x" ] && return 2
 				continue ;;
 			#"" ylmf1 
-			ylmf)
+			ylmf|YLMF)
+				[ "x$b" != "x" ]  && return 2
+				[ "x$a" != "x" ]  && return 1
 				[ "x$aoa" = "x" ] && return 2
 				[ "x$boa" = "x" ] && return 1
+
 				continue 	;;
 			#rc1  rc2 
-			#ylmf1 ylmf2
-			rcrc|ylmfylmf)
+			rcrc|RCRC)
 				a=${a##rc}
+				a=${a##RC}
 				b=${b##rc}
-				a=${a##ylmf}
-				b=${b##ylmf}
+				b=${b##RC}
 				[ "1$a" -gt "1$b" ] && return 1
 				[ "1$a" -lt "1$b" ] && return 2
 				continue 	;;
+			#beta1  beta2 
+			betabeta|BETABETA)
+				a=${a##beta}
+				a=${a##BETA}
+				b=${b##beta}
+				b=${b##BETA}
+				[ "1$a" -gt "1$b" ] && return 1
+				[ "1$a" -lt "1$b" ] && return 2
+				continue 	;;
+			#alpha1  alpha2 
+			alphaalpha|ALPHAALPHA)
+				a=${a##alpha}
+				a=${a##ALPHA}
+				b=${b##alpha}
+				b=${b##ALPHA}
+				[ "1$a" -gt "1$b" ] && return 1
+				[ "1$a" -lt "1$b" ] && return 2
+				continue 	;;
+			#ylmf1 ylmf2
+			ylmfylmf|YLMFYLMF)
+				a=${a##ylmf}
+				a=${a##YLMF}
+				b=${b##ylmf}
+				b=${b##YLMF}
+				[ "1$a" -gt "1$b" ] && return 1
+				[ "1$a" -lt "1$b" ] && return 2
+				continue 	;;
+			#rc1 beta1
+			#beta1 rc1
+			rcbeta|betarc)
+				a=${a##rc*}
+				[ "x$a" = "x" ] && return 1
+				a=${a##beta*}
+				[ "x$a" = "x" ] && return 2
+				continue	;;
+			#rc1 alpha1
+			#alpha1 rc1
+			rcalpha|alpharc)
+				a=${a##rc*}
+				[ "x$a" = "x" ] && return 1
+				a=${a##alpha*}
+				[ "x$a" = "x" ] && return 2
+				continue	;;
+			#beta1 alpha1
+			#alpha1 beta1
+			betaalpha|alphabeta)
+				a=${a##beta*}
+				[ "x$a" = "x" ] && return 1
+				a=${a##alpha*}
+				[ "x$a" = "x" ] && return 2
+				continue  	;;
 			#rc1 ylmf1
 			#ylmf1 rc1
 			rcylmf|ylmfrc)
 				a=${a##rc*}
+				[ "x$a" = "x" ] && return 2
+				a=${a##ylmf*}
+				[ "x$a" = "x" ] && return 1
+				continue	;;
+			#beta1 ylmf1
+			#ylmf1 beta1
+			betaylmf|ylmfbeta)
+				a=${a##beta*}
+				[ "x$a" = "x" ] && return 2
+				a=${a##ylmf*}
+				[ "x$a" = "x" ] && return 1
+				continue	;;
+			#alpha ylmf1
+			#ylmf1 alpha1
+			alphaylmf|ylmfalpha)
+				a=${a##alpha*}
 				[ "x$a" = "x" ] && return 2
 				a=${a##ylmf*}
 				[ "x$a" = "x" ] && return 1
@@ -362,9 +433,9 @@ atom_vercmp() {
 }
 
 #compare 2 atoms, such as linux_2.6.9.pbs and linux_2.6.10.pbs
-#return 0 if same. 
-#return 1 if $1 is grater than $2 
-#return 2 if $1 is lesser then $2
+#same: return 0 
+#$1 is greater than $2: return 1
+#$2 is greater then $1: return 2
 atom_cmp() {
 	local R1 R2
 	local V1 V2 
@@ -385,9 +456,9 @@ atom_cmp() {
 }
 
 #compare 2 atoms pth, such as /var/ypkg/sys/linux-2.6.9.pbs and linux-2.6.10.pbs
-#return 0 if same. 
-#return 1 if $1 is grater than $2 
-#return 2 if $1 is lesser then $2
+#same: return 0 
+#$1 is greater than $2: return 1
+#$2 is greater then $1: return 2
 atom_cmp_path() {
 	local R1
 	local V1
@@ -551,7 +622,6 @@ ypkg_searchOK() {
 	local install_result
 	
 	tmpfile=$(mktemp -p $workdir)
-	#3333	
 	ypkg_searchInstalled $1 $2  >$tmpfile
 	
 	[ "x$status" == "xinstalled" ] && gmsg_ "[I] " || msg_ "[*] "
@@ -1319,7 +1389,7 @@ ypkg_checkinst() {
 
 #
 #find_pkg_info_
-#etc:
+#e.g.:
 #1. ypkg_find_info /var/ypkg/pbslib/universe 
 #2. ypkg_find_info /var/ypkg/pbslib/universe remove
 #3. ypkg_find_info /var/ypkg/pbslib/universe all
@@ -2147,14 +2217,14 @@ install_pack () {
 			. $install
 			case $operate in 
 			upgrade|downgrade)
-				if grep -wq pre_$operate $install; then
+				if type pre_$operate >/dev/null 2>&1; then
 					msg "* Call pre_$operate of ${c_name}_$c_version"
 					pre_$operate $c_name $c_version $p_version
 					err_check "* [Error]: ${c_name}_$c_version call pre_$operate failed"
 				fi	
 					;;
 			     *)
-				if grep -wq pre_install $install; then
+				if type pre_install >/dev/null 2>&1; then
 					msg "* Call pre_install of ${c_name}_$c_version"
 					pre_install $c_name $c_version
 					err_check "* [Error]: ${c_name}_$c_version call pre_install failed"
@@ -2176,14 +2246,14 @@ install_pack () {
 		. $YPPATH_DB/$c_name/$install
 		case $operate in
 		upgrade|downgrade)
-			if grep -wq post_$operate $YPPATH_DB/$c_name/$install; then
+			if type post_$operate >/dev/null 2>&1; then
 				msg "* Call post_$operate of ${c_name}_$c_version"
 				post_$operate $c_name $c_version $p_version
 				err_check "* [Error]: ${c_name}_$c_version call post_$operate failed"
 			fi	
 				;;
 			*)
-			if grep -wq post_install $YPPATH_DB/$c_name/$install; then
+			if type post_install >/dev/null 2>&1; then
 				msg "* Call post_install of ${c_name}_$c_version"
 				post_install $c_name $c_version
 				err_check "* [Error]: ${c_name}_$c_version call post_install failed"
@@ -2622,9 +2692,9 @@ ypkg_do_remove_package() {
 	
 	#
 	if [ "x$install" != "x" ]; then
-		if grep -wq post_remove $install; then
+		. $install
+		if type post_remove >/dev/null 2>&1; then
 			msg "* Call post_remove of ${N}_$V$R "
-			. $install
 			post_remove $N $V$R
 			err_check "* [Error]: Call post_remove of ${N}_$V$R failed"
 		fi
@@ -2713,7 +2783,7 @@ ypkg_remove_package() {
 				if [ "x$install" != "x" ] && is_exist $YPPATH_DB/$N/$install; then
 					install_file=$YPPATH_DB/$N/$install
 					. $install_file
-					if grep -wq pre_remove $install_file; then
+					if type pre_remove >/dev/null 2>&1; then
 						msg "* Call pre_remove of ${N}_$V$R"	
 						pre_remove  $N $V$R
 						err_check "* [Error]: Call pre_remove of ${N}_$V$R failed"
@@ -2747,7 +2817,7 @@ ypkg_conflict_remove() {
 	install="$INSTALL"
 	if [ "x$install" != "x" ] && is_exist $YPPATH_DB/$N/$install; then
 		. $YPPATH_DB/$N/$install
-		if grep -wq pre_remove $YPPATH_DB/$N/$install; then
+		if type pre_remove >/dev/null 2>&1; then
 			msg "* Call pre_remove of ${N}_$V$R"
 			pre_remove $N $V$R
 			err_check "* [Error]: ${N}_$V$R call pre_remove failed"
@@ -2784,7 +2854,7 @@ ypkg_conflict_remove() {
 	install="$INSTALL"
 	if [ "x$install" != "x" ] && is_exist $YPPATH_DB/$N/$install; then
 		. $YPPATH_DB/$N/$install
-		if grep -wq post_remove $YPPATH_DB/$N/$install; then
+		if type post_remove >/dev/null 2>&1; then
 			msg "* Call post_remove of ${N}_$V$R"
 			post_remove $N $V$R
 			err_check "* [Error]: ${N}_$V$R call post_remove failed"
