@@ -20,8 +20,33 @@ mkdir -p $YPPATH_LIB $YPPATH_SOURCE $YPPATH_PACKAGE $YPPATH_DB $YPPATH_FIELD
 chmod 777 $YPPATH_FIELD $YPPATH_SOURCE  2>/dev/null
 
 # reload parameters if available
-export CC
-export CXX
+if [ -z "$ARCH" ]; then
+  case "$(uname -m)" in
+    i?86) export ARCH=i686 ;;
+    arm*) export ARCH=arm ;;
+       *) export ARCH=$(uname -m) ;;
+  esac
+fi
+
+case "$ARCH" in
+ "i686")
+	CFLAGS="-O2 -march=i686 -mtune=i686 -pipe"
+	BUILD="-m32"	;;
+ "s390")
+	CFLAGS="-O2"	;;
+ "x86_64")
+	CFLAGS="-O2 -fPIC"
+	BUILD="-m64"	;;
+ *)
+	CFLAGS="-O2"	
+esac
+CXXFLAGS="$CFLAGS"
+YARCH="$ARCH"
+
+export ARCH 
+export YARCH
+export CC="$CC $BUILD"
+export CXX="$CXX $BUILD"
 export CFLAGS
 export CXXFLAGS
 export MAKEOPTS
@@ -29,6 +54,7 @@ export YPINST_PREFIX
 export YP_I18N
 export ACCEPT_REPO
 export YPPATH_URI
+export BUILD
 
 
 # Support set YPKG_ROOT 

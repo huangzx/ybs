@@ -542,7 +542,7 @@ do_install () {
 		uri=${uri%*.$PACK_SUFFIX}
 		if [ "x$PRETEND" != "xyes" ];then
 			printf ">>% 2d%s%02d %13s % 25s\n" $count $sep $pall "installing:" " $uri"
-			ypkg -i $binpack 
+			ypkg2 -i $binpack 
 			#if [ "x$?" = "x0" ]; then
 			#	printf "% 15s\n" "installed"
 			#fi
@@ -690,7 +690,7 @@ do_remove () {
 			name=${pack[1]}
 			version=${pack[2]}
 			printf ">>% 2d%s%02d %13s % 25s\n" $count $sep $pall "removing:" ${name}_$version
-			ypkg -C ${name}_$version >/dev/null
+			ypkg2 -C ${name}_$version >/dev/null
 			let "count++"
 			done	;;
 		    *) 

@@ -233,7 +233,7 @@ atom_parse() {
 	local RR
 	case x${1##*.} in
 	xpbs)              ATOM="${1%.pbs}" ;;
-	x$PACK_SUFFIX)     ATOM="${1%.$PACK_SUFFIX}" ;;
+	x$PACK_SUFFIX)     ATOM="${1%-$YARCH.$PACK_SUFFIX}" ;;
 	xlist)		   ATOM="${1%.list}" ;;
 	xdesc)		   ATOM="${1%.desc}" ;;
 	*)                 ATOM="$1"
@@ -806,6 +806,7 @@ ypkg_begin_download() {
 	YPB_CONFIG="$YPINST_PREFIX "
 	YPB_CONFIG="--prefix=/usr
 		    --sysconfdir=/etc
+		    --libdir=/usr/lib
 		    --localstatedir=/var
 		    --infodir=/usr/share/info
 		    --mandir=/usr/share/man
@@ -827,11 +828,13 @@ ypkg_begin_download() {
 	err_check "* [Error]: Create dir $YPPATH_SOURCE failed."
 
 	#download all files
-	for url in ${SRC_URI}; do
-		#echo $url
-		check_and_download $url
-		err_check "* [Error]: download $url failed."
-	done
+	if [ "x${SRC_URI}" != "x" ]; then
+		for url in ${SRC_URI}; do
+			#echo $url
+			check_and_download $url
+			err_check "* [Error]: download $url failed."
+		done
+	fi
 
 	return 0
 }
@@ -896,7 +899,7 @@ ypkg_strip_mani18n() {
 ypkg_strip_bin() {
 	#msg ">>> strip debug info.."
 	find $1/{,usr/}{bin,sbin} -type f -exec strip --strip-all '{}' ';' 2>/dev/null
-	find $1/{,usr/}lib -type f -exec strip --strip-debug '{}' ';' 2>/dev/null
+	find $1/{,usr/}{lib,local/lib} -type f -exec strip --strip-debug '{}' ';' 2>/dev/null
 }
 
 
@@ -944,8 +947,9 @@ sys|x11|gnome|kde|lxde|xfce|app)
 split_dev() {
 	local dir="$1"
 	local destdir="$workdir"
-	#*.la *.a
-	devlib=$(find $dir/{usr/lib,lib} -type f -name "*.la" -o -name "*.a" 2>/dev/null)
+	#*.la *.a *.h
+	devlib=$(find $dir/usr -name "*.la" -o -name "*.a" 2>/dev/null)
+	devlib+=" $(find $dir/usr -name "*.h" 2>/dev/null)"
 	if [ x"$devlib" != "x" ]; then
 		for lib in $devlib; do
 			i=${lib#$dir}
@@ -962,24 +966,10 @@ split_dev() {
 			ypkg_domv $pc $destdir/$N-dev_$V$R/$dirpc
 		done
 	fi
-	#/usr/include/*.h
-	headers=$(ls -d $dir/usr/include/* 2>/dev/null)
-	if [ x"$headers" != "x" ]; then
-		ypkg_domv $dir/usr/include $destdir/$N-dev_$V$R/usr
-	fi
 	#/usr/share/aclocal/ogg.m4
 	acl=$(ls -d $dir/usr/share/aclocal/* 2>/dev/null)
 	if [ x"$acl" != "x" ]; then
 		ypkg_domv $dir/usr/share/aclocal $destdir/$N-dev_$V$R/usr/share
-	fi
-	#/usr/share/*/include  /usr/lib/*/include
-	headers_extra=$(ls -d $dir/usr/share/*/include $dir/usr/lib/*/include 2>/dev/null)
-	if [ "x$headers_extra" != "x" ]; then
-		ls -1d $dir/usr/share/*/include $dir/usr/lib/*/include 2>/dev/null |while read line;do
-			local tmp=${line##$dir}
-			local tmp=${tmp%%/include}
-			ypkg_domv $line $destdir/$N-dev_$V$R/$tmp
-		done
 	fi
 	[ -d $destdir/$N-dev_$V$R ] && echo $destdir/$N-dev_$V$R && return 0
 	return 1
@@ -1121,10 +1111,11 @@ mkpackage() {
 	[ x"$REPO" = x ] && REPO="stable"
 	repo=$REPO
 	subdir="$(echo $N |cut -b1)"
-	uri="$subdir/${N}_$V$R.$PACK_SUFFIX"
+	uri="$subdir/${N}_$V$R-$YARCH.$PACK_SUFFIX"
 	license="$LICENSE"
 	homepage="$HOMEPAGE"
 	install="$INSTALL"
+	arch="$YARCH"
 	depend=$(echo $RDEPEND |xargs |tr " " ",")
 	bdepend=$(echo $BDEPEND |xargs |tr " " ",")
 	redepend=$(echo $RECOMMENDED |xargs |tr " " ",")
@@ -1144,6 +1135,7 @@ NAME="$name"
 DESCRIPTION="$description"
 HOMEPAGE="$HOMEPAGE"
 REPO="$repo"
+ARCH="$arch"
 LICENSE="$license"
 PRIORITY="$priority"
 PACKAGER="$PACKAGER"
@@ -1190,7 +1182,7 @@ OOO
      <keyword lang="en">$name</keyword>
    </genericname>
    <category>$category</category>           
-   <arch>i686</arch>                                        
+   <arch>$arch</arch>                                        
    <version>$version</version>                            
    <priority>$priority</priority>                    
    <license>$license</license>
@@ -1421,7 +1413,7 @@ ypkg_find_info() {
 				#end_add=$(($end+1))
 				if [ x"$version" != x ];then	
 					if grep $version $tempfile >/dev/null 2>&1 \
-					&& grep ${name}_$version.$PACK_SUFFIX $tempfile >/dev/null 2>&1; then
+					&& grep ${name}_$version-$YARCH.$PACK_SUFFIX $tempfile >/dev/null 2>&1; then
 						#sed -i -e ''"$start"','"$end"'d' -e ''"$start_sub"'d' -e ''"$end_add"'d'  $file
 						sed -i ''"$start"','"$end"'d' $file
 					fi
@@ -1432,7 +1424,7 @@ ypkg_find_info() {
 			*)
 				if [ x"$version" != x ];then	
 					if grep $version $tempfile >/dev/null 2>&1 \
-						&& grep ${name}_$version.$PACK_SUFFIX $tempfile >/dev/null 2>&1; then
+						&& grep ${name}_$version-$YARCH.$PACK_SUFFIX $tempfile >/dev/null 2>&1; then
 						sed -n ''"$start"','"$end"'p' $file 
 					fi
 				else
@@ -1681,6 +1673,7 @@ ypkg_unpack() {
 		is_exist "$SRC_URI" && SRC_URI="$SRC_URI"
 		is_exist "$YPPATH_SOURCE/$SRC_URI" && SRC_URI="$YPPATH_SOURCE/$SRC_URI"
 	fi
+	[ "x$SRC_URI" = "x" ] && return 0
 	SRC_URI=($SRC_URI)
 	local first_pack=${SRC_URI[0]}
 	local fname=$(basename $first_pack)
@@ -2378,7 +2371,8 @@ ypkg_begininstall() {
 	for pack in $packs; do
 		case "x$AUTO_INSTALL" in
 		xyes) mmsg ">>> Install: $pack"
-		      install_pack $pack ;;
+		      #install_pack $pack ;;
+		      ypkg2 -i $pack ;;
 		   *) gmsg ">>> $pack"
 		esac
 	done
@@ -2998,7 +2992,7 @@ ypkg_show_binary() {
 		atom_parse_path $newest
 		pbsfile="$newest"
 		i=${pbsfile##*/}
-		bianry="${i%*.pbs}".$PACK_SUFFIX
+		bianry="${i%*.pbs}"-$YARCH.$PACK_SUFFIX
 		absbianry=$YPPATH_PACKAGE/$bianry
 		echo $absbianry
 		return 0
