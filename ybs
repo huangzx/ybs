@@ -28,6 +28,7 @@ if [ -z "$ARCH" ]; then
   esac
 fi
 
+LIBDIRSUFFIX=""
 case "$ARCH" in
  "i686")
 	CFLAGS="-O2 -march=i686 -mtune=i686 -pipe"
@@ -55,7 +56,6 @@ export YP_I18N
 export ACCEPT_REPO
 export YPPATH_URI
 export BUILD
-
 
 # Support set YPKG_ROOT 
 #

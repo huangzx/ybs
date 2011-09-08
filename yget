@@ -542,7 +542,7 @@ do_install () {
 		uri=${uri%*.$PACK_SUFFIX}
 		if [ "x$PRETEND" != "xyes" ];then
 			printf ">>% 2d%s%02d %13s % 25s\n" $count $sep $pall "installing:" " $uri"
-			ypkg2 -i $binpack 
+			ypkg -i $binpack 
 			#if [ "x$?" = "x0" ]; then
 			#	printf "% 15s\n" "installed"
 			#fi

@@ -1,6 +1,9 @@
 
-. /etc/environment
-export PATH
+if [ "xLANG" = "x" ]; then
+	export LANG="zh_CN.UTF-8"
+fi
+
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/opt/bin"
 
 ## -------------------- colourful print --------------------
 ## ANSI Foreground color codes:
@@ -58,6 +61,9 @@ PACK_SUFFIX="ypk"
 XZ="xz"
 
 #
+YLMFOS="YLMFOS"
+
+#
 WORLD_LOCKFILE="/tmp/.ypkg_lock"
 UNI_LOCKFILE="/tmp/.ybs_lock"
 
@@ -69,24 +75,39 @@ filelist="filelist"
 
 #
 blank_funcs () {
+	DESCRIPTION=""
+	HOMEPAGE=""
+	REPO=""
+	YARCH="$(uname -m)"
+	LICENSE=""
+	PRIORITY=""
+	PACKAGER=""
+	SRC_URI=""
+	RDEPEND=""
+	BDEPEND=""
+	RECOMMENDED=""
+	CONFLICT=""
+	NOTES=""
+	OPIONAL=""
+	PROVIDE=""
+	INSTALL=""
+	OPINION=""
+	
+	INAME=""
+	CATEGORY=""
+	VERSION=""
+	PRIORITY=""
+	TYPE=""
+	INSTALL_SIZE=""
+	BUILD_TIME=""
+	BIN_URI=""
+	PACK_SIZE=""
+	INSTALL=""
+	SHA=""
+	NAME=""
+	BRIEF=""
+	SPECIFICATION=""
 	if [ "x$1" = "xpbs" ];then
-		DESCRIPTION=""
-		HOMEPAGE=""
-		REPO=""
-		LICENSE=""
-		PRIORITY=""
-		PACKAGER=""
-		SRC_URI=""
-		RDEPEND=""
-		BDEPEND=""
-		RECOMMENDED=""
-		CONFLICT=""
-		NOTES=""
-		OPIONAL=""
-		PROVIDE=""
-		INSTALL=""
-		OPINION=""
-
 		pbs_unpack() {
 			:
 		}
@@ -103,28 +124,7 @@ blank_funcs () {
 			:
 		}
 	fi
-	if [ "x$1" = "xdesc" ];then
-		INAME=""
-		CATEGORY=""
-		VERSION=""
-		PRIORITY=""
-		TYPE=""
-		REPO=""
-		INSTALL_SIZE=""
-		BUILD_TIME=""
-		BIN_URI=""
-		RDEPEND=""
-		RECOMMENDED=""
-		CONFLICT=""
-		PACK_SIZE=""
-		DESCRIPTION=""
-		INSTALL=""
-		SHA=""
-		NAME=""
-		BRIEF=""
-		SPECIFICATION=""
-		OPINION=""
-	fi
+	[ "x$1" = "xdesc" ] && :
 }
 
 #
@@ -231,13 +231,29 @@ err_check() {
 atom_parse() {
 	local ATOM
 	local RR
+
 	case x${1##*.} in
-	xpbs)              ATOM="${1%.pbs}" ;;
-	x$PACK_SUFFIX)     ATOM="${1%-$YARCH.$PACK_SUFFIX}" ;;
-	xlist)		   ATOM="${1%.list}" ;;
-	xdesc)		   ATOM="${1%.desc}" ;;
-	*)                 ATOM="$1"
+	xpbs)           
+		ATOM="${1%.pbs}" ;;
+	x$PACK_SUFFIX)     
+		if [ "x$YARCH" != "x" ]; then
+			ATOM="${1%-$YARCH.$PACK_SUFFIX}"
+		else
+			ATOM="${1%.$PACK_SUFFIX}"
+		fi		     ;;
+	xlist)	
+		ATOM="${1%.list}" ;;
+	xdesc)	
+		ATOM="${1%.desc}" ;;
+	*)      
+		ATOM="$1"
 	esac
+
+	[ "x$ARCH" = "x" ] && ARCH="$(uname -m)"
+
+	ATOM=${ATOM%-$ARCH}
+	ATOM=${ATOM%-any}
+
 	N=${ATOM%%_[0-9]*}
 	N=${N%%_}
 	VR=${ATOM#$N}
@@ -641,7 +657,7 @@ ypkg_searchOK() {
 	blank_funcs pbs
 	blank_funcs desc
 	echo 
-	[ -f $tmpfile ] && rm -r $tmpfile
+	is_exist $tmpfile && rm -r $tmpfile
 }
 
 #
@@ -721,7 +737,7 @@ check_and_download_raw() {
 		fi
 		[ "$?" == "0" ] && return 0 ;;
     http|https|ftp|*)	
-		if [ -f ${YPPATH_SOURCE}/${fname} ]; then
+		if is_exist "${YPPATH_SOURCE}/${fname}"; then
 			#printf "%s exists, Skip.\n" $fname
 			msg "* $YPPATH_SOURCE/$fname exists, Skip."
 			return 0
@@ -906,7 +922,7 @@ ypkg_strip_bin() {
 #compress man and info 
 ypkg_gzip_extra() {
 	#msg ">>> compress man info"
-	[ -f $1/usr/share/info/dir ] && rm $1/usr/share/info/dir 2>/dev/null
+	is_exist "$1/usr/share/info/dir" && rm $1/usr/share/info/dir 2>/dev/null
 	#find $1/usr/{,share/}{man,doc,info} -type f -exec gzip '{}' ';' 2>/dev/null
 	find $1/usr/{,share/}{man,info} -type f -exec gzip '{}' ';' 2>/dev/null
 }
@@ -947,6 +963,15 @@ sys|x11|gnome|kde|lxde|xfce|app)
 split_dev() {
 	local dir="$1"
 	local destdir="$workdir"
+	
+	#/usr/include/ /usr/share/*/include /usr/lib/*/include
+	ls -1d $dir/usr/share/*/include $dir/usr/lib/*/include \
+	       $dir/usr/include 2>/dev/null |while read line; do
+	        	local tmp=${line##$dir}
+			local tmp=${tmp%%/include}
+			ypkg_domv $line $destdir/$N-dev_$V$R/$tmp
+ 		done
+	
 	#*.la *.a *.h
 	devlib=$(find $dir/usr -name "*.la" -o -name "*.a" 2>/dev/null)
 	devlib+=" $(find $dir/usr -name "*.h" 2>/dev/null)"
@@ -957,6 +982,7 @@ split_dev() {
 			ypkg_domv $lib  $destdir/$N-dev_$V$R/$libdir
 		done
 	fi
+
 	#pkgconfig
 	pcdir=$(find $dir -type d -name "pkgconfig" 2>/dev/null)
 	if [ x"$pcdir" != "x" ]; then
@@ -966,12 +992,14 @@ split_dev() {
 			ypkg_domv $pc $destdir/$N-dev_$V$R/$dirpc
 		done
 	fi
+	
 	#/usr/share/aclocal/ogg.m4
 	acl=$(ls -d $dir/usr/share/aclocal/* 2>/dev/null)
 	if [ x"$acl" != "x" ]; then
 		ypkg_domv $dir/usr/share/aclocal $destdir/$N-dev_$V$R/usr/share
 	fi
 	[ -d $destdir/$N-dev_$V$R ] && echo $destdir/$N-dev_$V$R && return 0
+	
 	return 1
 }
 
@@ -980,17 +1008,20 @@ split_doc() {
 	local dir="$1"
 	local destdir="$workdir"
 	docs=$(ls -d $dir/usr/share/doc/* 2>/dev/null)
+	
 	#info=$(ls -d $dir/usr/share/info/* 2>/dev/null)
 	gtk_docs=$(ls -d $dir/usr/share/gtk-doc/html/* 2>/dev/null)
 	if [ x"$docs" != "x" ]; then
 		ypkg_domv $dir/usr/share/doc $destdir/$N-doc_$V$R/usr/share
 	fi
+	
 	#if [ x"$info" != "x" ]; then
 	#	ypkg_domv $dir/usr/share/info $destdir/$N-doc_$V$R/usr/share
 	#fi
 	if [ x"$gtk_docs" != "x" ]; then
 		ypkg_domv $dir/usr/share/gtk-doc/html $destdir/$N-doc_$V$R/usr/share/gtk-doc
 	fi
+	
 	#ypkg_gzip_info $destdir/$N-doc_$V$R
 	[ -d $destdir/$N-doc_$V$R ] && echo $destdir/$N-doc_$V$R && return 0
 	return 1
@@ -1015,14 +1046,14 @@ split_i18n() {
 #
 find_desktop() {
 	local source_dir=$1
-	[ -f $source_dir/usr/share/applications/$N-gtk.desktop ] && desktop="$source_dir/usr/share/applications/$N-gtk.desktop"
-	[ -f $source_dir/usr/share/applications/$N-[[:digit:]].desktop ] && desktop="$(ls $source_dir/usr/share/applications/$N-[[:digit:]].desktop)"
-	[ -f $source_dir/usr/share/applications/$N.desktop ] && desktop="$source_dir/usr/share/applications/$N.desktop"
+	is_exist "$source_dir/usr/share/applications/$N-gtk.desktop" && desktop="$source_dir/usr/share/applications/$N-gtk.desktop"
+	is_exist "$source_dir/usr/share/applications/$N-[[:digit:]].desktop" && desktop="$(ls $source_dir/usr/share/applications/$N-[[:digit:]].desktop)"
+	is_exist "$source_dir/usr/share/applications/$N.desktop" && desktop="$source_dir/usr/share/applications/$N.desktop"
 	if [ "x$DESKTOPFILE" != "x" ]; then
-		[ -f "$source_dir/$DESKTOPFILE" ] && desktop="$source_dir/$DESKTOPFILE"
-		[ -f "$source_dir/usr/share/applications/$DESKTOPFILE" ] && desktop="$source_dir/usr/share/applications/$DESKTOPFILE"
+		is_exist "$source_dir/$DESKTOPFILE" && desktop="$source_dir/$DESKTOPFILE"
+		is_exist "$source_dir/usr/share/applications/$DESKTOPFILE" && desktop="$source_dir/usr/share/applications/$DESKTOPFILE"
 	fi
-	if [ "x$desktop" != "x" ] && [ -f $desktop ]; then
+	if [ "x$desktop" != "x" ] && is_exist "$desktop"; then
 		echo "$desktop"
 		return 0
 	fi
@@ -1034,10 +1065,10 @@ find_icon() {
 	local desktop=$1 
 	local source_dir=$2
 	icon_name="$(grep ^Icon= $desktop |sed -e 's/Icon=//g')"
-	if [ -f "$source_dir/$icon_name" ]; then
+	if is_exist "$source_dir/$icon_name"; then
 		icon="$source_dir/$icon_name"
 	else
-		[ -f $source_dir/usr/share/icons/hicolor/scalable/apps/$icon_name.svg ] && \
+		is_exist "$source_dir/usr/share/icons/hicolor/scalable/apps/$icon_name.svg" && \
 		icon="$source_dir/usr/share/icons/hicolor/scalable/apps/$icon_name.svg"
 		icon_name=${icon_name%.svg}
 		icon_name=${icon_name%.png}
@@ -1045,20 +1076,20 @@ find_icon() {
 		icon_name=${icon_name%.jpg}
 		for i in 24x24 22x22 32x32 48x48; do
 			icon="$source_dir/usr/share/icons/hicolor/"$i"/apps/$icon_name.png"
-			[ -f $icon ] && break || continue
+			is_exist "$icon" && break || continue
 		done
 	fi
-	[ -f $source_dir/usr/share/icons/$icon_name.png ] && icon="$source_dir/usr/share/icons/$icon_name.png"
-	[ -f $source_dir/usr/share/icons/$icon_name.xpm ] && icon="$source_dir/usr/share/icons/$icon_name.xpm"
-	[ -f $source_dir/usr/share/pixmaps/$icon_name.svg ] && icon="$source_dir/usr/share/pixmaps/$icon_name.svg"
-	[ -f $source_dir/usr/share/pixmaps/$icon_name.xpm ] && icon="$source_dir/usr/share/pixmaps/$icon_name.xpm"
-	[ -f $source_dir/usr/share/pixmaps/$icon_name.png ] && icon="$source_dir/usr/share/pixmaps/$icon_name.png"
-	[ -f $source_dir/usr/share/pixmaps/$icon_name ] && icon="$source_dir/usr/share/pixmaps/$icon_name"
+	is_exist "$source_dir/usr/share/icons/$icon_name.png" && icon="$source_dir/usr/share/icons/$icon_name.png"
+	is_exist "$source_dir/usr/share/icons/$icon_name.xpm" && icon="$source_dir/usr/share/icons/$icon_name.xpm"
+	is_exist "$source_dir/usr/share/pixmaps/$icon_name.svg" && icon="$source_dir/usr/share/pixmaps/$icon_name.svg"
+	is_exist "$source_dir/usr/share/pixmaps/$icon_name.xpm" && icon="$source_dir/usr/share/pixmaps/$icon_name.xpm"
+	is_exist "$source_dir/usr/share/pixmaps/$icon_name.png" && icon="$source_dir/usr/share/pixmaps/$icon_name.png"
+	is_exist "$source_dir/usr/share/pixmaps/$icon_name" && icon="$source_dir/usr/share/pixmaps/$icon_name"
 	if [ "x$ICONFILE" != "x" ]; then
-		[ -f "$source_dir/$ICONFILE" ] && icon="$source_dir/$ICONFILE"
-		[ -f "$source_dir/usr/share/pixmaps/$ICONFILE" ] && icon="$source_dir/usr/share/pixmaps/$ICONFILE"
+		is_exist "$source_dir/$ICONFILE" && icon="$source_dir/$ICONFILE"
+		is_exist "$source_dir/usr/share/pixmaps/$ICONFILE" && icon="$source_dir/usr/share/pixmaps/$ICONFILE"
 	fi
-	if [ "x$icon" != "x" ] && [ -f $icon ]; then
+	if [ "x$icon" != "x" ] && is_exist "$icon"; then
 		echo "$icon"
 		return 0
 	fi
@@ -1073,6 +1104,7 @@ mkpackage() {
 	local source_dir="$1"  
 	atom_parse_path $source_dir
 	local dbdir="${YPPATH_DB#/}/$N"
+	
 	#creat pkgdate
 	#
 	cd $source_dir
@@ -1107,6 +1139,7 @@ mkpackage() {
 	category=$(ypkg_get_category "$TT")
 	name=$N
 	version=$V$R
+	yversion="$YVERSION"
 	priority=$PRIORITY
 	[ x"$REPO" = x ] && REPO="stable"
 	repo=$REPO
@@ -1157,13 +1190,14 @@ OOO
 	icon=
 	gname=
 	gdescription=
+	
 	#desktop and icon
 	desktop=$(find_desktop $source_dir)
-	if [ "x$desktop" != "x" ] && [ -f $desktop ]; then
+	if [ "x$desktop" != "x" ] && is_exist "$desktop"; then
 		cp $desktop  $pkgdir/$N.desktop
 		cp $desktop  /usr/share/app-info/desktop/$N.desktop
 		icon=$(find_icon $desktop $source_dir)
-		if [ "x$icon" != "x" ] && [ -f $icon ]; then		
+		if [ "x$icon" != "x" ] && is_exist "$icon"; then		
 			cp $icon  $pkgdir/
 			cp $icon  /usr/share/app-info/icon/
 		fi
@@ -1184,6 +1218,7 @@ OOO
    <category>$category</category>           
    <arch>$arch</arch>                                        
    <version>$version</version>                            
+   <yversion>$yversion</yversion>                            
    <priority>$priority</priority>                    
    <license>$license</license>
    <homepage>$homepage</homepage>
@@ -1231,7 +1266,7 @@ OOO
 		timeout=10
 		while true; do
 			[ $timeout -eq 0 ] && rm -f "$UNI_LOCKFILE"
-			if [ ! -f "$UNI_LOCKFILE" ]; then
+			if ! is_exist "$UNI_LOCKFILE"; then
 				touch $UNI_LOCKFILE
 				sed -i '/# '"$N $V $R"'/d'                                 $YPPATH_LOCAL_UNI
 				ypkg_find_info			                           $YPPATH_LOCAL_UNI  "remove"
@@ -1317,10 +1352,10 @@ ypkg_mkpackage() {
 
 #
 ypkg_rm_packgeinfo() {
-	local destpath=$YPPATH_DB
+	local destpath="$YPPATH_DB"
 	#delete info files
 	for i in config.gz para list pbs date size; do
-		if [ -f $destpath/${N}/${N}_$V$R.${i} ]; then
+		if is_exist "$destpath/${N}/${N}_$V$R.${i}"; then
 			printf "<< file %s\n" "$destpath/${N}/${N}_$V$R.${i}"
 			rm -fr "$destpath/${N}/${N}_$V$R.${i}"
 		fi
@@ -1330,7 +1365,7 @@ ypkg_rm_packgeinfo() {
 		. ${i}
 		install=$INSTALL
 		if ! grep -wq INSTALL=\"$install\" $(ls -1 $destpath/${N}/${N}_*.desc |grep -v ${i}); then
-			if [ -f $destpath/${N}/$install ]; then
+			if is_exist "$destpath/${N}/$install"; then
 				printf "<< file %s\n" "$destpath/${N}/$install"
 				rm -fr "$destpath/${N}/$install"
 			fi
@@ -1412,8 +1447,7 @@ ypkg_find_info() {
 				#start_sub=$(($start-1))
 				#end_add=$(($end+1))
 				if [ x"$version" != x ];then	
-					if grep $version $tempfile >/dev/null 2>&1 \
-					&& grep ${name}_$version-$YARCH.$PACK_SUFFIX $tempfile >/dev/null 2>&1; then
+					if grep -q $version $tempfile && grep -q ${name}_$version $tempfile ; then
 						#sed -i -e ''"$start"','"$end"'d' -e ''"$start_sub"'d' -e ''"$end_add"'d'  $file
 						sed -i ''"$start"','"$end"'d' $file
 					fi
@@ -1423,8 +1457,7 @@ ypkg_find_info() {
 				;;
 			*)
 				if [ x"$version" != x ];then	
-					if grep $version $tempfile >/dev/null 2>&1 \
-						&& grep ${name}_$version-$YARCH.$PACK_SUFFIX $tempfile >/dev/null 2>&1; then
+					if grep -q $version $tempfile && grep -q ${name}_$version $tempfile; then
 						sed -n ''"$start"','"$end"'p' $file 
 					fi
 				else
@@ -1446,11 +1479,11 @@ ypkg_dodesktop() {
 	local icon=""
 	is_exist "$FILES_PATH/files/${dfile##*/}"   && dfile="$FILES_PATH/files/${dfile##*/}"
 	is_exist "$FILES_PATH/files/${picture##*/}" && picture="$FILES_PATH/files/${picture##*/}"
-	if [ x"$dfile" != x ] && [ -f "$dfile" ]; then
+	if [ x"$dfile" != x ] && is_exist "$dfile"; then
 		mkdir -p "$YPPATH_DEST"/usr/share/applications
 		install -m755 "$dfile" "$YPPATH_DEST"/usr/share/applications 
 	fi
-	if [ x"$picture" != x ] && [ -f "$picture" ]; then 
+	if [ x"$picture" != x ] && is_exist "$picture"; then 
 		ypkg_docp "$picture"   "$YPPATH_DEST"/usr/share/pixmaps
 	fi
 	dfile="${dfile##*/}"
@@ -1470,7 +1503,7 @@ ypkg_dounit() {
 	local file="$@"
 	if [ x"$file" != x ]; then
 		for i in $@; do
-			if [ -f "$i" ]; then
+			if is_exist "$i"; then
 				ypkg_docp "$i" "$YPPATH_DEST"/lib/systemd/system
 			else
 				ypkg_docp "$FILES_PATH"/files/"$i"  "$YPPATH_DEST"/lib/systemd/system
@@ -1484,7 +1517,7 @@ ypkg_doinit() {
 	local file="$1"
 	mkdir -p "$YPPATH_DEST"/etc/init.d
 	if [ x"$file" != x ]; then
-		if [ -f "$file" ]; then
+		if is_exist "$file"; then
        			install -m755 "$file" "$YPPATH_DEST"/etc/init.d
 		else
        			install -m755 "$FILES_PATH"/files/"$file" "$YPPATH_DEST"/etc/init.d
@@ -1784,21 +1817,21 @@ ypkg_config() {
 	fi
 	
 	#perl module
-	[ -f Makefile.pl ] && mv Makefile.pl Makefile.PL
-	[ -f Makefile.PL ] && command="perl Makefile.PL -y PREFIX=/usr $@"
+	is_exist Makefile.pl && mv Makefile.pl Makefile.PL
+	is_exist Makefile.PL && command="perl Makefile.PL -y PREFIX=/usr $@"
 	if [ x"$command" != x ];then
 		mmsg ">>> $command"
-		if ! $command; then
+		if ! eval $command; then
 			command="perl Makefile.PL PREFIX=/usr $@"
 			mmsg ">>> $command"  
-			$command && return 0
+			eval $command && return 0
 		else
 			return 0
 		fi
 	fi
 
 	#cmake
-	if [ -f CMakeLists.txt ];then
+	if is_exist CMakeLists.txt; then
 		command="mkdir -p build"
 		command1="cd build"
 		command2="cmake ../ -DCMAKE_INSTALL_PREFIX=/usr" # -DCMAKE_SHARED_LIBRARY_PREFIX=lib"
@@ -1816,7 +1849,7 @@ ypkg_config() {
 	fi
 
 	#scons
-	if [ -f SConstruct ];then
+	if is_exist SConstruct; then
 		#command="scons --prefix=/usr"
 		command="scons $(echo $YPB_CONFIG |xargs)"
 		mmsg ">>> $command"
@@ -1832,7 +1865,7 @@ ypkg_make() {
 		mmsg ">>> $command"
 		$command && return 0
 	fi
-	if [ -f setup.py ];then
+	if is_exist setup.py;then
 		if [ "x$1"  = "xmake" ]; then
 			command="make $MAKEOPTS $@"
 		else
@@ -1841,16 +1874,16 @@ ypkg_make() {
 		mmsg ">>> $command"
 		$command && return 0
 	fi
-	if [ -f Makefile ] || [ -f GNUmakefile ];then
+	if is_exist Makefile || is_exist GNUmakefile; then
 		command="make $MAKEOPTS $@" 
 	fi
-	if [ -f makefile.linux ];then
+	if is_exist makefile.linux; then
                 command="make $MAKEOPTS -f makefile.linux $@"
 	fi
-	if [ -f Imakefile ]; then
+	if is_exist Imakefile; then
 		command="make $MAKEOPTS $@"
 	fi
-	if [ -f SConstruct ];then
+	if is_exist SConstruct; then
 	        return 0
 	fi
 
@@ -1866,7 +1899,7 @@ ypkg_mkinstall() {
 		mmsg ">>> $command"
 		$command && return 0
 	fi
-	if [ -f setup.py ];then
+	if is_exist setup.py;then
 		if [ "x$1"  = "xmake" ]; then
 			command="make DESTDIR="$YPPATH_DEST" $@ install"		
 		else
@@ -1876,7 +1909,7 @@ ypkg_mkinstall() {
 		$command && return 0
 	fi
 		
-	if [ -f SConstruct ];then
+	if is_exist SConstruct;then
 		if [ x"$@" = x ]; then
 			command="scons --install-sandbox="$YPPATH_DEST" "$@" install"
 		else
@@ -1886,7 +1919,7 @@ ypkg_mkinstall() {
 		$command && return 0
 	fi	
 
-	if [ -f Makefile ] || [ -f GNUmakefile ] ;then
+	if is_exist Makefile || is_exist GNUmakefile; then
 		command="make DESTDIR="$YPPATH_DEST" "$@" install"
 	fi	
 	mmsg ">>> $command"
@@ -2184,7 +2217,22 @@ install_pack () {
 	#
 	cd $workdir
 	
-	atom_parse ${pack##*/}
+	pack_=${pack##*/}
+	N=${pack_%_*}
+	if ! tar xf $pack $pkginfo; then
+		rmsg "* invalid ypk format. "
+		[ -d $myworkdir ] && rm -rf $myworkdir
+		return 1
+	fi
+
+	if ! tar xf $pkginfo $control; then
+		rmsg "* invalid ypk format. "
+		[ -d $myworkdir ] && rm -rf $myworkdir
+		return 1
+	fi
+	VR="$(get_value version $control)"
+
+	atom_parse "${N}_$VR"
 	#current_name
 	c_name="$N"
 	#current_version
@@ -2203,7 +2251,6 @@ install_pack () {
 	fi
 
 	#
-	tar xf $pack $pkginfo
 	if tar xf $pkginfo 2>/dev/null; then
 		install="$(get_value install $control)"
 		if [ "x$install" != "x" ] && is_exist $install; then
@@ -2265,7 +2312,7 @@ install_pack () {
 	timeout=10
 	while true; do
 		[ $timeout -eq 0 ] && rm -f "$WORLD_LOCKFILE"
-		if [ ! -f "$WORLD_LOCKFILE" ]; then
+		if ! is_exist "$WORLD_LOCKFILE"; then
 			touch $WORLD_LOCKFILE
 			ypkg_find_info $YPPATH_WORLD remove
 			sed -i '/<\/PackageInfo>/d'                      $YPPATH_WORLD
@@ -2371,8 +2418,8 @@ ypkg_begininstall() {
 	for pack in $packs; do
 		case "x$AUTO_INSTALL" in
 		xyes) mmsg ">>> Install: $pack"
-		      #install_pack $pack ;;
-		      ypkg2 -i $pack ;;
+		      install_pack $pack ;;
+		      #ypkg2 -i $pack ;;
 		   *) gmsg ">>> $pack"
 		esac
 	done
@@ -2597,7 +2644,7 @@ ypkg_list_all_available() {
 		else
 			blank_funcs desc
 		fi
-		if [ -f "$YPPATH_DB/$N/$pbsfile" ];then
+		if is_exist "$YPPATH_DB/$N/$pbsfile"; then
 			gmsg_ '[I] '  
 			echo -e "$T/${N}_$V$R\t$BUILD_TIME\t$INSTALL_SIZE\t$PACK_SIZE"
 		else	
@@ -2701,7 +2748,7 @@ ypkg_do_remove_package() {
 	timeout=10
 	while true; do
 		[ $timeout -eq 0 ] && rm -f "$WORLD_LOCKFILE"
-		if [ ! -f "$WORLD_LOCKFILE" ]; then
+		if ! is_exist "$WORLD_LOCKFILE"; then
 			touch $WORLD_LOCKFILE
 			ypkg_find_info $YPPATH_WORLD  "remove"
 			rm -f $WORLD_LOCKFILE
@@ -2770,7 +2817,7 @@ ypkg_remove_package() {
         if [ "x$listfile" != "x" ]; then
 		for i in ${listfile[@]}; do
 			atom_parse_path $i
-			if [ -f $YPPATH_DB/$N/${N}_$V$R.desc ]; then
+			if is_exist "$YPPATH_DB/$N/${N}_$V$R.desc"; then
 				blank_funcs "pbs"
 				. $YPPATH_DB/$N/${N}_$V$R.desc
 				install=$INSTALL
@@ -2862,7 +2909,7 @@ ypkg_conflict_remove() {
 	timeout=10
 	while true; do
 		[ $timeout -eq 0 ] && rm -f "$WORLD_LOCKFILE"
-		if [ ! -f "$WORLD_LOCKFILE" ]; then
+		if ! is_exist "$WORLD_LOCKFILE"; then
 			touch $WORLD_LOCKFILE
      			ypkg_find_info $YPPATH_WORLD  "remove"
 			rm -f $WORLD_LOCKFILE
@@ -2913,7 +2960,7 @@ ypkg_upgrade_remove() {
 	timeout=10
 	while true; do
 		[ $timeout -eq 0 ] && rm -f "$WORLD_LOCKFILE"
-		if [ ! -f "$WORLD_LOCKFILE" ]; then
+		if ! is_exist "$WORLD_LOCKFILE"; then
 			touch $WORLD_LOCKFILE
      			ypkg_find_info $YPPATH_WORLD  "remove"
 			rm -f $WORLD_LOCKFILE
@@ -2984,25 +3031,6 @@ ypkg_showpbs() {
 }
 
 #
-ypkg_show_binary() {
-	local i bianry
-        atom_parse_type $1
-        ypkg_getpbsfile $1
-       	if [ $? == 0 ]; then
-		atom_parse_path $newest
-		pbsfile="$newest"
-		i=${pbsfile##*/}
-		bianry="${i%*.pbs}"-$YARCH.$PACK_SUFFIX
-		absbianry=$YPPATH_PACKAGE/$bianry
-		echo $absbianry
-		return 0
-	else
-		#rmsg "* [Error]: $1 not found."
-		return 1
-	fi
-}
-
-#
 ypkg_whatrequires() {
 	local depend 
 	local ppkg=$1
@@ -3049,13 +3077,17 @@ ypkg_unpack_binary() {
 	local source_pack="$1"
 	local target_dir="$2"
 	msg ">> decompress: $source_pack"
-	tar xjpf $source_pack -C $target_dir
-	if cd $target_dir; then
-		msg ">> $pkginfo"
-		tar xjpf $pkginfo 
-		msg ">> $pkgdata"
-		$XZ -d -c $pkgdata |cpio -idum --quiet
+	if tar xjpf "$source_pack" -C "$target_dir"; then
+		if cd "$target_dir"; then
+			msg ">> $pkginfo"
+			mkdir -p "$YLMFOS"
+			if tar xjpf "$pkginfo" -C "$YLMFOS"; then  
+				msg ">> $pkgdata"
+				"$XZ" -d -c "$pkgdata" |cpio -idum --quiet
+			fi
+		fi
 	fi
+	rm "$pkgdata" "$pkginfo"
 }
 
 #end of file
