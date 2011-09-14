@@ -1365,7 +1365,7 @@ ypkg_rm_packgeinfo() {
 		. ${i}
 		install=$INSTALL
 		if ! grep -wq INSTALL=\"$install\" $(ls -1 $destpath/${N}/${N}_*.desc |grep -v ${i}); then
-			if is_exist "$destpath/${N}/$install"; then
+			if [ -f "$destpath/${N}/$install" ]; then
 				printf "<< file %s\n" "$destpath/${N}/$install"
 				rm -fr "$destpath/${N}/$install"
 			fi
