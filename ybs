@@ -31,17 +31,17 @@ fi
 LIBDIRSUFFIX=""
 case "$ARCH" in
  "i686")
-	CFLAGS="-O2 -march=i686 -mtune=i686 -pipe"
+	CFLAGS="-O2 -march=i686 -mtune=i686 -pipe "
 	BUILD="-m32"	;;
  "s390")
-	CFLAGS="-O2"	;;
+	CFLAGS="-O2 "	;;
  "x86_64")
-	CFLAGS="-O2 -fPIC"
+	CFLAGS="-O2 -fPIC "
 	BUILD="-m64"	;;
  *)
-	CFLAGS="-O2"	
+	CFLAGS="-O2 "	
 esac
-CXXFLAGS="$CFLAGS"
+CXXFLAGS="$CFLAGS "
 YARCH="$ARCH"
 
 export ARCH 

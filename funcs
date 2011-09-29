@@ -973,8 +973,8 @@ split_dev() {
  		done
 	
 	#*.la *.a *.h
-	devlib=$(find $dir/usr -name "*.la" -o -name "*.a" 2>/dev/null)
-	devlib+=" $(find $dir/usr -name "*.h" 2>/dev/null)"
+	devlib=$(find $dir/ -name "*.la" -o -name "*.a" 2>/dev/null)
+	devlib+=" $(find $dir/ -name "*.h" 2>/dev/null)"
 	if [ x"$devlib" != "x" ]; then
 		for lib in $devlib; do
 			i=${lib#$dir}
@@ -1624,7 +1624,11 @@ ypkg_doman() {
 		name=${i%.[0-9]}
 		num=${i##$name}
 		num=${num##.}
-		ypkg_docp ${i} "$YPPATH_DEST"/usr/share/man/man${num}/
+		if is_exist "$i"; then
+			ypkg_docp ${i} "$YPPATH_DEST"/usr/share/man/man${num}/
+		else
+			ypkg_docp "$FILES_PATH"/files/"${i}" "$YPPATH_DEST"/usr/share/man/man${num}/
+		fi
 	done
 }
 
@@ -3061,20 +3065,21 @@ ypkg_whatrequires() {
 		atom_parse_path "$file"
 		. "$file"
 		for depend in RDEPEND BDEPEND RECOMMENDED CONFLICT; do
-			if eval "echo \$${depend}" |grep -w $pkg >/dev/null 2>&1; then
+			if str_isIn "$(eval "echo \$${depend}")" "$pkg"; then
+			#if eval "echo \$${depend}" |grep -w $pkg >/dev/null 2>&1; then
 				case $depend in
 				RDEPEND)
 					gmsg_ "[R] "
-					msg "$T/${N}_$V$R"  ;;
+					msg "${N}_$V$R"  ;;
 				BDEPEND)
 					ymsg_ "[B] "
-					msg "$T/${N}_$V$R"  ;;
+					msg "${N}_$V$R"  ;;
 			    RECOMMENDED) 
 					bmsg_ "[A] "
-					msg "$T/${N}_$V$R"  ;;
+					msg "${N}_$V$R"  ;;
 			       CONFLICT)
 					rmsg_ "[C] "
-					rmsg "$T/${N}_$V$R"
+					rmsg "${N}_$V$R"
 				esac
 			fi
 		done
