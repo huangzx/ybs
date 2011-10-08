@@ -129,8 +129,8 @@ blank_funcs () {
 
 #
 #
-is_exist () {
-	ls -d "$1" >/dev/null 2>&1 && return 0 || return 1
+file_is_exist () {
+	[ -f "$1" ] && return 0 || return 1
 }
 
 
@@ -657,7 +657,7 @@ ypkg_searchOK() {
 	blank_funcs pbs
 	blank_funcs desc
 	echo 
-	is_exist $tmpfile && rm -r $tmpfile
+	file_is_exist $tmpfile && rm -r $tmpfile
 }
 
 #
@@ -737,7 +737,7 @@ check_and_download_raw() {
 		fi
 		[ "$?" == "0" ] && return 0 ;;
     http|https|ftp|*)	
-		if is_exist "${YPPATH_SOURCE}/${fname}"; then
+		if file_is_exist "${YPPATH_SOURCE}/${fname}"; then
 			#printf "%s exists, Skip.\n" $fname
 			msg "* $YPPATH_SOURCE/$fname exists, Skip."
 			return 0
@@ -922,7 +922,7 @@ ypkg_strip_bin() {
 #compress man and info 
 ypkg_gzip_extra() {
 	#msg ">>> compress man info"
-	is_exist "$1/usr/share/info/dir" && rm $1/usr/share/info/dir 2>/dev/null
+	file_is_exist "$1/usr/share/info/dir" && rm $1/usr/share/info/dir 2>/dev/null
 	#find $1/usr/{,share/}{man,doc,info} -type f -exec gzip '{}' ';' 2>/dev/null
 	find $1/usr/{,share/}{man,info} -type f -exec gzip '{}' ';' 2>/dev/null
 }
@@ -1046,14 +1046,14 @@ split_i18n() {
 #
 find_desktop() {
 	local source_dir=$1
-	is_exist "$source_dir/usr/share/applications/$N-gtk.desktop" && desktop="$source_dir/usr/share/applications/$N-gtk.desktop"
-	is_exist "$source_dir/usr/share/applications/$N-[[:digit:]].desktop" && desktop="$(ls $source_dir/usr/share/applications/$N-[[:digit:]].desktop)"
-	is_exist "$source_dir/usr/share/applications/$N.desktop" && desktop="$source_dir/usr/share/applications/$N.desktop"
+	file_is_exist "$source_dir/usr/share/applications/$N-gtk.desktop" && desktop="$source_dir/usr/share/applications/$N-gtk.desktop"
+	file_is_exist "$source_dir/usr/share/applications/$N-[[:digit:]].desktop" && desktop="$(ls $source_dir/usr/share/applications/$N-[[:digit:]].desktop)"
+	file_is_exist "$source_dir/usr/share/applications/$N.desktop" && desktop="$source_dir/usr/share/applications/$N.desktop"
 	if [ "x$DESKTOPFILE" != "x" ]; then
-		is_exist "$source_dir/$DESKTOPFILE" && desktop="$source_dir/$DESKTOPFILE"
-		is_exist "$source_dir/usr/share/applications/$DESKTOPFILE" && desktop="$source_dir/usr/share/applications/$DESKTOPFILE"
+		file_is_exist "$source_dir/$DESKTOPFILE" && desktop="$source_dir/$DESKTOPFILE"
+		file_is_exist "$source_dir/usr/share/applications/$DESKTOPFILE" && desktop="$source_dir/usr/share/applications/$DESKTOPFILE"
 	fi
-	if [ "x$desktop" != "x" ] && is_exist "$desktop"; then
+	if [ "x$desktop" != "x" ] && file_is_exist "$desktop"; then
 		echo "$desktop"
 		return 0
 	fi
@@ -1065,10 +1065,10 @@ find_icon() {
 	local desktop=$1 
 	local source_dir=$2
 	icon_name="$(grep ^Icon= $desktop |sed -e 's/Icon=//g')"
-	if is_exist "$source_dir/$icon_name"; then
+	if file_is_exist "$source_dir/$icon_name"; then
 		icon="$source_dir/$icon_name"
 	else
-		is_exist "$source_dir/usr/share/icons/hicolor/scalable/apps/$icon_name.svg" && \
+		file_is_exist "$source_dir/usr/share/icons/hicolor/scalable/apps/$icon_name.svg" && \
 		icon="$source_dir/usr/share/icons/hicolor/scalable/apps/$icon_name.svg"
 		icon_name=${icon_name%.svg}
 		icon_name=${icon_name%.png}
@@ -1076,20 +1076,20 @@ find_icon() {
 		icon_name=${icon_name%.jpg}
 		for i in 24x24 22x22 32x32 48x48; do
 			icon="$source_dir/usr/share/icons/hicolor/"$i"/apps/$icon_name.png"
-			is_exist "$icon" && break || continue
+			file_is_exist "$icon" && break || continue
 		done
 	fi
-	is_exist "$source_dir/usr/share/icons/$icon_name.png" && icon="$source_dir/usr/share/icons/$icon_name.png"
-	is_exist "$source_dir/usr/share/icons/$icon_name.xpm" && icon="$source_dir/usr/share/icons/$icon_name.xpm"
-	is_exist "$source_dir/usr/share/pixmaps/$icon_name.svg" && icon="$source_dir/usr/share/pixmaps/$icon_name.svg"
-	is_exist "$source_dir/usr/share/pixmaps/$icon_name.xpm" && icon="$source_dir/usr/share/pixmaps/$icon_name.xpm"
-	is_exist "$source_dir/usr/share/pixmaps/$icon_name.png" && icon="$source_dir/usr/share/pixmaps/$icon_name.png"
-	is_exist "$source_dir/usr/share/pixmaps/$icon_name" && icon="$source_dir/usr/share/pixmaps/$icon_name"
+	file_is_exist "$source_dir/usr/share/icons/$icon_name.png" && icon="$source_dir/usr/share/icons/$icon_name.png"
+	file_is_exist "$source_dir/usr/share/icons/$icon_name.xpm" && icon="$source_dir/usr/share/icons/$icon_name.xpm"
+	file_is_exist "$source_dir/usr/share/pixmaps/$icon_name.svg" && icon="$source_dir/usr/share/pixmaps/$icon_name.svg"
+	file_is_exist "$source_dir/usr/share/pixmaps/$icon_name.xpm" && icon="$source_dir/usr/share/pixmaps/$icon_name.xpm"
+	file_is_exist "$source_dir/usr/share/pixmaps/$icon_name.png" && icon="$source_dir/usr/share/pixmaps/$icon_name.png"
+	file_is_exist "$source_dir/usr/share/pixmaps/$icon_name" && icon="$source_dir/usr/share/pixmaps/$icon_name"
 	if [ "x$ICONFILE" != "x" ]; then
-		is_exist "$source_dir/$ICONFILE" && icon="$source_dir/$ICONFILE"
-		is_exist "$source_dir/usr/share/pixmaps/$ICONFILE" && icon="$source_dir/usr/share/pixmaps/$ICONFILE"
+		file_is_exist "$source_dir/$ICONFILE" && icon="$source_dir/$ICONFILE"
+		file_is_exist "$source_dir/usr/share/pixmaps/$ICONFILE" && icon="$source_dir/usr/share/pixmaps/$ICONFILE"
 	fi
-	if [ "x$icon" != "x" ] && is_exist "$icon"; then
+	if [ "x$icon" != "x" ] && file_is_exist "$icon"; then
 		echo "$icon"
 		return 0
 	fi
@@ -1112,7 +1112,7 @@ mkpackage() {
 	find |sort -r |fileinfo > $workdir/${N}_$V$R.list
 	mkdir -p $dbdir
 	install=$INSTALL
-	if is_exist $YPPATH_SCRIPT/${N}_$V$R.pbs; then
+	if file_is_exist $YPPATH_SCRIPT/${N}_$V$R.pbs; then
 		pbsfile="$(ls $YPPATH_SCRIPT/${N}_$V$R.pbs)"
 		atom_parse_path $pbsfile
 		TT=$T
@@ -1120,14 +1120,14 @@ mkpackage() {
 		install=$INSTALL
 		cp $pbsfile $dbdir
 	fi
-	if [ "x$install" != "x" ] && is_exist $YPPATH_SCRIPT/files/$install; then
+	if [ "x$install" != "x" ] && file_is_exist $YPPATH_SCRIPT/files/$install; then
 		cp $YPPATH_SCRIPT/files/$install  $dbdir
 	fi
 	
 	build_date="$(date +%s)"
 	declare -a install_size=($(du $source_dir -sb))
 	install_size=${install_size[0]}
-	is_exist $workdir/${N}_$V$R.list &&  cp $workdir/${N}_$V$R.list $dbdir
+	file_is_exist $workdir/${N}_$V$R.list &&  cp $workdir/${N}_$V$R.list $dbdir
 	
 	#creat pkginfo
 	#
@@ -1193,11 +1193,11 @@ OOO
 	
 	#desktop and icon
 	desktop=$(find_desktop $source_dir)
-	if [ "x$desktop" != "x" ] && is_exist "$desktop"; then
+	if [ "x$desktop" != "x" ] && file_is_exist "$desktop"; then
 		cp $desktop  $pkgdir/$N.desktop
 		cp $desktop  /usr/share/app-info/desktop/$N.desktop
 		icon=$(find_icon $desktop $source_dir)
-		if [ "x$icon" != "x" ] && is_exist "$icon"; then		
+		if [ "x$icon" != "x" ] && file_is_exist "$icon"; then		
 			cp $icon  $pkgdir/
 			cp $icon  /usr/share/app-info/icon/
 		fi
@@ -1245,7 +1245,7 @@ OOO
 OOO
 	cd $pkgdir
 	cp $workdir/${N}_$V$R.list $filelist
-	if [ "x$install" != "x" ] && is_exist $YPPATH_SCRIPT/files/$install; then
+	if [ "x$install" != "x" ] && file_is_exist $YPPATH_SCRIPT/files/$install; then
 		cp $YPPATH_SCRIPT/files/$install .
 	fi
 	tar cjf ../$pkginfo *
@@ -1266,7 +1266,7 @@ OOO
 		timeout=10
 		while true; do
 			[ $timeout -eq 0 ] && rm -f "$UNI_LOCKFILE"
-			if ! is_exist "$UNI_LOCKFILE"; then
+			if ! file_is_exist "$UNI_LOCKFILE"; then
 				touch $UNI_LOCKFILE
 				sed -i '/# '"$N $V $R"'/d'                                 $YPPATH_LOCAL_UNI
 				ypkg_find_info			                           $YPPATH_LOCAL_UNI  "remove"
@@ -1355,7 +1355,7 @@ ypkg_rm_packgeinfo() {
 	local destpath="$YPPATH_DB"
 	#delete info files
 	for i in config.gz para list pbs date size; do
-		if is_exist "$destpath/${N}/${N}_$V$R.${i}"; then
+		if file_is_exist "$destpath/${N}/${N}_$V$R.${i}"; then
 			printf "<< file %s\n" "$destpath/${N}/${N}_$V$R.${i}"
 			rm -fr "$destpath/${N}/${N}_$V$R.${i}"
 		fi
@@ -1477,13 +1477,13 @@ ypkg_dodesktop() {
 	local dfile="$1"
 	local picture="$2"
 	local icon=""
-	is_exist "$FILES_PATH/files/${dfile##*/}"   && dfile="$FILES_PATH/files/${dfile##*/}"
-	is_exist "$FILES_PATH/files/${picture##*/}" && picture="$FILES_PATH/files/${picture##*/}"
-	if [ x"$dfile" != x ] && is_exist "$dfile"; then
+	file_is_exist "$FILES_PATH/files/${dfile##*/}"   && dfile="$FILES_PATH/files/${dfile##*/}"
+	file_is_exist "$FILES_PATH/files/${picture##*/}" && picture="$FILES_PATH/files/${picture##*/}"
+	if [ x"$dfile" != x ] && file_is_exist "$dfile"; then
 		mkdir -p "$YPPATH_DEST"/usr/share/applications
 		install -m755 "$dfile" "$YPPATH_DEST"/usr/share/applications 
 	fi
-	if [ x"$picture" != x ] && is_exist "$picture"; then 
+	if [ x"$picture" != x ] && file_is_exist "$picture"; then 
 		ypkg_docp "$picture"   "$YPPATH_DEST"/usr/share/pixmaps
 	fi
 	dfile="${dfile##*/}"
@@ -1491,7 +1491,7 @@ ypkg_dodesktop() {
 	icon=$(grep ^Icon= "$YPPATH_DEST"/usr/share/applications/"$dfile" |sed 's/Icon=//g')
 	name=${icon%.*}
 	type=${picture##*.}
-	if [ x"$picture" != x"$name.$type" ]; then 
+	if [ x"$type" != x ] && [ x"$picture" != x"$name.$type" ]; then 
 		mv "$YPPATH_DEST"/usr/share/pixmaps/"$picture" "$YPPATH_DEST"/usr/share/pixmaps/"$name"."$type" 
 	else
 		return 0
@@ -1503,7 +1503,7 @@ ypkg_dounit() {
 	local file="$@"
 	if [ x"$file" != x ]; then
 		for i in $@; do
-			if is_exist "$i"; then
+			if file_is_exist "$i"; then
 				ypkg_docp "$i" "$YPPATH_DEST"/lib/systemd/system
 			else
 				ypkg_docp "$FILES_PATH"/files/"$i"  "$YPPATH_DEST"/lib/systemd/system
@@ -1517,7 +1517,7 @@ ypkg_doinit() {
 	local file="$1"
 	mkdir -p "$YPPATH_DEST"/etc/init.d
 	if [ x"$file" != x ]; then
-		if is_exist "$file"; then
+		if file_is_exist "$file"; then
        			install -m755 "$file" "$YPPATH_DEST"/etc/init.d
 		else
        			install -m755 "$FILES_PATH"/files/"$file" "$YPPATH_DEST"/etc/init.d
@@ -1624,7 +1624,7 @@ ypkg_doman() {
 		name=${i%.[0-9]}
 		num=${i##$name}
 		num=${num##.}
-		if is_exist "$i"; then
+		if file_is_exist "$i"; then
 			ypkg_docp ${i} "$YPPATH_DEST"/usr/share/man/man${num}/
 		else
 			ypkg_docp "$FILES_PATH"/files/"${i}" "$YPPATH_DEST"/usr/share/man/man${num}/
@@ -1681,9 +1681,9 @@ ypkg_patch(){
 	local num=""
 	while [ "x$1" != "x" ]; do
 		file="$1"
-		is_exist "$file" || file=""$FILES_PATH"/files/$1"
-		is_exist "$file" || file=""$FILES_PATH"/files/patches/$1"
-		if ! is_exist "$file"; then
+		file_is_exist "$file" || file=""$FILES_PATH"/files/$1"
+		file_is_exist "$file" || file=""$FILES_PATH"/files/patches/$1"
+		if ! file_is_exist "$file"; then
 			rmsg "* Error: \"$1\" not found."
 			exit  1
 		fi
@@ -1704,11 +1704,11 @@ ypkg_patch(){
 ypkg_unpack() {
 	if [ "x$SRC_URI" = "x" ];then
 		for i in tar.bz2 tar.gz bz2 tgz tbz tbz2 rar zip 7z; do
-			is_exist "$YPPATH_SOURCE/$N-$V$R.${i}" && SRC_URI="$YPPATH_SOURCE/$N-$V$R.${i}"
+			file_is_exist "$YPPATH_SOURCE/$N-$V$R.${i}" && SRC_URI="$YPPATH_SOURCE/$N-$V$R.${i}"
 		done
 	else
-		is_exist "$SRC_URI" && SRC_URI="$SRC_URI"
-		is_exist "$YPPATH_SOURCE/$SRC_URI" && SRC_URI="$YPPATH_SOURCE/$SRC_URI"
+		file_is_exist "$SRC_URI" && SRC_URI="$SRC_URI"
+		file_is_exist "$YPPATH_SOURCE/$SRC_URI" && SRC_URI="$YPPATH_SOURCE/$SRC_URI"
 	fi
 	[ "x$SRC_URI" = "x" ] && return 0
 	SRC_URI=($SRC_URI)
@@ -1821,8 +1821,8 @@ ypkg_config() {
 	fi
 	
 	#perl module
-	is_exist Makefile.pl && mv Makefile.pl Makefile.PL
-	is_exist Makefile.PL && command="perl Makefile.PL -y PREFIX=/usr $@"
+	file_is_exist Makefile.pl && mv Makefile.pl Makefile.PL
+	file_is_exist Makefile.PL && command="perl Makefile.PL -y PREFIX=/usr $@"
 	if [ x"$command" != x ];then
 		mmsg ">>> $command"
 		if ! eval $command; then
@@ -1835,7 +1835,7 @@ ypkg_config() {
 	fi
 
 	#cmake
-	if is_exist CMakeLists.txt; then
+	if file_is_exist CMakeLists.txt; then
 		command="mkdir -p build"
 		command1="cd build"
 		command2="cmake ../ -DCMAKE_INSTALL_PREFIX=/usr" # -DCMAKE_SHARED_LIBRARY_PREFIX=lib"
@@ -1853,7 +1853,7 @@ ypkg_config() {
 	fi
 
 	#scons
-	if is_exist SConstruct; then
+	if file_is_exist SConstruct; then
 		#command="scons --prefix=/usr"
 		command="scons $(echo $YPB_CONFIG |xargs)"
 		mmsg ">>> $command"
@@ -1869,7 +1869,7 @@ ypkg_make() {
 		mmsg ">>> $command"
 		$command && return 0
 	fi
-	if is_exist setup.py;then
+	if file_is_exist setup.py;then
 		if [ "x$1"  = "xmake" ]; then
 			command="make $MAKEOPTS $@"
 		else
@@ -1878,16 +1878,16 @@ ypkg_make() {
 		mmsg ">>> $command"
 		$command && return 0
 	fi
-	if is_exist Makefile || is_exist GNUmakefile; then
+	if file_is_exist Makefile || file_is_exist GNUmakefile; then
 		command="make $MAKEOPTS $@" 
 	fi
-	if is_exist makefile.linux; then
+	if file_is_exist makefile.linux; then
                 command="make $MAKEOPTS -f makefile.linux $@"
 	fi
-	if is_exist Imakefile; then
+	if file_is_exist Imakefile; then
 		command="make $MAKEOPTS $@"
 	fi
-	if is_exist SConstruct; then
+	if file_is_exist SConstruct; then
 	        return 0
 	fi
 
@@ -1903,7 +1903,7 @@ ypkg_mkinstall() {
 		mmsg ">>> $command"
 		$command && return 0
 	fi
-	if is_exist setup.py;then
+	if file_is_exist setup.py;then
 		if [ "x$1"  = "xmake" ]; then
 			command="make DESTDIR="$YPPATH_DEST" $@ install"		
 		else
@@ -1913,7 +1913,7 @@ ypkg_mkinstall() {
 		$command && return 0
 	fi
 		
-	if is_exist SConstruct;then
+	if file_is_exist SConstruct;then
 		if [ x"$@" = x ]; then
 			command="scons --install-sandbox="$YPPATH_DEST" "$@" install"
 		else
@@ -1923,7 +1923,7 @@ ypkg_mkinstall() {
 		$command && return 0
 	fi	
 
-	if is_exist Makefile || is_exist GNUmakefile; then
+	if file_is_exist Makefile || file_is_exist GNUmakefile; then
 		command="make DESTDIR="$YPPATH_DEST" "$@" install"
 	fi	
 	mmsg ">>> $command"
@@ -2179,7 +2179,7 @@ ypkg_check_package () {
 	local pack="$(readlink -f $1)"
 	workdir="$(mktemp -d)"
 	trap "rm -r $workdir; return 1" INT
-	if ! is_exist $pack; then
+	if ! file_is_exist $pack; then
 		echo "* $pack not found" 1>&2
 		rm -rf $workdir
 		return 1
@@ -2269,7 +2269,7 @@ install_pack () {
 	#
 	if tar xf $pkginfo 2>/dev/null; then
 		install="$(get_value install $control)"
-		if [ "x$install" != "x" ] && is_exist $install; then
+		if [ "x$install" != "x" ] && file_is_exist $install; then
 			. $install
 			case $operate in 
 			upgrade|downgrade)
@@ -2298,7 +2298,7 @@ install_pack () {
 	done
 
 	#
-	if [ "x$install" != "x" ] && is_exist $YPPATH_DB/$c_name/$install; then
+	if [ "x$install" != "x" ] && file_is_exist $YPPATH_DB/$c_name/$install; then
 		. $YPPATH_DB/$c_name/$install
 		case $operate in
 		upgrade|downgrade)
@@ -2328,7 +2328,7 @@ install_pack () {
 	timeout=10
 	while true; do
 		[ $timeout -eq 0 ] && rm -f "$WORLD_LOCKFILE"
-		if ! is_exist "$WORLD_LOCKFILE"; then
+		if ! file_is_exist "$WORLD_LOCKFILE"; then
 			touch $WORLD_LOCKFILE
 			ypkg_find_info $YPPATH_WORLD remove
 			sed -i '/<\/PackageInfo>/d'                      $YPPATH_WORLD
@@ -2601,15 +2601,15 @@ ypkg_csvop_rm() {
 	# ${value[7]} --- md5sum
 	case "${value[0]}" in
 	F) #file
-		is_exist "${value[1]}" || continue
+		file_is_exist "${value[1]}" || continue
 		printf "<< file: %s\n" "${value[1]}"
 		unlink "${value[1]}"    ;;
 	S) #symbol.
-		is_exist "${value[1]}" || continue
+		[ -h "${value[1]}" ] || continue
 		printf "<< link: %s\n" "${value[1]}"
 		unlink "${value[1]}"	;;
 	D) #directory.
-		is_exist "${value[1]}" || continue
+		[ -d "${value[1]}" ] || continue
 		ypkg_rm_dir_safe "${value[1]}"
 	esac
 }
@@ -2660,7 +2660,7 @@ ypkg_list_all_available() {
 		else
 			blank_funcs desc
 		fi
-		if is_exist "$YPPATH_DB/$N/$pbsfile"; then
+		if file_is_exist "$YPPATH_DB/$N/$pbsfile"; then
 			gmsg_ '[I] '  
 			echo -e "$T/${N}_$V$R\t$BUILD_TIME\t$INSTALL_SIZE\t$PACK_SIZE"
 		else	
@@ -2764,7 +2764,7 @@ ypkg_do_remove_package() {
 	timeout=10
 	while true; do
 		[ $timeout -eq 0 ] && rm -f "$WORLD_LOCKFILE"
-		if ! is_exist "$WORLD_LOCKFILE"; then
+		if ! file_is_exist "$WORLD_LOCKFILE"; then
 			touch $WORLD_LOCKFILE
 			ypkg_find_info $YPPATH_WORLD  "remove"
 			rm -f $WORLD_LOCKFILE
@@ -2833,11 +2833,11 @@ ypkg_remove_package() {
         if [ "x$listfile" != "x" ]; then
 		for i in ${listfile[@]}; do
 			atom_parse_path $i
-			if is_exist "$YPPATH_DB/$N/${N}_$V$R.desc"; then
+			if file_is_exist "$YPPATH_DB/$N/${N}_$V$R.desc"; then
 				blank_funcs "pbs"
 				. $YPPATH_DB/$N/${N}_$V$R.desc
 				install=$INSTALL
-				if [ "x$install" != "x" ] && is_exist $YPPATH_DB/$N/$install; then
+				if [ "x$install" != "x" ] && file_is_exist $YPPATH_DB/$N/$install; then
 					install_file=$YPPATH_DB/$N/$install
 					. $install_file
 					if type pre_remove >/dev/null 2>&1; then
@@ -2870,9 +2870,9 @@ ypkg_conflict_remove() {
 
 	#
 	atom_parse_path $old_listfile
-	is_exist $YPPATH_DB/$N/${N}_$V$R.desc && . $YPPATH_DB/$N/${N}_$V$R.desc
+	file_is_exist $YPPATH_DB/$N/${N}_$V$R.desc && . $YPPATH_DB/$N/${N}_$V$R.desc
 	install="$INSTALL"
-	if [ "x$install" != "x" ] && is_exist $YPPATH_DB/$N/$install; then
+	if [ "x$install" != "x" ] && file_is_exist $YPPATH_DB/$N/$install; then
 		. $YPPATH_DB/$N/$install
 		if type pre_remove >/dev/null 2>&1; then
 			msg "* Call pre_remove of ${N}_$V$R"
@@ -2891,15 +2891,15 @@ ypkg_conflict_remove() {
 		if ! grep ",${value[1]}," $new_listfile >/dev/null 2>/dev/null; then
 			case "${value[0]}" in
 			F) #file
-		   	   is_exist "${value[1]}" || continue
+		   	   file_is_exist "${value[1]}" || continue
 			   printf "<< file %s\n" "${value[1]}"
 			   unlink "${value[1]}"    ;;
 			S) #symbol.
-			   is_exist "${value[1]}" || continue
+			   [ -h "${value[1]}" ] || continue
 			   printf "<< link %s\n" "${value[1]}"
 			   unlink "${value[1]}"	;;
 			D) #directory.
-			   is_exist "${value[1]}" || continue
+			   [ -d "${value[1]}" ] || continue
 			   ypkg_rm_dir_safe "${value[1]}" 
 			esac
 		fi
@@ -2907,9 +2907,9 @@ ypkg_conflict_remove() {
 	
 	#
 	atom_parse_path $old_listfile
-	is_exist $YPPATH_DB/$N/${N}_$V$R.desc && . $YPPATH_DB/$N/${N}_$V$R.desc
+	file_is_exist $YPPATH_DB/$N/${N}_$V$R.desc && . $YPPATH_DB/$N/${N}_$V$R.desc
 	install="$INSTALL"
-	if [ "x$install" != "x" ] && is_exist $YPPATH_DB/$N/$install; then
+	if [ "x$install" != "x" ] && file_is_exist $YPPATH_DB/$N/$install; then
 		. $YPPATH_DB/$N/$install
 		if type post_remove >/dev/null 2>&1; then
 			msg "* Call post_remove of ${N}_$V$R"
@@ -2925,7 +2925,7 @@ ypkg_conflict_remove() {
 	timeout=10
 	while true; do
 		[ $timeout -eq 0 ] && rm -f "$WORLD_LOCKFILE"
-		if ! is_exist "$WORLD_LOCKFILE"; then
+		if ! file_is_exist "$WORLD_LOCKFILE"; then
 			touch $WORLD_LOCKFILE
      			ypkg_find_info $YPPATH_WORLD  "remove"
 			rm -f $WORLD_LOCKFILE
@@ -2955,15 +2955,15 @@ ypkg_upgrade_remove() {
 		if ! grep ",${value[1]}," $new_listfile >/dev/null 2>/dev/null; then
 			case "${value[0]}" in
 			F) #file
-		   	   is_exist "${value[1]}" || continue
+		   	   file_is_exist "${value[1]}" || continue
 			   printf "<< file %s\n" "${value[1]}"
 			   unlink "${value[1]}"    ;;
 			S) #symbol.
-			   is_exist "${value[1]}" || continue
+			   [ -h "${value[1]}" ] || continue
 			   printf "<< link %s\n" "${value[1]}"
 			   unlink "${value[1]}"	;;
 			D) #directory.
-			   is_exist "${value[1]}" || continue
+			   [ -d "${value[1]}" ] || continue
 			   ypkg_rm_dir_safe "${value[1]}" 
 			esac
 		fi
@@ -2976,7 +2976,7 @@ ypkg_upgrade_remove() {
 	timeout=10
 	while true; do
 		[ $timeout -eq 0 ] && rm -f "$WORLD_LOCKFILE"
-		if ! is_exist "$WORLD_LOCKFILE"; then
+		if ! file_is_exist "$WORLD_LOCKFILE"; then
 			touch $WORLD_LOCKFILE
      			ypkg_find_info $YPPATH_WORLD  "remove"
 			rm -f $WORLD_LOCKFILE
@@ -3001,7 +3001,7 @@ ypkg_whatprovides() {
 	local file
 	file="$1"
 	file=$(get_abspath "$file")
-	if ! is_exist "$file"; then
+	if ! file_is_exist "$file"; then
 		rmsg "* $file No such file or directory."
 		return 1
 	fi
