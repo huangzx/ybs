@@ -2377,27 +2377,41 @@ ypkg_begininstall() {
 	pbs_unpack
 	err_check "* [Error]: $T/${N}_$V$R call pbs_unpack failed"
 
-	ymsg ">> $T/${N}_$V$R configure..."
 	YPPATH_DEST="$workdir/${N}_$V$R"
-	#[ -p ${N}_$V$R.pipe ] || mkfifo ${N}_$V$R.pipe
-	cd "$N-$V$R"   2>/dev/null
-	#tee ../${N}_$V$R.config < ../${N}_$V$R.pipe & 
-	pbs_config #> ../${N}_$V$R.pipe
+	buildlog="$YPPATH_SCRIPT/${N}_$V$R.buildlog"
+
+	cd "$N-$V$R"
+
+	ymsg ">> $T/${N}_$V$R configure..."
+	[ -p config.pipe ] || mkfifo config.pipe
+	tee configure-log < config.pipe & 
+	pbs_config > config.pipe
 	err_check "* [Error]: $T/${N}_$V$R call pbs_config failed"
 
-	#call build
 	ymsg ">> $T/${N}_$V$R compiling..."
-	pbs_build
+	[ -p make.pipe ] || mkfifo make.pipe
+	tee make-log < make.pipe & 
+	pbs_build > make.pipe
 	err_check "* [Error]: $T/${N}_$V$R call pbs_build failed"
 
 	ymsg ">> $T/${N}_$V$R make check..."
-	pbs_check 
+	[ -p check.pipe ] || mkfifo check.pipe
+	tee check-log < check.pipe & 
+	pbs_check > check.pipe
 	err_check "* [Error]: $T/${N}_$V$R call pbs_check failed"
 
 	ymsg ">> $T/${N}_$V$R make install..."
-	pbs_install
+	[ -p mkinstall.pipe ] || mkfifo mkinstall.pipe
+	tee mkinstall-log < mkinstall.pipe & 
+	pbs_install > mkinstall.pipe
 	err_check "* [Error]: $T/${N}_$V$R call pbs_install failed"
 	
+	>$buildlog
+	for i in configure make check mkinstall; do
+		cat ${i}-log >> $buildlog
+	done
+	gzip $buildlog
+
 	ORIG_N=${N}
 	YPPATH_DEST_OLD=$YPPATH_DEST
 	packs=""
