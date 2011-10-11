@@ -2378,9 +2378,10 @@ ypkg_begininstall() {
 	err_check "* [Error]: $T/${N}_$V$R call pbs_unpack failed"
 
 	YPPATH_DEST="$workdir/${N}_$V$R"
-	buildlog="$YPPATH_SCRIPT/${N}_$V$R.buildlog"
+	buildlog="$YPPATH_SCRIPT/${N}_$V$R-$YARCH.buildlog"
 
 	cd "$N-$V$R"
+	here=$(pwd)
 
 	ymsg ">> $T/${N}_$V$R configure..."
 	[ -p config.pipe ] || mkfifo config.pipe
@@ -2408,9 +2409,9 @@ ypkg_begininstall() {
 	
 	>$buildlog
 	for i in configure make check mkinstall; do
-		cat ${i}-log >> $buildlog
+		cat $here/${i}-log >> $buildlog
 	done
-	gzip $buildlog
+	gzip -f $buildlog
 
 	ORIG_N=${N}
 	YPPATH_DEST_OLD=$YPPATH_DEST

@@ -73,6 +73,8 @@ do_update() {
 	local sha="universe.tar.bz2.sha1sum"
 	local download="yes"
 	local shatool="${sha##*.}"
+	msg_ "* Current channel:"
+	rmsg " ${ACCEPT_REPO:=stable}"
 	msg_ "* Fetching universe:  $YPPATH_URI/$universe"
 	server_sha="$(wget -q -O - $YPPATH_URI/$sha)"
 	if [ "x$server_sha" = "x" ]; then
