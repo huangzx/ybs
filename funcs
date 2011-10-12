@@ -1356,7 +1356,7 @@ ypkg_rm_packgeinfo() {
 	#delete info files
 	for i in config.gz para list pbs date size; do
 		if file_is_exist "$destpath/${N}/${N}_$V$R.${i}"; then
-			printf "<< file %s\n" "$destpath/${N}/${N}_$V$R.${i}"
+			printf "<< file: %s\n" "$destpath/${N}/${N}_$V$R.${i}"
 			rm -fr "$destpath/${N}/${N}_$V$R.${i}"
 		fi
 	done
@@ -1366,13 +1366,13 @@ ypkg_rm_packgeinfo() {
 		install=$INSTALL
 		if ! grep -wq INSTALL=\"$install\" $(ls -1 $destpath/${N}/${N}_*.desc |grep -v ${i}); then
 			if [ -f "$destpath/${N}/$install" ]; then
-				printf "<< file %s\n" "$destpath/${N}/$install"
+				printf "<< file: %s\n" "$destpath/${N}/$install"
 				rm -fr "$destpath/${N}/$install"
 			fi
 		fi
 	done
 	#delete desc file
-	printf "<< file %s\n" "$destpath/${N}/${N}_$V$R.desc"
+	printf "<< file: %s\n" "$destpath/${N}/${N}_$V$R.desc"
 	rm -fr "$destpath/${N}/${N}_$V$R.desc"
 	#remove directory
 	ypkg_rm_dir_safe $YPPATH_DB/$N
@@ -1534,6 +1534,21 @@ ypkg_domk() {
 	# name=rtl8101
 	# version=1.020.00
 	
+	local show_usage=
+	[ "x$1" = "x" ] && show_usage=yes
+	case "$1" in 
+		 build|delete|autoinstall) : ;;
+		 *)	show_usage=yes
+	esac
+	
+	if [ "x$show_usage" = "xyes" ]; then
+		 msg "Usage: "
+			msg "ypkg_domk build PACKAGE_NAME PACKAGE_VERSION"
+			msg "ypkg_domk delete PACKAGE_NAME PACKAGE_VERSION"
+			msg "ypkg_domk autoinstall"
+			return 0
+	fi
+
 	local action="$1"
 	local name="$2"
 	local version="$3"
@@ -1546,36 +1561,80 @@ ypkg_domk() {
 	build)
 		local record="$dir"/"$name"/"$version"/"$(uname -m)"/"$(uname -r)"
 		mkdir -p $record
-
 		if cd /usr/src/"${name}_$version"; then
-			make $args
-			make install $args
-			depmod -a  
+			local    preparelog="$PWD/prepare-log"
+			local       makelog="$PWD/make-log"
+			local  mkinstalllog="$PWD/mkinstall-log"
 
 			#
-			find -name "*.ko" -exec sha1sum {} \;  |while read sha1 name; do 
-				echo ${name##.*/} $sha1
-			done |sort -u >$record/modules
+			if [ -x ypkg_domk ]; then
+				msg "* ypkg_domk found!"
+				msg "* ${name}_$version kernel modules preparing ..."
+				if ! ./ypkg_domk >$preparelog 2>&1; then
+					rmsg "* [Error] prepare kernel modules failed!"
+		                        rmsg "* prepare log: $preparelog"
+					return 1
+				fi
+			fi
+
+			msg "* ${name}_$version kernel modules compiling ..."
+			if ! make $args >$makelog 2>&1; then
+				rmsg "* [Error] build kernel modules failed!"
+				rmsg "* build log: $makelog"
+				return 1
+			else
+				msg "* ${name}_$version kernel modules installing ..."
+				if ! make install $args >$mkinstalllog 2>&1; then
+					rmsg "* [Error] install kernel modules failed!"
+					rmsg "* install log: $mkinstalllog"
+					return 1
+				else
+					depmod -a  
+				fi
+			fi
 
 			#
-			make clean
+			>$record/modules
+			find . -type f -name "*.ko" |sort -u |while read i; do
+				local origin="$i"
+				local name=${i##.*/}
+				local target="$(find /lib/modules/"$(uname -r)" -type f -name ${i##*/} |head -n1)"
+				if diff $origin $target >/dev/null 2>&1; then	
+					msg "$name -> $target"
+					sha1sum $target |while read sha1 name; do 
+						echo $name $sha1 >>$record/modules
+					done
+				fi
+			done 
+
+			#
+			make clean >/dev/null 2>&1
+			rm -rf $makepipe $makelog $mkinstallpipe $mkinstalllog $preparelog 2>/dev/null 
 		else
-			rm -r "$dir"/"$name"/"$version"
+			rm -rf "$dir"/"$name"/"$version"
 		fi
+		return 0
 		;;
 	delete)
 		local record="$dir"/"$name"/"$version"/"$(uname -m)"/"$(uname -r)"
-		cat $record/modules |while read name sha1; do
+		cat $record/modules |while read file sha1; do
 			sha1_old=${sha1}
-			file=($(find /lib/modules/"$(uname -r)" -type f -name "${name}" -exec sha1sum {} \;))
-			sha1_new=${file[0]}
+			#file=($(find /lib/modules/"$(uname -r)" -type f -name "${name}" -exec sha1sum {} \;))
+			if [ -f $file ]; then
+				file=($(sha1sum $file))
+				sha1_new=${file[0]}
+			fi
+
 			if [ "x$sha1_old" = "x$sha1_new" ]; then
+				msg "<< file: ${file[1]}"
 				rm -f ${file[1]}
 			fi
 		done
+		
+		msg "<< file: $record/modules"
+		rm -f $record/modules
 
-		rm -r $record
-		ypkg_rm_dir_safe $(dirname $record) 
+		rmdir -p $record 2>/dev/null  
 		;;
 
 	autoinstall)
@@ -1587,7 +1646,6 @@ ypkg_domk() {
 
 	return 0
 }
-
 
 #cp
 ypkg_docp() {
@@ -2380,39 +2438,48 @@ ypkg_begininstall() {
 	YPPATH_DEST="$workdir/${N}_$V$R"
 	buildlog="$YPPATH_SCRIPT/${N}_$V$R-$YARCH.buildlog"
 
+	local 	 configpipe="$PWD/config.pipe"
+	local     configlog="$PWD/configure-log"
+	local      makepipe="$PWD/make.pipe"
+	local       makelog="$PWD/make-log"
+	local     checkpipe="$PWD/check.pipe"
+	local      checklog="$PWD/check-log"
+	local mkinstallpipe="$PWD/mkinstall.pipe"
+	local  mkinstalllog="$PWD/mkinstall-log"
+
 	cd "$N-$V$R"
-	here=$(pwd)
 
 	ymsg ">> $T/${N}_$V$R configure..."
-	[ -p config.pipe ] || mkfifo config.pipe
-	tee configure-log < config.pipe & 
-	pbs_config > config.pipe
+	[ -p $configpipe ] || mkfifo $configpipe
+	tee $configlog < $configpipe & 
+	pbs_config > $configpipe
 	err_check "* [Error]: $T/${N}_$V$R call pbs_config failed"
 
 	ymsg ">> $T/${N}_$V$R compiling..."
-	[ -p make.pipe ] || mkfifo make.pipe
-	tee make-log < make.pipe & 
-	pbs_build > make.pipe
+	[ -p $makepipe ] || mkfifo $makepipe
+	tee $makelog < $makepipe & 
+	pbs_build > $makepipe
 	err_check "* [Error]: $T/${N}_$V$R call pbs_build failed"
 
 	ymsg ">> $T/${N}_$V$R make check..."
-	[ -p check.pipe ] || mkfifo check.pipe
-	tee check-log < check.pipe & 
-	pbs_check > check.pipe
+	[ -p $checkpipe ] || mkfifo $checkpipe
+	tee $checklog < $checkpipe & 
+	pbs_check > $checkpipe
 	err_check "* [Error]: $T/${N}_$V$R call pbs_check failed"
 
 	ymsg ">> $T/${N}_$V$R make install..."
-	[ -p mkinstall.pipe ] || mkfifo mkinstall.pipe
-	tee mkinstall-log < mkinstall.pipe & 
-	pbs_install > mkinstall.pipe
+	[ -p $mkinstallpipe ] || mkfifo $mkinstallpipe
+	tee $mkinstalllog < $mkinstallpipe & 
+	pbs_install > $mkinstallpipe
 	err_check "* [Error]: $T/${N}_$V$R call pbs_install failed"
 	
 	>$buildlog
-	for i in configure make check mkinstall; do
-		cat $here/${i}-log >> $buildlog
-	done
-	gzip -f $buildlog
-
+	[ -e $configlog ] && cat $configlog >> $buildlog
+	[ -e $makelog ] &&   cat $makelog >> $buildlog
+	[ -e $checklog ] &&  cat $checklog >> $buildlog
+	[ -e $mkinstalllog ] &&  cat $mkinstalllog >> $buildlog
+	[ -e $buildlog ] && gzip -f $buildlog
+	
 	ORIG_N=${N}
 	YPPATH_DEST_OLD=$YPPATH_DEST
 	packs=""
@@ -2907,11 +2974,11 @@ ypkg_conflict_remove() {
 			case "${value[0]}" in
 			F) #file
 		   	   file_is_exist "${value[1]}" || continue
-			   printf "<< file %s\n" "${value[1]}"
+			   printf "<< file: %s\n" "${value[1]}"
 			   unlink "${value[1]}"    ;;
 			S) #symbol.
 			   [ -h "${value[1]}" ] || continue
-			   printf "<< link %s\n" "${value[1]}"
+			   printf "<< link: %s\n" "${value[1]}"
 			   unlink "${value[1]}"	;;
 			D) #directory.
 			   [ -d "${value[1]}" ] || continue
@@ -2971,11 +3038,11 @@ ypkg_upgrade_remove() {
 			case "${value[0]}" in
 			F) #file
 		   	   file_is_exist "${value[1]}" || continue
-			   printf "<< file %s\n" "${value[1]}"
+			   printf "<< file: %s\n" "${value[1]}"
 			   unlink "${value[1]}"    ;;
 			S) #symbol.
 			   [ -h "${value[1]}" ] || continue
-			   printf "<< link %s\n" "${value[1]}"
+			   printf "<< link: %s\n" "${value[1]}"
 			   unlink "${value[1]}"	;;
 			D) #directory.
 			   [ -d "${value[1]}" ] || continue
