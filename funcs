@@ -1145,21 +1145,22 @@ mkpackage() {
 	repo=$REPO
 	subdir="$(echo $N |cut -b1)"
 	uri="$subdir/${N}_$V$R-$YARCH.$PACK_SUFFIX"
-	license="$LICENSE"
-	homepage="$HOMEPAGE"
+	license="$(echo $LICENSE |tr -d '<>')"
+	packager="$(echo $PACKAGER |tr -d '<>')"
+	homepage="$(echo $HOMEPAGE |tr -d '<>')"
 	install="$INSTALL"
 	arch="$YARCH"
 	depend=$(echo $RDEPEND |xargs |tr " " ",")
 	bdepend=$(echo $BDEPEND |xargs |tr " " ",")
 	redepend=$(echo $RECOMMENDED |xargs |tr " " ",")
 	conflict=$(echo $CONFLICT |xargs |tr " " ",")
-	description=$(echo $DESCRIPTION |sed 's/&/and/g')
+	description=$(echo $DESCRIPTION |sed 's/&/and/g' |tr -d '<>')
 	if [ "x$name" = "x$nn-dev" ]; then
 		depend=
 		bdepend=
 		redepend=
 		conflict=
-		description="$(echo $DESCRIPTION |sed 's/&/and/g') (development files)" 
+		description="$description (development files)" 
 	fi
 	#
 	cd $source_dir
@@ -1170,8 +1171,8 @@ HOMEPAGE="$HOMEPAGE"
 REPO="$repo"
 ARCH="$arch"
 LICENSE="$license"
+PACKAGER="$packager"
 PRIORITY="$priority"
-PACKAGER="$PACKAGER"
 SRC_URI="$SRC_URI"
 RDEPEND="$depend"
 BDEPEND="$bdepend"
@@ -1221,6 +1222,7 @@ OOO
    <yversion>$yversion</yversion>                            
    <priority>$priority</priority>                    
    <license>$license</license>
+   <packager>$packager</packager>
    <homepage>$homepage</homepage>
    <repo>$repo</repo>
    <install>$install</install>
@@ -2447,7 +2449,7 @@ ypkg_begininstall() {
 	local mkinstallpipe="$PWD/mkinstall.pipe"
 	local  mkinstalllog="$PWD/mkinstall-log"
 
-	cd "$N-$V$R"
+	cd "$N-$V$R" 2>/dev/null
 
 	ymsg ">> $T/${N}_$V$R configure..."
 	[ -p $configpipe ] || mkfifo $configpipe
