@@ -268,7 +268,7 @@ install_prepare () {
 			is_installed $N $V$R && continue 
 			ypkg_find_info $YPPATH_UNI >$allinfo
 			if [ "x$(cat $allinfo)" = "x" ]; then
-				echo "dep: $depend not found" 1>&2
+				echo "dep: $depend not found, it is necessary." 1>&2
 				rm -rf $allinfo $singleinfo 
 				exit 1
 			else
@@ -422,7 +422,11 @@ do_install () {
 	#
 	#
 	allpacks_ready=$(yget_mktemp f)
-	grep -vw "remove" $allpacks |while read pack; do
+	grep -w "^redep:" $allpacks |while read pack; do
+		msg "$pack, but it is not necessary."
+	done
+
+	grep -vw "remove" $allpacks |grep -vw "not found" |while read pack; do
 		 declare -a line=($pack)
 		 name=${line[0]}
 		 version=${line[1]}
