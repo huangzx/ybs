@@ -54,7 +54,6 @@ export MAKEOPTS
 export YPINST_PREFIX
 export YP_I18N
 export ACCEPT_REPO
-export YPPATH_URI
 export BUILD
 
 # Support set YPKG_ROOT 

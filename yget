@@ -68,35 +68,63 @@ yget_mktemp(){
 
 #
 do_update() {
-	local universe="universe.tar.bz2"
+	# YPPATH_UNI=/var/ypkg/packages/universe
+	local universe_dir=${YPPATH_UNI%/*}         #/var/ypkg/packages/
+	local universe_file=${YPPATH_UNI##*/}       #universe
+	local universe="${YPPATH_UNI##*/}.tar.bz2"  #universe.tar.bz2
 	local appinfo_dir="/usr/share/app-info"
-	local sha="universe.tar.bz2.sha1sum"
+	local sha="$universe.sha1sum"
 	local download="yes"
 	local shatool="${sha##*.}"
+	local universe_local_file=$YPPATH_PKGDEST/$universe_file
+	local universe_local=$YPPATH_PKGDEST/$universe
+
+	msg "* YPK pool: ${YPPATH_PKGDEST:=universe_dir}"
+
 	msg_ "* Current channel:"
 	rmsg " ${ACCEPT_REPO:=stable}"
-	msg_ "* Fetching universe:  $YPPATH_URI/$universe"
-	server_sha="$(wget -q -O - $YPPATH_URI/$sha)"
-	if [ "x$server_sha" = "x" ]; then
-		echo "Can not connect to sever, please mail to <ylmfos@115.com>" 1>&2
-		return 1
-	fi
-	if [ -f ${YPPATH_UNI%/*}/$universe ]; then
-		declare -a local_sha=($($shatool ${YPPATH_UNI%/*}/$universe))
-		local_sha=${local_sha[0]}
-		[ "x$local_sha" = "x$server_sha" ] && download="no"
-	fi
-	if [ "x$download" = "xyes" ] || [ ! -f $YPPATH_UNI ]; then
-		wget -q $YPPATH_URI/$universe -O ${YPPATH_UNI%/*}/$universe
-		if [ "$?" == "0" ]; then
-			cd ${YPPATH_UNI%/*}
-			cp $YPPATH_UNI $YPPATH_UNI- 2>/dev/null
-			if ! tar xf $universe; then
-				rm ${YPPATH_UNI%/*}/$universe
-				echo "$universe was damaged, please mail to <ylmfos@115.com>" 1>&2
+	
+	# 
+	case "x${YPPATH_URI%%/*}" in
+		xfile:|x)	
+		# local source
+		msg_ "* Using local source: $YPPATH_URI"
+		univers_remote=${YPPATH_URI##*:}/$universe
+		if ! diff $univers_remote $universe_local >/dev/null 2>/dev/null; then
+			cp $univers_remote $universe_local
+			istar="yes"
+		fi
+			;;
+	 xftp:|xhttp:|*) 
+	 	# remote source 
+		msg_ "* Using remote source:  $YPPATH_URI"
+		server_sha="$(wget -q -O - $YPPATH_URI/$sha)"
+		if [ "x$server_sha" = "x" ]; then
+			echo "Can not connect to sever, please mail to <ylmfos@115.com>" 1>&2
+			return 1
+		fi
+		if [ -f $YPPATH_PKGDEST/$universe ]; then
+			declare -a local_sha=($($shatool $YPPATH_PKGDEST/$universe))
+			local_sha=${local_sha[0]}
+			[ "x$local_sha" = "x$server_sha" ] && download="no"
+		fi
+		if [ "x$download" = "xyes" ]; then
+			wget -q $YPPATH_URI/$universe -O $YPPATH_PKGDEST/$universe
+			if [ "$?" == "0" ]; then
+				istar="yes"
 			fi
 		fi
+	esac
+
+	if [ "x$istar" = "xyes" ] || [ ! -f $universe_local_file ]; then
+		cd $YPPATH_PKGDEST
+		cp $universe_file $universe_file- 2>/dev/null
+		if ! tar xf $universe; then
+			rm $universe
+			echo "$universe was damaged, please mail to <ylmfos@115.com>" 1>&2
+		fi
 	fi
+
 	echo
 	msg_ "* Updating app-info pool:  "
 	if [ -d $appinfo_dir/.git ]; then
@@ -106,8 +134,8 @@ do_update() {
 		cd $(dirname $appinfo_dir)
 		[ -d /etc ] || mkdir /etc
 		[ -f /etc/hosts ] || touch /etc/hosts
-		git config --system --add user.name  ylmfos_user
-		git config --system --add user.email ylmfos_user@115.com
+		#git config --system --add user.name  ylmfos_user
+		#git config --system --add user.email ylmfos_user@115.com
 		git clone git://git.ylmf.com/app-info.git
 	fi
 	return 0
@@ -329,14 +357,27 @@ do_download () {
 	while [ "x$1" != "x" ]; do
 		local url="$YPPATH_URI/$1"
 		local pack=$YPPATH_PKGDEST/${1##*/}
-		wget -q $url -O $pack.tmp
-		if [ "$?" == "0" ]; then
-			mv $pack.tmp $pack
-		else	
-			# 4 Can not connect to $YPPATH_URI
-			# 8 $pack not found at $YPPATH_URI
-			return "$?"
-		fi
+
+		case x"${url%%:/*}" in
+			# local 
+			xfile|x)
+				url=${url##*:}
+				if ! diff $url $pack >/dev/null 2>/dev/null; then
+					cp $url $pack
+				fi
+				return 0 ;;
+			# remote
+			xftp|xhttp|*)
+				wget -q $url -O $pack.tmp
+				if [ "$?" == "0" ]; then
+				mv $pack.tmp $pack
+			else	
+				# 4 Can not connect to $YPPATH_URI
+				# 8 $pack not found at $YPPATH_URI
+				return "$?"
+			fi
+		esac
+
 		shift 
 	done
 }
