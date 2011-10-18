@@ -911,6 +911,12 @@ ypkg_strip_mani18n() {
 }
 
 
+#upx for compressing eXecutables files
+ypkg_upx_bin () {
+	find $1 -type f -executable -exec upx -9 {} \; >/dev/null 2>&1
+}
+
+
 #strip binary in directory $1
 ypkg_strip_bin() {
 	#msg ">>> strip debug info.."
@@ -1326,6 +1332,11 @@ ypkg_mkpackage() {
 	#strip bin
 	if ! str_isIn "$OPINION" "nostrip"; then
 		ypkg_strip_bin $YPPATH_DEST
+	fi
+
+	#upx executables files
+	if str_isIn "$OPINION" "upx"; then
+		ypkg_upx_bin $YPPATH_DEST
 	fi
 
 	#split i18n
