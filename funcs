@@ -19,7 +19,7 @@ COLOR_CYAN=$(   echo -e "\e[36;49m" )
 COLOR_WHILE=$(   echo -e "\033[1m" )
 COLOR_RESET=$(  echo -e "\e[0m"     )
       
-## *msg argv: "$str"
+# Msg argv: "$str"
 msg()  { echo "$@";                               }
 rmsg() { echo "${COLOR_RED}$*${COLOR_RESET}";     }
 gmsg() { echo "${COLOR_GREEN}$*${COLOR_RESET}";   }
@@ -29,7 +29,7 @@ mmsg() { echo "${COLOR_MAGENTA}$*${COLOR_RESET}"; }
 cmsg() { echo "${COLOR_CYAN}$*${COLOR_RESET}";    }
 wmsg() { echo "${COLOR_WHILE}$*${COLOR_RESET}";   }
 					
-# colourful print without "\n"
+# Colourful print without "\n"
 msg_()  {  msg "$@" | tr -d '\n'; }
 rmsg_() { rmsg "$@" | tr -d '\n'; }
 gmsg_() { gmsg "$@" | tr -d '\n'; }
@@ -40,7 +40,7 @@ cmsg_() { cmsg "$@" | tr -d '\n'; }
 wmsg_() { wmsg "$@" | tr -d '\n'; }
 
 #
-# path defines
+# Path defines
 YPPATH="/var/ybs"
 YPPATH_LIB="$YPPATH/pbslib"
 YPPATH_SOURCE="$YPPATH/sources"
@@ -135,20 +135,25 @@ file_is_exist () {
 
 
 #
-# check root
+# Check root
 #
 check_root () {
 	if [ "x$UID" != "x0" ];then
-	        rmsg "* You must be root to run this script, Try: "
-        	ymsg "sudo $0 $*"
+	        rmsg "* You must be root to run this script."
+        	ymsg "* Try: sudo $0 $*"
        		exit 1
 	fi
 }
 
 #
-# $@ is digital
-# summation 1 2 3
+# Smmation
+# 
 summation() {
+	if [ "x$1" = "x" ];then
+		msg "* summation: you must specify a list of digit"
+		msg "* i.e. 'summation 1 2 3' "
+		return 1
+	fi
         local sum=0
 	while [ "x$1" != "x" ]; do
 		local tmp=$1
@@ -161,9 +166,13 @@ summation() {
 
 # $1 - name
 # $2 - version
-# is_installed leafpad 0.8.18.1
 #
 is_installed () {
+	if [ "x$1" = "x" ];then
+		msg "* is_installed: you must specify package name and version."
+		msg "* i.e. 'is_installed leafpad' or 'is_installed leafpad 0.8.18.1'"
+		return 1
+	fi
         local N=$1
         local V=$2
         local listfile
@@ -176,8 +185,8 @@ is_installed () {
 }
 
 #
+# Get_value from xml file
 #
-# get_value from xml file
 get_value () {
 	local element=$1
 	local file=$2
@@ -205,8 +214,14 @@ get_abspath () {
 }
 
 #
-#check: if $2 in $1, return 0, else return 1
+# If $2 in $1 return 0, else return 1
+#
 str_isIn() {
+	if [ "x$2" = "x" ];then
+		msg "* str_isIn: you must specify at least two strings."
+		msg "* i.e. 'str_isIn \"a b c\" b'"
+		return 1
+	fi
 	local string=($1)
 	local substring="$2"
 	for i in ${string[@]}; do
@@ -264,7 +279,7 @@ atom_parse() {
 }
 
 #
-#return type and name. 
+# Return type and name. 
 atom_parse_type() {
 	if echo $1 |grep "/" >/dev/null 2>/dev/null; then
 		T=${1%%/*}
@@ -292,12 +307,17 @@ atom_parse_path() {
 }
 
 #
-#compare 2 versions, such 2.6.9 and 2.6.10
-#same: return 0 
-#$1 is greater than $2: return 1
-#$2 is greater then $1: return 2
+# Compare 2 versions
 # alpha < beta < rc 
 atom_vercmp() {
+	if [ "x$2" = "x" ];then
+		msg "* atom_vercmp: you must specify at least two package versions."
+		msg "* the former > the latter, return 1"
+		msg "* the former < the latter, return 2"
+		msg "* the former = the latter, return 0" 
+	        msg "* i.e. 'atom_vercmp 2.6.9 2.6.10'"
+		 return 1
+	fi
 	v1=$1
 	v2=$2
 	if [ "x$v1" = "x$v2" ];then
@@ -310,11 +330,11 @@ atom_vercmp() {
 	for ((i=0; i<maxnum; i++)); do
 		a=${a[i]} 
 		b=${b[i]}
-		#only alpha
+		# Only alpha
 		aoa=$(echo $a |tr -d '[:digit:]' |tr -d '[:punct:]')
 		boa=$(echo $b |tr -d '[:digit:]' |tr -d '[:punct:]')
 		case $aoa$boa in
-			#1.2.3 3.2.1
+			# 1.2.3 3.2.1
 			"")	
 				[ "x$a" = "x$b" ] && continue
 				v1=$a.
@@ -328,14 +348,14 @@ atom_vercmp() {
 				        v2="${v2#*.}"
 				done
 				continue ;;
-			#"" rc1 
-			#"" beta1
-			#"" alpha1
+			# "" rc1 
+			# "" beta1
+			# "" alpha1
 			rc|RC|beta|BETA|alpha|ALPHA)
 				[ "x$aoa" = "x" ] && return 1
 				[ "x$boa" = "x" ] && return 2
 				continue ;;
-			#"" ylmf1 
+			# "" ylmf1 
 			ylmf|YLMF)
 				[ "x$b" != "x" ]  && return 2
 				[ "x$a" != "x" ]  && return 1
@@ -343,7 +363,7 @@ atom_vercmp() {
 				[ "x$boa" = "x" ] && return 1
 
 				continue 	;;
-			#rc1  rc2 
+			# rc1  rc2 
 			rcrc|RCRC)
 				a=${a##rc}
 				a=${a##RC}
@@ -352,7 +372,7 @@ atom_vercmp() {
 				[ "1$a" -gt "1$b" ] && return 1
 				[ "1$a" -lt "1$b" ] && return 2
 				continue 	;;
-			#beta1  beta2 
+			# beta1 beta2 
 			betabeta|BETABETA)
 				a=${a##beta}
 				a=${a##BETA}
@@ -361,7 +381,7 @@ atom_vercmp() {
 				[ "1$a" -gt "1$b" ] && return 1
 				[ "1$a" -lt "1$b" ] && return 2
 				continue 	;;
-			#alpha1  alpha2 
+			# alpha1  alpha2 
 			alphaalpha|ALPHAALPHA)
 				a=${a##alpha}
 				a=${a##ALPHA}
@@ -370,7 +390,7 @@ atom_vercmp() {
 				[ "1$a" -gt "1$b" ] && return 1
 				[ "1$a" -lt "1$b" ] && return 2
 				continue 	;;
-			#ylmf1 ylmf2
+			# ylmf1 ylmf2
 			ylmfylmf|YLMFYLMF)
 				a=${a##ylmf}
 				a=${a##YLMF}
@@ -379,48 +399,48 @@ atom_vercmp() {
 				[ "1$a" -gt "1$b" ] && return 1
 				[ "1$a" -lt "1$b" ] && return 2
 				continue 	;;
-			#rc1 beta1
-			#beta1 rc1
+			# rc1 beta1
+			# beta1 rc1
 			rcbeta|betarc)
 				a=${a##rc*}
 				[ "x$a" = "x" ] && return 1
 				a=${a##beta*}
 				[ "x$a" = "x" ] && return 2
 				continue	;;
-			#rc1 alpha1
-			#alpha1 rc1
+			# rc1 alpha1
+			# alpha1 rc1
 			rcalpha|alpharc)
 				a=${a##rc*}
 				[ "x$a" = "x" ] && return 1
 				a=${a##alpha*}
 				[ "x$a" = "x" ] && return 2
 				continue	;;
-			#beta1 alpha1
-			#alpha1 beta1
+			# beta1 alpha1
+			# alpha1 beta1
 			betaalpha|alphabeta)
 				a=${a##beta*}
 				[ "x$a" = "x" ] && return 1
 				a=${a##alpha*}
 				[ "x$a" = "x" ] && return 2
 				continue  	;;
-			#rc1 ylmf1
-			#ylmf1 rc1
+			# rc1 ylmf1
+			# ylmf1 rc1
 			rcylmf|ylmfrc)
 				a=${a##rc*}
 				[ "x$a" = "x" ] && return 2
 				a=${a##ylmf*}
 				[ "x$a" = "x" ] && return 1
 				continue	;;
-			#beta1 ylmf1
-			#ylmf1 beta1
+			# beta1 ylmf1
+			# ylmf1 beta1
 			betaylmf|ylmfbeta)
 				a=${a##beta*}
 				[ "x$a" = "x" ] && return 2
 				a=${a##ylmf*}
 				[ "x$a" = "x" ] && return 1
 				continue	;;
-			#alpha ylmf1
-			#ylmf1 alpha1
+			# alpha ylmf1
+			# ylmf1 alpha1
 			alphaylmf|ylmfalpha)
 				a=${a##alpha*}
 				[ "x$a" = "x" ] && return 2
@@ -448,11 +468,16 @@ atom_vercmp() {
 	return 0
 }
 
-#compare 2 atoms, such as linux_2.6.9.pbs and linux_2.6.10.pbs
-#same: return 0 
-#$1 is greater than $2: return 1
-#$2 is greater then $1: return 2
+# Compare 2 atoms, such as linux_2.6.9.pbs and linux_2.6.10.pbs
 atom_cmp() {
+	if [ "x$2" = "x" ];then
+		msg "* atom_cmp: you must specify at least two packages atoms."
+		msg "* the former > the latter, return 1"
+		msg "* the former < the latter, return 2"
+		msg "* the former = the latter, return 0" 
+	        msg "* i.e. 'atom_cmp linux_2.6.9 linux_2.6.10'"
+		return 1
+	fi
 	local R1 R2
 	local V1 V2 
 	local N1 N2
@@ -471,16 +496,22 @@ atom_cmp() {
 	return $(atom_vercmp $V1$R1 $V2$R2)
 }
 
-#compare 2 atoms pth, such as /var/ypkg/sys/linux-2.6.9.pbs and linux-2.6.10.pbs
-#same: return 0 
-#$1 is greater than $2: return 1
-#$2 is greater then $1: return 2
+# Compare 2 atoms path
 atom_cmp_path() {
+	if [ "x$2" = "x" ];then
+	        msg "* atom_cmp_path: you must specify at least two package atom paths"
+	        msg "* the former > the latter, return 1"
+	        msg "* the former < the latter, return 2"
+	        msg "* the former = the latter, return 0"
+	        msg "* i.e."
+		msg "atom_cmp_path /var/ybs/pbslib/sys-apps/linux-kernel/linux-kernel_2.6.38.3-ylmf1.pbs /var/ybs/pbslib/sys-apps/linux-kernel/linux-kernel_2.6.38.3.pbs"
+	        return 1
+	fi
 	local R1
 	local V1
 	local N1
 
-	#echo "Begin Compare: $1 $2"
+	# echo "Begin Compare: $1 $2"
 	atom_parse_path $1
 	R1=$R
 	V1=$V
@@ -493,12 +524,12 @@ atom_cmp_path() {
 	N2=$N
 	#echo "N2="$N", V2=$V, R2=$R"
 
-	#compare version
+	# Compare version
 	return $(atom_vercmp $V1$R1 $V2$R2)
 }
 
 #
-#split csv line. 
+# Split csv line. 
 csv_split() {
 	count=0
 	local retv=$1
@@ -514,10 +545,10 @@ csv_split() {
 }
 
 #
-# search packages
+# Sarch packages
 #
 
-#list all pack types
+# List all pack types
 ypkg_get_types() {
 	ypkg_types=`ls $YPPATH_LIB 2>/dev/null`
 }
@@ -526,8 +557,8 @@ ypkg_get_packages() {
 	ypkg_packs=`ls $YPPATH_LIB/$1 2>/dev/null`
 }
 
-#Get Newest file in dir $1
-#return path of the newest on in $newest
+# Get Newest file in dir $1
+# Return path of the newest on in $newest
 ypkg_getnewest() {
 	local files file files_ready
 	newest=""
@@ -557,8 +588,8 @@ ypkg_getnewest() {
 	return 1
 }
 
-#get all pbs versions, ret to $allver
-#$1 is path 
+# Get all pbs versions, ret to $allver
+# $1 is path 
 ypkg_getallpbsver() {
 	local files file repo
 	local tmpfile=$(mktemp)
@@ -631,7 +662,8 @@ ypkg_searchInstalled() {
 	rm -rf $tmpfile 2>/dev/null
 }
 
-#find one packge $1 is type, $2 is package name, $3 is index
+# Find one packge.
+# $1 is type, $2 is package name, $3 is index
 #
 ypkg_searchOK() {
 	local allver
@@ -647,7 +679,7 @@ ypkg_searchOK() {
 		echo -e "\t$line"
 	done
 
-	#get newest version
+	# get newest version
 	ypkg_getallpbsver $YPPATH_LIB/$1/$2        #$YPPATH_DB/$2
 	echo -e "\t$(gmsg "Available:") $allver"
 	echo -e "\t$(gmsg "Homepage:") $HOMEPAGE"
@@ -705,7 +737,7 @@ ypkg_search() {
 }
 
 #
-# download packeage
+# Download packeage
 #
 wget_do () {
 	local uri="$1"
@@ -719,7 +751,7 @@ wget_do () {
 	return 1
 }
 
-#check and download package, $1 is URL, $2 is local file name.
+# Check and download package, $1 is URL, $2 is local file name.
 check_and_download_raw() {
 	local uri=$1
 	local fname=$2
@@ -761,7 +793,7 @@ check_and_download_raw() {
 	return 1
 }
 
-#check and download package, $1 is URL.
+# Check and download package, $1 is URL.
 check_and_download() {
 	#local fname=${1##*/}
 	local url="$1"
@@ -770,7 +802,7 @@ check_and_download() {
 }
 
 
-# return specifid pbs files in $newest, with full path
+# Return specifid pbs files in $newest, with full path
 ypkg_getpbsfile() {
 	local results
 	local pack
@@ -869,7 +901,7 @@ ypkg_download() {
 
 
 #
-#strip unnessesary i18n in path $1
+# Strip unnessesary i18n in path $1
 ypkg_strip_i18n() {
 	local ipath="$1/usr/share/locale"
 	local i18ns=$(ls $ipath 2>/dev/null)
@@ -886,7 +918,7 @@ ypkg_strip_i18n() {
 	done
 }
 
-#strip unnessesary i18n in man path.
+# strip unnessesary i18n in man path.
 ypkg_strip_mani18n() {
 	local ipath="$1/usr/share/man"
 	local i18ns=$(ls $ipath 2>/dev/null)
@@ -911,13 +943,17 @@ ypkg_strip_mani18n() {
 }
 
 
-#upx for compressing eXecutables files
+# Upx for compressing eXecutables files
 ypkg_upx_bin () {
-	find $1 -type f -executable -exec upx -9 {} \; >/dev/null 2>&1
+	find $1/{,usr/}{bin,sbin} -type f -executable 2>/dev/null |while read file; do
+		if ! upx -9 $file >/dev/null 2>&1; then
+			[ -f $file.upx ] && rm -rf $file.upx
+		fi
+	done
 }
 
 
-#strip binary in directory $1
+# Strip binary in directory $1
 ypkg_strip_bin() {
 	#msg ">>> strip debug info.."
 	find $1/{,usr/}{bin,sbin} -type f -exec strip --strip-all '{}' ';' 2>/dev/null
@@ -925,7 +961,7 @@ ypkg_strip_bin() {
 }
 
 
-#compress man and info 
+# Compress man and info 
 ypkg_gzip_extra() {
 	#msg ">>> compress man info"
 	file_is_exist "$1/usr/share/info/dir" && rm $1/usr/share/info/dir 2>/dev/null
@@ -1298,7 +1334,7 @@ OOO
 	INSTALL=""
 }
 
-# check /dirs permission
+# Check /dirs permission
 check_perm_dirs () {
 	local dir="$1"
 	for i in tmp root proc sys; do	
@@ -1316,7 +1352,7 @@ check_perm_dirs () {
 #
 ypkg_mkpackage() {
 	nn=$N
-	#source packages
+	# Source packages
 	local spacks="$YPPATH_DEST "
 
 	#check /dirs permission
@@ -1329,31 +1365,31 @@ ypkg_mkpackage() {
 		#strip unnessesary i18n in man path.
 		ypkg_strip_mani18n $YPPATH_DEST
 	fi
-	#strip bin
+	# Strip bin
 	if ! str_isIn "$OPINION" "nostrip"; then
 		ypkg_strip_bin $YPPATH_DEST
 	fi
 
-	#upx executables files
+	# Upx executables files
 	if str_isIn "$OPINION" "upx"; then
 		ypkg_upx_bin $YPPATH_DEST
 	fi
 
-	#split i18n
+	# Split i18n
 	#spacks+="$(split_i18n $YPPATH_DEST) "
 
-	#split dev
+	# Split dev
 	if ! str_isIn "$OPINION" "nodev"; then
 		spacks+="$(split_dev $YPPATH_DEST) "
 	fi
 
-	#split_doc
+	# Split_doc
 	#spacks+="$(split_doc $YPPATH_DEST) "
 
-	#compress man doc info
+	# Compress man doc info
 	ypkg_gzip_extra $YPPATH_DEST
 
-	#mkpackges one by one
+	# Mkpackges one by one
 	for pack in $spacks; do
 		#skip empty dirs
 		local files=$(find $pack -type f)
@@ -1366,14 +1402,14 @@ ypkg_mkpackage() {
 #
 ypkg_rm_packgeinfo() {
 	local destpath="$YPPATH_DB"
-	#delete info files
+	# Delete info files
 	for i in config.gz para list pbs date size; do
 		if file_is_exist "$destpath/${N}/${N}_$V$R.${i}"; then
 			printf "<< file: %s\n" "$destpath/${N}/${N}_$V$R.${i}"
 			rm -fr "$destpath/${N}/${N}_$V$R.${i}"
 		fi
 	done
-	#delete install file
+	# Delete install file
 	ls -1 $destpath/${N}/${N}_*.desc |while read i; do
 		. ${i}
 		install=$INSTALL
@@ -1384,21 +1420,20 @@ ypkg_rm_packgeinfo() {
 			fi
 		fi
 	done
-	#delete desc file
+	# Delete desc file
 	printf "<< file: %s\n" "$destpath/${N}/${N}_$V$R.desc"
 	rm -fr "$destpath/${N}/${N}_$V$R.desc"
-	#remove directory
+	# Remove directory
 	ypkg_rm_dir_safe $YPPATH_DB/$N
 }
 
-#Check if already insalled. $T/"$N"$V 
+# Check if already insalled. $T/"$N"$V 
 ypkg_checkinst() {
 	local statu tmp
-	#N -- new install
-	#U -- upgrade
-	#D -- downgrade
-	#E -- same version
-	
+	# N -- new install
+	# U -- upgrade
+	# D -- downgrade
+	# E -- same version
 	if ! ls $YPKG_ROOT/$YPPATH_DB/$N/${N}_*.list >/dev/null 2>&1;then
 		echo "$V$R N"
 		return 0
@@ -1428,11 +1463,11 @@ ypkg_checkinst() {
 }
 
 #
-#find_pkg_info_
-#e.g.:
-#1. ypkg_find_info /var/ypkg/pbslib/universe 
-#2. ypkg_find_info /var/ypkg/pbslib/universe remove
-#3. ypkg_find_info /var/ypkg/pbslib/universe all
+# find_pkg_info
+# i.e.:
+# 1. ypkg_find_info /var/ypkg/pbslib/universe 
+# 2. ypkg_find_info /var/ypkg/pbslib/universe remove
+# 3. ypkg_find_info /var/ypkg/pbslib/universe all
 ypkg_find_info() {
 	local file
 	local first
@@ -1485,7 +1520,7 @@ ypkg_find_info() {
 	fi
 }
 
-#cp desktop file to "$YPPATH_DEST"/usr/share/applications
+# Cp desktop file to "$YPPATH_DEST"/usr/share/applications
 ypkg_dodesktop() {
 	local dfile="$1"
 	local picture="$2"
@@ -1511,7 +1546,7 @@ ypkg_dodesktop() {
 	fi
 }
 
-#add unit for systemd
+# Add unit for systemd
 ypkg_dounit() {
 	local file="$@"
 	if [ x"$file" != x ]; then
@@ -1525,7 +1560,7 @@ ypkg_dounit() {
 	fi
 }
 
-#cp script to "$YPPATH_DEST"/etc/init.d
+# Cp script to "$YPPATH_DEST"/etc/init.d
 ypkg_doinit() {
 	local file="$1"
 	mkdir -p "$YPPATH_DEST"/etc/init.d
@@ -1538,7 +1573,7 @@ ypkg_doinit() {
 	fi
 }
 
-#ypkg_domk, for modules make/make install automatic
+# Ypkg_domk, for modules make/make install automatic
 ypkg_domk() {
 	# $1 action: build delete
 	# $2 name
@@ -1660,35 +1695,35 @@ ypkg_domk() {
 	return 0
 }
 
-#cp
+# cp
 ypkg_docp() {
 	local end=${!#}
 	mkdir -p "$end"
 	cp -a "$@"
 }
 
-#cp and rename
+# cp and rename
 ypkg_docp_rename() {
 	local end=${!#}
 	mkdir -p "$(dirname $end)"
 	cp -a "$@"
 }
 
-#mv
+# mv
 ypkg_domv() {
 	local end=${!#}
 	mkdir -p "$end"
 	mv "$@"
 }
 
-#mv and rename
+# mv and rename
 ypkg_domv_rename() {
 	local end=${!#}
 	mkdir -p "$(dirname $end)"
 	mv "$@"
 }
 
-#cp man to dir
+# cp man to dir
 ypkg_doman() {
 	local name num
 	for i in $@; do
@@ -1703,7 +1738,7 @@ ypkg_doman() {
 	done
 }
 
-#link
+# link
 ypkg_doln(){
 	local end=${!#}
 	mkdir -p "$(dirname $end)"
@@ -1711,7 +1746,7 @@ ypkg_doln(){
 	ln -sf $@
 }
 
-#font
+# font
 ypkg_dofont() {
 	msg ">>> mkfontscale $1"
 	mkfontscale "$1"
@@ -1744,7 +1779,7 @@ ypkg_remove_info () {
 }
 
 
-#patch
+# patch
 ypkg_patch(){
 	local file=""
 	local dir1=""
@@ -1859,20 +1894,20 @@ ypkg_unpack() {
 	fi
 }
 
-#configure
+# Configure
 ypkg_config() {
 	local command=""
 	local command1=""
 	local command2=""
 		
-	#waf
+	# waf
 	[ -x waf ] && command="./waf configure $(echo $YPB_CONFIG |xargs)"
 	if [ x"$command" != x ];then
 		mmsg ">>> $command"
 		$command && return 0
 	fi
 	
-	#generic
+	# generic
 	[ -x configure ] && command="./configure $(echo $YPB_CONFIG |xargs)"
 	[ -x Configure ] && command="./Configure $(echo $YPB_CONFIG |xargs)"
 	if [ x"$command" != x ];then
@@ -1880,7 +1915,7 @@ ypkg_config() {
 		$command && return 0
 	fi
 
-	#autogen
+	# autogen
 	if [ -x autogen.sh ];then
 		command="./autogen.sh" 
 		command1=" ./configure $(echo $YPB_CONFIG |xargs)"
@@ -1891,7 +1926,7 @@ ypkg_config() {
 		$command1 && return 0
 	fi
 	
-	#perl module
+	# perl module
 	file_is_exist Makefile.pl && mv Makefile.pl Makefile.PL
 	file_is_exist Makefile.PL && command="perl Makefile.PL -y PREFIX=/usr $@"
 	if [ x"$command" != x ];then
@@ -1905,7 +1940,7 @@ ypkg_config() {
 		fi
 	fi
 
-	#cmake
+	# cmake
 	if file_is_exist CMakeLists.txt; then
 		command="mkdir -p build"
 		command1="cd build"
@@ -1916,14 +1951,14 @@ ypkg_config() {
 		$command2 && return 0
 	fi
 
-	#qmake
+	# qmake
 	if ls *.pro >/dev/null 2>/dev/null; then
 		command="qmake $@"
 		mmsg ">>> $command"
 		$command && return 0
 	fi
 
-	#scons
+	# scons
 	if file_is_exist SConstruct; then
 		#command="scons --prefix=/usr"
 		command="scons $(echo $YPB_CONFIG |xargs)"
@@ -1932,7 +1967,7 @@ ypkg_config() {
 	fi	
 }
 
-#make
+# Make
 ypkg_make() {
 	local command="make $MAKEOPTS $@"
 	if [ -x waf ];then
@@ -1966,7 +2001,7 @@ ypkg_make() {
 	$command
 }
 
-#make install
+# Make install
 ypkg_mkinstall() {
 	local command="make DESTDIR="$YPPATH_DEST" "$@" install"
 	if [ -x waf ];then
@@ -2002,14 +2037,14 @@ ypkg_mkinstall() {
 	ldconfig
 }
 
-#cp src file to specified dir
+# Cp src file to specified dir
 ypkg_dosrc() {
 	mmsg ">>> Copy source files: /usr/src/"${N}_$V$R""
 	mkdir -p "$YPPATH_DEST"/usr/src/"${N}_$V$R"
 	cp -a "$@" "$YPPATH_DEST"/usr/src/"${N}_$V$R"/
 }
 
-#cp supported to specified dir
+# Cp supported to specified dir
 ypkg_dosupported() {
 	mmsg ">>> Copy supported file: $1"
 	mkdir -p "$YPPATH_DEST"/usr/src/"${N}_$V$R"
@@ -2017,22 +2052,22 @@ ypkg_dosupported() {
 }
 
 
-#cp doc to specified dir
+# Cp doc to specified dir
 ypkg_dodoc() {
 	mmsg ">>> Copy documents: $@"
 	install -m755 -d "$YPPATH_DEST"/usr/share/doc/"$N"/"$V$R"
 	cp -a "$@" "$YPPATH_DEST"/usr/share/doc/"$N"/"$V$R"
 }
 
-#cp dkms.conf to specified dir
-ypkg_dodkms() {
-	mmsg ">>> Copy dkms config: $1"
-	install -m755 -d "$YPPATH_DEST"/usr/src/"${N}_$V$R"
-	cp -a "$FILES_PATH"/files/"$1" "$YPPATH_DEST"/usr/src/"${N}_$V$R"
-}
+# Cp dkms.conf to specified dir
+#ypkg_dodkms() {
+#	mmsg ">>> Copy dkms config: $1"
+#	install -m755 -d "$YPPATH_DEST"/usr/src/"${N}_$V$R"
+#	cp -a "$FILES_PATH"/files/"$1" "$YPPATH_DEST"/usr/src/"${N}_$V$R"
+#}
 
 #
-#ypkg useradd
+# Ypkg useradd
 ypkg_useradd() {
 	local end=${!#}
 	local N=$end
@@ -2043,7 +2078,7 @@ ypkg_useradd() {
 }
 
 #
-#ypkg userdel
+# Ypkg userdel
 ypkg_userdel() {
 	local end=${!#}
 	local N=$end
@@ -2054,7 +2089,7 @@ ypkg_userdel() {
 }
 
 #
-#ypkg groupadd
+# Ypkg groupadd
 ypkg_groupadd() {
 	local end=${!#}
 	local N=$end
@@ -2066,7 +2101,7 @@ ypkg_groupadd() {
 
 #
 #
-#ypkg groupdel
+# Ypkg groupdel
 ypkg_groupdel() {
 	local end=${!#}
 	local N=$end
@@ -2103,7 +2138,7 @@ glib_compile_schemas() {
 	return 0
 }
 
-# install defaut settings
+# Install defaut settings
 gnome2_install_defaut_gconf() {
 	#type
 	local t=$1	
@@ -2135,7 +2170,7 @@ gnome2_install_schema() {
 	fi
 }
 
-# unstall schemas
+# Unstall schemas
 gnome2_uninstall_schema() {
 	#this is this-is-deprecated
 	#return 0
@@ -2170,7 +2205,7 @@ gnome2_uninstall_mine() {
 	fi
 }
 
-# update rarian database
+# Update rarian database
 gnome2_rarian_sk_update() {
 	if [ -x /usr/bin/rarian-sk-update ]; then
 		msg ">>> Updating rarian database.."
@@ -2178,7 +2213,7 @@ gnome2_rarian_sk_update() {
 	fi
 }
 
-# update desktop entries
+# Update desktop entries
 gnome2_desktop_database_update() {
 	if [ -x /usr/bin/update-desktop-database ]; then
 		msg ">>> Updating desktop database.."
@@ -2202,7 +2237,7 @@ gnome2_gtk_immodules_update() {
         fi
 }
 
-#Update gdk pixbuf loaders
+# Update gdk pixbuf loaders
 gnome2_gdk_pixbuf_loaders_update() {
 	if [ -d /etc/gtk-2.0 ] && [ -x /usr/bin/update-gdk-pixbuf-loaders ]; then
 		msg ">>> Updating gdk pixbuf loaders.."
@@ -2240,7 +2275,7 @@ gnome2_mime_database_update() {
 }
 
 
-# return value
+# Return value
 # 0 ok
 # 1 invalid format or file not found
 # 2 missing runtime deps
@@ -2539,7 +2574,7 @@ ypkg_begininstall() {
 	return 0
 }
 
-#install packge
+# Install packge
 ypkg_install() {
 	local ret
 	local itype
@@ -2656,7 +2691,7 @@ ypkg_shownotes() {
 }
 
 #
-#operations when read a file.
+# Operations when read a file.
 # l = list files
 # f = remove files/symbol links
 # d = remove directorys
@@ -2719,7 +2754,7 @@ ypkg_rm_dir_safe() {
 	fi
 }
 
-# read from stdin
+# Read from stdin
 ypkg_read() {
 	local line
 	local count
@@ -2734,7 +2769,7 @@ ypkg_read() {
 	done
 }
 
-#read from a file, $1 is file name, $2 is operation
+# Read from a file, $1 is file name, $2 is operation
 ypkg_readfile() {
 	YP_CSV_OP=$2
 	ypkg_read < $1
@@ -2874,7 +2909,7 @@ ypkg_do_remove_package() {
 
 #
 #
-# return specifid list files with full path
+# Return specifid list files with full path
 # (1) $N and $V$R != none , return $N_$V$R.list 
 # (2) $V$R=none and $N != none  renturn newest version
 # (3) $1=all, return all $N_.list
