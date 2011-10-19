@@ -68,16 +68,11 @@ yget_mktemp(){
 
 #
 do_update() {
-	# YPPATH_UNI=/var/ypkg/packages/universe
-	local universe_dir=${YPPATH_UNI%/*}         #/var/ypkg/packages/
-	local universe_file=${YPPATH_UNI##*/}       #universe
 	local universe="${YPPATH_UNI##*/}.tar.bz2"  #universe.tar.bz2
 	local appinfo_dir="/usr/share/app-info"
 	local sha="$universe.sha1sum"
 	local download="yes"
 	local shatool="${sha##*.}"
-	local universe_local_file=$YPPATH_PKGDEST/$universe_file
-	local universe_local=$YPPATH_PKGDEST/$universe
 
 	msg "* YPK pool: ${YPPATH_PKGDEST:=universe_dir}"
 
@@ -175,7 +170,7 @@ get_allver() {
 	vers="$(get_value version $file)"
 	for ver in $vers; do
 		atom_parse ${N}_$ver
-		ypkg_find_info $YPPATH_UNI >$tmpfile
+		ypkg_find_info $universe_local_file >$tmpfile
 		repo="$(get_value repo $file)"
 		build_date="$(get_value build_date $file)"
 		build_date=$(date -d "1970-01-01 UTC $build_date seconds" +%F,%T 2>/dev/null)
@@ -193,7 +188,7 @@ do_search () {
 	tmpfile=$(yget_mktemp f)
 	atom_parse_type "$1"
 	local app="$N"
-	apps=$(grep "<Package name=" $YPPATH_UNI |sed -e 's/<Package name="//g' -e 's/">//g' |grep $app |sort -u |tr '\n' ' ')
+	apps=$(grep "<Package name=" $universe_local_file |sed -e 's/<Package name="//g' -e 's/">//g' |grep $app |sort -u |tr '\n' ' ')
 	if [ "x$apps" = "x" ]; then
 		rmsg "* $1 not found"
 		rm -rf $tmpfile 2>/dev/null
@@ -201,7 +196,7 @@ do_search () {
 	fi
 	for app in $apps; do
 		atom_parse_type $app
-		ypkg_find_info $YPPATH_UNI >$tmpfile
+		ypkg_find_info $universe_local_file >$tmpfile
 		if [ "x$?" = "x1" ]; then
 			rmsg "* $app not found"
 			return 1
@@ -264,7 +259,7 @@ install_prepare () {
 	singleinfo=$(yget_mktemp f)
 	local app="$1"
 	atom_parse_type $app
-	ypkg_find_info $YPPATH_UNI >$allinfo
+	ypkg_find_info $universe_local_file >$allinfo
 	if [ "x$(cat $allinfo)" = "x" ]; then
 		echo "app: $app not found" 1>&2
 		rm -rf $allinfo $singleinfo 
@@ -294,7 +289,7 @@ install_prepare () {
 			atom_parse_type $depend
 			depend_name=$N
 			is_installed $N $V$R && continue 
-			ypkg_find_info $YPPATH_UNI >$allinfo
+			ypkg_find_info $universe_local_file >$allinfo
 			if [ "x$(cat $allinfo)" = "x" ]; then
 				echo "dep: $depend not found, it is necessary." 1>&2
 				rm -rf $allinfo $singleinfo 
@@ -306,7 +301,7 @@ install_prepare () {
 					depend_final_ver="$V$R"
 				fi
 					 atom_parse_type ${depend_name}_${depend_final_ver}
-					 ypkg_find_info $YPPATH_UNI >$singleinfo
+					 ypkg_find_info $universe_local_file >$singleinfo
 				         depuri="$(get_value   uri        $singleinfo)"
 				         depsha="$(get_value   sha        $singleinfo)"
 				        depsize="$(get_value   size       $singleinfo)"
@@ -319,7 +314,7 @@ install_prepare () {
 			atom_parse_type $redepend
 			redepend_name=$N
 			is_installed $N $V$R && continue 
-			ypkg_find_info $YPPATH_UNI >$allinfo
+			ypkg_find_info $universe_local_file >$allinfo
 			if [ "x$(cat $allinfo)" = "x" ]; then
 				echo "redep: $redepend not found"
 			else
@@ -329,7 +324,7 @@ install_prepare () {
 					redepend_final_ver="$V$R"
 				fi
 					 atom_parse_type ${redepend_name}_${redepend_final_ver}
-					 ypkg_find_info $YPPATH_UNI >$singleinfo
+					 ypkg_find_info $universe_local_file >$singleinfo
 				         redepuri="$(get_value   uri        $singleinfo)"
 				         redepsha="$(get_value   sha        $singleinfo)"
 				        redepsize="$(get_value   size       $singleinfo)"
@@ -388,7 +383,7 @@ install_dev_prepare () {
 	singleinfo=$(yget_mktemp f)
 	local app="$1"
 	atom_parse_type $app
-	ypkg_find_info $YPPATH_UNI >$allinfo
+	ypkg_find_info $universe_local_file >$allinfo
 	if [ "x$(cat $allinfo)" = "x" ]; then
 		echo "app: $app not found" 1>&2
 		rm -rf $allinfo $singleinfo 
@@ -414,7 +409,7 @@ install_dev_prepare () {
 		for i in $rdepends; do
 			i=${i}-dev
 			atom_parse ${i}
-			ypkg_find_info $YPPATH_UNI >/dev/null && rdepends_ready+="${i} "
+			ypkg_find_info $universe_local_file >/dev/null && rdepends_ready+="${i} "
 		done
 		echo $bdepends $rdepends_ready
 	fi
@@ -608,8 +603,8 @@ do_upgrade () {
 	fi
 	yget update
 	echo 
-	if [ ! -f $YPPATH_UNI ]; then
-		rmsg "Error: $YPPATH_UNI not found, try:"
+	if [ ! -f $universe_local_file ]; then
+		rmsg "Error: $universe_local_file not found, try:"
 		echo "$0 update"
 		exit 1
 	fi
@@ -624,14 +619,14 @@ do_upgrade () {
 		flag=""
 		allinfo=$(yget_mktemp f)
 		singleinfo=$(yget_mktemp f)
-		ypkg_find_info $YPPATH_UNI all >$allinfo
+		ypkg_find_info $universe_local_file all >$allinfo
 		new=$(get_final_ver $N $allinfo)
 		atom_vercmp $old $new
 		case $? in
 			2) flag="upgrade" ;;
 			#0)  
 			#   #compare build time further.
-			#   ypkg_find_info $YPPATH_UNI  >$singleinfo
+			#   ypkg_find_info $universe_local_file >$singleinfo
 			#   buildtime_new="$(grep "<build_date>" $singleinfo |sort -u |sed -e 's/<build_date>//g' -e 's/<\/build_date>//g' -e 's/[[:space:]]//g')"
 		   	#   if [ "x$buildtime_new$buildtime_old" != "x" ]; then
 			#	[ "1$buildtime_new" -gt "1$buildtime_old" ] && flag="upgrade_time"
@@ -750,6 +745,11 @@ do_remove () {
 
 # main
 #
+
+universe_dir=${YPPATH_UNI%/*}         #/var/ypkg/packages/
+universe_file=${YPPATH_UNI##*/}       #universe
+universe_local_file=$YPPATH_PKGDEST/$universe_file
+universe_local=$YPPATH_PKGDEST/$universe
 
 #if [ $# -lt 2 ]; then
 #	usage
