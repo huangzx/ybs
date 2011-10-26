@@ -230,7 +230,7 @@ case "${1}" in
 	msg "..."
 	for i in ${args[@]}; do
 		if [ "x$TERM" != "xlinux" ]; then
-			echo -ne "\033]0;ybs work: ${i}\007"; ypkg_install $i "force"
+			echo -ne "\033]0;ybs working: ${i}\007"; ypkg_install $i "force"
 		else
 			ypkg_install $i "force"
 		fi
