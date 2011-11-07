@@ -1573,8 +1573,10 @@ ypkg_doinit() {
 	fi
 }
 
-# Ypkg_domk, for modules make/make install automatic
-ypkg_domk() {
+#
+# Kernel modules make/mkinstall automatically
+# 
+ykms() {
 	# $1 action: build delete
 	# $2 name
 	# $3 version
@@ -1585,15 +1587,16 @@ ypkg_domk() {
 	local show_usage=
 	[ "x$1" = "x" ] && show_usage=yes
 	case "$1" in 
-		 build|delete|autoinstall) : ;;
+		 install|remove|autoinstall) : ;;
 		 *)	show_usage=yes
 	esac
 	
 	if [ "x$show_usage" = "xyes" ]; then
 		 msg "Usage: "
-			msg "ypkg_domk build PACKAGE_NAME PACKAGE_VERSION"
-			msg "ypkg_domk delete PACKAGE_NAME PACKAGE_VERSION"
-			msg "ypkg_domk autoinstall"
+			msg "ykms build name version"
+			msg "ykms install name version"
+			msg "ykms remove name version"
+			msg "ykms autoinstall"
 			return 0
 	fi
 
@@ -1602,68 +1605,94 @@ ypkg_domk() {
 	local version="$3"
 	local args="$4 $5 $6"
 	local dir="$YPKPATH/modules"
-	mkdir -p $dir
+	local source_dir="/usr/src/"${name}_$version""
+
+	if [ "x$action" != "xautoinstall" ]; then
+		if [ ! -d $source_dir ]; then
+			rmsg "* $source_dir: not such directory"
+			return 1
+		fi
+	fi
 
 	#
 	case "$action" in 
-	build)
+	install)
+		cd $source_dir
+		local    preparelog="$PWD/prepare-log"
+		local       makelog="$PWD/make-log"
+		local  mkinstalllog="$PWD/mkinstall-log"
+		local  post_instlog="$PWD/post_inst-log"
+
+		[ -f ./ykms.conf ] && . ./ykms.conf
+
+		#if [ "x$patches" != "x" ]; then
+		#	msg "* ${name}_$version kernel modules patching ..." 
+		#	for patch in $patches; do
+		#		ypkg_patch "$patch"
+		#	done
+		#
+		#fi
+
+		if [ "x$prepare" != "x" ]; then
+			msg "* ${name}_$version kernel modules preparing ..." 
+        	        if ! eval $prepare >$preparelog 2>&1; then 
+				rmsg "* [Error] prepare kernel modules failed!"
+			        rmsg "* prepare log: $preparelog"
+		                return 1
+			fi
+		fi   
+
+		msg "* ${name}_$version kernel modules compiling ..."
+		if ! make $MAKEOPTS $make_args >$makelog 2>&1; then
+			rmsg "* [Error] build kernel modules failed!"
+			rmsg "* build log: $makelog"
+			return 1
+		fi	
+
+		msg "* ${name}_$version kernel modules installing ..."
+		if [ "x$mkinstall_args" = "x" ]; then
+			command="make $MAKEOPTS install"
+		else
+			command="make $MAKEOPTS $mkinstall_args"
+		fi
+		if ! eval "$command" >$mkinstalllog 2>&1; then
+			rmsg "* [Error] install kernel modules failed!"
+			rmsg "* install log: $mkinstalllog"
+			return 1
+		fi
+		
+		#
 		local record="$dir"/"$name"/"$version"/"$(uname -m)"/"$(uname -r)"
 		mkdir -p $record
-		if cd /usr/src/"${name}_$version"; then
-			local    preparelog="$PWD/prepare-log"
-			local       makelog="$PWD/make-log"
-			local  mkinstalllog="$PWD/mkinstall-log"
-
-			#
-			if [ -x ypkg_domk ]; then
-				msg "* ypkg_domk found!"
-				msg "* ${name}_$version kernel modules preparing ..."
-				if ! ./ypkg_domk >$preparelog 2>&1; then
-					rmsg "* [Error] prepare kernel modules failed!"
-		                        rmsg "* prepare log: $preparelog"
-					return 1
-				fi
+		>$record/modules
+		find . -type f -name "*.ko" |sort -u |while read i; do
+			local origin="$i"
+			local name=${i##.*/}
+			local target="$(find /lib/modules/"$(uname -r)" -type f -name ${i##*/} |head -n1)"
+			if diff $origin $target >/dev/null 2>&1; then	
+				msg "$name -> $target"
+				sha1sum $target |while read sha1 name; do 
+					echo $name $sha1 >>$record/modules
+				done
 			fi
+		done 
+		#
+		make $MAKEOPTS clean >/dev/null 2>&1
 
-			msg "* ${name}_$version kernel modules compiling ..."
-			if ! make $args >$makelog 2>&1; then
-				rmsg "* [Error] build kernel modules failed!"
-				rmsg "* build log: $makelog"
-				return 1
-			else
-				msg "* ${name}_$version kernel modules installing ..."
-				if ! make install $args >$mkinstalllog 2>&1; then
-					rmsg "* [Error] install kernel modules failed!"
-					rmsg "* install log: $mkinstalllog"
-					return 1
-				else
-					depmod -a  
-				fi
+		if [ "x$post_inst" != "x" ]; then
+			msg "* ${name}_$version kernel modules post install ..." 
+        	        if ! eval $post_inst >$post_instlog 2>&1; then 
+				rmsg "* [Error] post install kernel modules failed!"
+			        rmsg "* post_inst log: $post_instlog"
+		                return 1
 			fi
+		fi   
 
-			#
-			>$record/modules
-			find . -type f -name "*.ko" |sort -u |while read i; do
-				local origin="$i"
-				local name=${i##.*/}
-				local target="$(find /lib/modules/"$(uname -r)" -type f -name ${i##*/} |head -n1)"
-				if diff $origin $target >/dev/null 2>&1; then	
-					msg "$name -> $target"
-					sha1sum $target |while read sha1 name; do 
-						echo $name $sha1 >>$record/modules
-					done
-				fi
-			done 
+		#
 
-			#
-			make clean >/dev/null 2>&1
-			rm -rf $makepipe $makelog $mkinstallpipe $mkinstalllog $preparelog 2>/dev/null 
-		else
-			rm -rf "$dir"/"$name"/"$version"
-		fi
-		return 0
+		rm -rf $makepipe $makelog $mkinstallpipe $mkinstalllog $preparelog 2>/dev/null 	
 		;;
-	delete)
+	remove)
 		local record="$dir"/"$name"/"$version"/"$(uname -m)"/"$(uname -r)"
 		cat $record/modules |while read file sha1; do
 			sha1_old=${sha1}
@@ -1681,14 +1710,24 @@ ypkg_domk() {
 		
 		msg "<< file: $record/modules"
 		rm -f $record/modules
+		
+		#if [ -d $source_dir ]; then
+		#	msg "<< dir: $source_dir"
+		#	rm -rf $source_dir 2>/dev/null  
+		#fi
 
 		rmdir -p $record 2>/dev/null  
 		;;
 
 	autoinstall)
 		ls -d1 "$dir"/*/* |awk -F\/ '{print $5 " " $6}' |while read name version;do
-			ypkg_domk build $name $version
+			ykms install $name $version
+			prepare=""
+			make_args=""
+			mkinstall_args=""
+			post_inst=""
 		done   ;;
+
 		*)  :
 	esac	
 
@@ -2051,6 +2090,13 @@ ypkg_dosupported() {
 	install -m755 "$FILES_PATH"/files/"$1" "$YPPATH_DEST"/usr/src/"${N}_$V$R"
 }
 
+# Cp ykms.conf to specified dir
+ypkg_doykms() {
+	mmsg ">>> Copy ykms file: ykms.conf"
+	mkdir -p "$YPPATH_DEST"/usr/src/"${N}_$V$R"
+	install -m755 "$FILES_PATH"/files/ykms.conf "$YPPATH_DEST"/usr/src/"${N}_$V$R"
+}
+
 
 # Cp doc to specified dir
 ypkg_dodoc() {
@@ -2058,13 +2104,6 @@ ypkg_dodoc() {
 	install -m755 -d "$YPPATH_DEST"/usr/share/doc/"$N"/"$V$R"
 	cp -a "$@" "$YPPATH_DEST"/usr/share/doc/"$N"/"$V$R"
 }
-
-# Cp dkms.conf to specified dir
-#ypkg_dodkms() {
-#	mmsg ">>> Copy dkms config: $1"
-#	install -m755 -d "$YPPATH_DEST"/usr/src/"${N}_$V$R"
-#	cp -a "$FILES_PATH"/files/"$1" "$YPPATH_DEST"/usr/src/"${N}_$V$R"
-#}
 
 #
 # Ypkg useradd
@@ -2554,6 +2593,8 @@ ypkg_begininstall() {
 				packs+="$(ypkg_mkpackage) "
 				err_check "* [Error]: $T/${ORIG_N}_$V$R ${N} make binary package failed"
 			fi
+			YARCH=$(uname -m)
+			INSTALL=""
 		done
 	fi
 
