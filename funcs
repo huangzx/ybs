@@ -301,7 +301,7 @@ atom_parse_path() {
 	T=${T##*/}
 
 	#files dir is with *.pbs, contains patchs and user-defined files 
-	FILES_PATH="${1%/*}"
+	filesdir="${1%/*}"/files/
 	
 	atom_parse "$atom"
 }
@@ -851,8 +851,8 @@ ypkg_begin_download() {
 	#clear all routines by include template file
 	blank_funcs pbs
 
-	YPB_CONFIG="$YPINST_PREFIX "
-	YPB_CONFIG="--prefix=/usr
+	config="$YPINST_PREFIX "
+	config="--prefix=/usr
 		    --sysconfdir=/etc
 		    --libdir=/usr/lib
 		    --localstatedir=/var
@@ -1011,7 +1011,7 @@ split_dev() {
 	       $dir/usr/include 2>/dev/null |while read line; do
 	        	local tmp=${line##$dir}
 			local tmp=${tmp%%/include}
-			ypkg_domv $line $destdir/$N-dev_$V$R/$tmp
+			domv $line $destdir/$N-dev_$V$R/$tmp
  		done
 	
 	#*.la *.a *.h
@@ -1021,7 +1021,7 @@ split_dev() {
 		for lib in $devlib; do
 			i=${lib#$dir}
 			libdir=${i%/*}
-			ypkg_domv $lib  $destdir/$N-dev_$V$R/$libdir
+			domv $lib  $destdir/$N-dev_$V$R/$libdir
 		done
 	fi
 
@@ -1031,14 +1031,14 @@ split_dev() {
 		for pc in $pcdir; do
 			i=${pc#$dir}
 			dirpc=${i%/*}
-			ypkg_domv $pc $destdir/$N-dev_$V$R/$dirpc
+			domv $pc $destdir/$N-dev_$V$R/$dirpc
 		done
 	fi
 	
 	#/usr/share/aclocal/ogg.m4
 	acl=$(ls -d $dir/usr/share/aclocal/* 2>/dev/null)
 	if [ x"$acl" != "x" ]; then
-		ypkg_domv $dir/usr/share/aclocal $destdir/$N-dev_$V$R/usr/share
+		domv $dir/usr/share/aclocal $destdir/$N-dev_$V$R/usr/share
 	fi
 	[ -d $destdir/$N-dev_$V$R ] && echo $destdir/$N-dev_$V$R && return 0
 	
@@ -1054,14 +1054,14 @@ split_doc() {
 	#info=$(ls -d $dir/usr/share/info/* 2>/dev/null)
 	gtk_docs=$(ls -d $dir/usr/share/gtk-doc/html/* 2>/dev/null)
 	if [ x"$docs" != "x" ]; then
-		ypkg_domv $dir/usr/share/doc $destdir/$N-doc_$V$R/usr/share
+		domv $dir/usr/share/doc $destdir/$N-doc_$V$R/usr/share
 	fi
 	
 	#if [ x"$info" != "x" ]; then
-	#	ypkg_domv $dir/usr/share/info $destdir/$N-doc_$V$R/usr/share
+	#	domv $dir/usr/share/info $destdir/$N-doc_$V$R/usr/share
 	#fi
 	if [ x"$gtk_docs" != "x" ]; then
-		ypkg_domv $dir/usr/share/gtk-doc/html $destdir/$N-doc_$V$R/usr/share/gtk-doc
+		domv $dir/usr/share/gtk-doc/html $destdir/$N-doc_$V$R/usr/share/gtk-doc
 	fi
 	
 	#ypkg_gzip_info $destdir/$N-doc_$V$R
@@ -1077,7 +1077,7 @@ split_i18n() {
 	if ls -d $dir/$localdir/* >/dev/null 2>/dev/null; then
 		ls -d $dir/$localdir/* |while read line;do
 			lang=${line##*/}
-			ypkg_domv $dir/$localdir/$lang      $workdir/$N-i18n-${lang}_$V$R/$localdir
+			domv $dir/$localdir/$lang      $workdir/$N-i18n-${lang}_$V$R/$localdir
 			echo $workdir/$N-i18n-${lang}_$V$R
 		done
 		return 0
@@ -1353,41 +1353,41 @@ check_perm_dirs () {
 ypkg_mkpackage() {
 	nn=$N
 	# Source packages
-	local spacks="$YPPATH_DEST "
+	local spacks="$destdir "
 
 	#check /dirs permission
-	check_perm_dirs "$YPPATH_DEST"
+	check_perm_dirs "$destdir"
 
 	if [ "x$YP_I18N" != "x" ];then
 		#strip i18n 
-		ypkg_strip_i18n $YPPATH_DEST
+		ypkg_strip_i18n $destdir
 			
 		#strip unnessesary i18n in man path.
-		ypkg_strip_mani18n $YPPATH_DEST
+		ypkg_strip_mani18n $destdir
 	fi
 	# Strip bin
 	if ! str_isIn "$OPINION" "nostrip"; then
-		ypkg_strip_bin $YPPATH_DEST
+		ypkg_strip_bin $destdir
 	fi
 
 	# Upx executables files
 	if str_isIn "$OPINION" "upx"; then
-		ypkg_upx_bin $YPPATH_DEST
+		ypkg_upx_bin $destdir
 	fi
 
 	# Split i18n
-	#spacks+="$(split_i18n $YPPATH_DEST) "
+	#spacks+="$(split_i18n $destdir) "
 
 	# Split dev
 	if ! str_isIn "$OPINION" "nodev"; then
-		spacks+="$(split_dev $YPPATH_DEST) "
+		spacks+="$(split_dev $destdir) "
 	fi
 
 	# Split_doc
-	#spacks+="$(split_doc $YPPATH_DEST) "
+	#spacks+="$(split_doc $destdir) "
 
 	# Compress man doc info
-	ypkg_gzip_extra $YPPATH_DEST
+	ypkg_gzip_extra $destdir
 
 	# Mkpackges one by one
 	for pack in $spacks; do
@@ -1520,55 +1520,55 @@ ypkg_find_info() {
 	fi
 }
 
-# Cp desktop file to "$YPPATH_DEST"/usr/share/applications
-ypkg_dodesktop() {
+# Cp desktop file to "$destdir"/usr/share/applications
+dodesktop() {
 	local dfile="$1"
 	local picture="$2"
 	local icon=""
-	file_is_exist "$FILES_PATH/files/${dfile##*/}"   && dfile="$FILES_PATH/files/${dfile##*/}"
-	file_is_exist "$FILES_PATH/files/${picture##*/}" && picture="$FILES_PATH/files/${picture##*/}"
+	file_is_exist "$filesdir/${dfile##*/}"   && dfile="$filesdir/${dfile##*/}"
+	file_is_exist "$filesdir/${picture##*/}" && picture="$filesdir/${picture##*/}"
 	if [ x"$dfile" != x ] && file_is_exist "$dfile"; then
-		mkdir -p "$YPPATH_DEST"/usr/share/applications
-		install -m755 "$dfile" "$YPPATH_DEST"/usr/share/applications 
+		mkdir -p "$destdir"/usr/share/applications
+		install -m755 "$dfile" "$destdir"/usr/share/applications 
 	fi
 	if [ x"$picture" != x ] && file_is_exist "$picture"; then 
-		ypkg_docp "$picture"   "$YPPATH_DEST"/usr/share/pixmaps
+		docp "$picture"   "$destdir"/usr/share/pixmaps
 	fi
 	dfile="${dfile##*/}"
 	picture="${picture##*/}"
-	icon=$(grep ^Icon= "$YPPATH_DEST"/usr/share/applications/"$dfile" |sed 's/Icon=//g')
+	icon=$(grep ^Icon= "$destdir"/usr/share/applications/"$dfile" |sed 's/Icon=//g')
 	name=${icon%.*}
 	type=${picture##*.}
 	if [ x"$type" != x ] && [ x"$picture" != x"$name.$type" ]; then 
-		mv "$YPPATH_DEST"/usr/share/pixmaps/"$picture" "$YPPATH_DEST"/usr/share/pixmaps/"$name"."$type" 
+		mv "$destdir"/usr/share/pixmaps/"$picture" "$destdir"/usr/share/pixmaps/"$name"."$type" 
 	else
 		return 0
 	fi
 }
 
 # Add unit for systemd
-ypkg_dounit() {
+dounit() {
 	local file="$@"
 	if [ x"$file" != x ]; then
 		for i in $@; do
 			if file_is_exist "$i"; then
-				ypkg_docp "$i" "$YPPATH_DEST"/lib/systemd/system
+				docp "$i" "$destdir"/lib/systemd/system
 			else
-				ypkg_docp "$FILES_PATH"/files/"$i"  "$YPPATH_DEST"/lib/systemd/system
+				docp "$filesdir/$i"  "$destdir"/lib/systemd/system
 			fi
 		done
 	fi
 }
 
-# Cp script to "$YPPATH_DEST"/etc/init.d
-ypkg_doinit() {
+# Cp script to "$destdir"/etc/init.d
+doinit() {
 	local file="$1"
-	mkdir -p "$YPPATH_DEST"/etc/init.d
+	mkdir -p "$destdir"/etc/init.d
 	if [ x"$file" != x ]; then
 		if file_is_exist "$file"; then
-       			install -m755 "$file" "$YPPATH_DEST"/etc/init.d
+       			install -m755 "$file" "$destdir"/etc/init.d
 		else
-       			install -m755 "$FILES_PATH"/files/"$file" "$YPPATH_DEST"/etc/init.d
+       			install -m755 "$filesdir/$file" "$destdir"/etc/init.d
 		fi
 	fi
 }
@@ -1628,7 +1628,7 @@ ykms() {
 		#if [ "x$patches" != "x" ]; then
 		#	msg "* ${name}_$version kernel modules patching ..." 
 		#	for patch in $patches; do
-		#		ypkg_patch "$patch"
+		#		dopatch "$patch"
 		#	done
 		#
 		#fi
@@ -1720,7 +1720,7 @@ ykms() {
 		;;
 
 	autoinstall)
-		ls -d1 "$dir"/*/* |awk -F\/ '{print $5 " " $6}' |while read name version;do
+		ls -d1 "$dir"/*/* 2>/dev/null |awk -F\/ '{print $5 " " $6}' |while read name version;do
 			ykms install $name $version
 			prepare=""
 			make_args=""
@@ -1735,50 +1735,50 @@ ykms() {
 }
 
 # cp
-ypkg_docp() {
+docp() {
 	local end=${!#}
 	mkdir -p "$end"
 	cp -a "$@"
 }
 
 # cp and rename
-ypkg_docp_rename() {
+docp_rename() {
 	local end=${!#}
 	mkdir -p "$(dirname $end)"
 	cp -a "$@"
 }
 
 # mv
-ypkg_domv() {
+domv() {
 	local end=${!#}
 	mkdir -p "$end"
 	mv "$@"
 }
 
 # mv and rename
-ypkg_domv_rename() {
+domv_rename() {
 	local end=${!#}
 	mkdir -p "$(dirname $end)"
 	mv "$@"
 }
 
 # cp man to dir
-ypkg_doman() {
+doman() {
 	local name num
 	for i in $@; do
 		name=${i%.[0-9]}
 		num=${i##$name}
 		num=${num##.}
 		if file_is_exist "$i"; then
-			ypkg_docp ${i} "$YPPATH_DEST"/usr/share/man/man${num}/
+			docp ${i} "$destdir"/usr/share/man/man${num}/
 		else
-			ypkg_docp "$FILES_PATH"/files/"${i}" "$YPPATH_DEST"/usr/share/man/man${num}/
+			docp "$filesdir/${i}" "$destdir"/usr/share/man/man${num}/
 		fi
 	done
 }
 
 # link
-ypkg_doln(){
+doln(){
 	local end=${!#}
 	mkdir -p "$(dirname $end)"
 	#ln -sf "$1"  "$2"
@@ -1786,7 +1786,7 @@ ypkg_doln(){
 }
 
 # font
-ypkg_dofont() {
+dofont() {
 	msg ">>> mkfontscale $1"
 	mkfontscale "$1"
 	msg ">>> mkfontdir $1"
@@ -1796,7 +1796,7 @@ ypkg_dofont() {
 }
 
 #
-ypkg_install_info () {
+doinstall_info () {
 	msg ">>> install info: $@"
 	[ -x /usr/bin/install-info ] || return 0
 	infodir=/usr/share/info
@@ -1807,7 +1807,7 @@ ypkg_install_info () {
 }
 
 #
-ypkg_remove_info () {
+doremove_info () {
 	msg ">>> remove info: $@"
 	[ -x /usr/bin/install-info ] || return 0
 	infodir=/usr/share/info
@@ -1819,15 +1819,15 @@ ypkg_remove_info () {
 
 
 # patch
-ypkg_patch(){
+dopatch(){
 	local file=""
 	local dir1=""
 	local dir2=""
 	local num=""
 	while [ "x$1" != "x" ]; do
 		file="$1"
-		file_is_exist "$file" || file=""$FILES_PATH"/files/$1"
-		file_is_exist "$file" || file=""$FILES_PATH"/files/patches/$1"
+		file_is_exist "$file" || file="$filesdir/$1"
+		file_is_exist "$file" || file="$filesdir/patches/$1"
 		if ! file_is_exist "$file"; then
 			rmsg "* Error: \"$1\" not found."
 			exit  1
@@ -1846,7 +1846,7 @@ ypkg_patch(){
 }
 
 #
-ypkg_unpack() {
+dounpack() {
 	if [ "x$SRC_URI" = "x" ];then
 		for i in tar.bz2 tar.gz bz2 tgz tbz tbz2 rar zip 7z; do
 			file_is_exist "$YPPATH_SOURCE/$N-$V$R.${i}" && SRC_URI="$YPPATH_SOURCE/$N-$V$R.${i}"
@@ -1934,21 +1934,21 @@ ypkg_unpack() {
 }
 
 # Configure
-ypkg_config() {
+doconfig() {
 	local command=""
 	local command1=""
 	local command2=""
 		
 	# waf
-	[ -x waf ] && command="./waf configure $(echo $YPB_CONFIG |xargs)"
+	[ -x waf ] && command="./waf configure $(echo $config |xargs)"
 	if [ x"$command" != x ];then
 		mmsg ">>> $command"
 		$command && return 0
 	fi
 	
 	# generic
-	[ -x configure ] && command="./configure $(echo $YPB_CONFIG |xargs)"
-	[ -x Configure ] && command="./Configure $(echo $YPB_CONFIG |xargs)"
+	[ -x configure ] && command="./configure $(echo $config |xargs)"
+	[ -x Configure ] && command="./Configure $(echo $config |xargs)"
 	if [ x"$command" != x ];then
 		mmsg ">>> $command"
 		$command && return 0
@@ -1957,7 +1957,7 @@ ypkg_config() {
 	# autogen
 	if [ -x autogen.sh ];then
 		command="./autogen.sh" 
-		command1=" ./configure $(echo $YPB_CONFIG |xargs)"
+		command1=" ./configure $(echo $config |xargs)"
 	fi
 	if [ x"$command" != x ];then
 		mmsg ">>> $command; $command1"
@@ -2000,14 +2000,14 @@ ypkg_config() {
 	# scons
 	if file_is_exist SConstruct; then
 		#command="scons --prefix=/usr"
-		command="scons $(echo $YPB_CONFIG |xargs)"
+		command="scons $(echo $config |xargs)"
 		mmsg ">>> $command"
 		$command 
 	fi	
 }
 
 # Make
-ypkg_make() {
+domake() {
 	local command="make $MAKEOPTS $@"
 	if [ -x waf ];then
 		command="./waf build $MAKEOPTS $@"
@@ -2041,18 +2041,18 @@ ypkg_make() {
 }
 
 # Make install
-ypkg_mkinstall() {
-	local command="make DESTDIR="$YPPATH_DEST" "$@" install"
+domkinstall() {
+	local command="make DESTDIR="$destdir" "$@" install"
 	if [ -x waf ];then
-		command="./waf install --destdir="$YPPATH_DEST" $@"
+		command="./waf install --destdir="$destdir" $@"
 		mmsg ">>> $command"
 		$command && return 0
 	fi
 	if file_is_exist setup.py;then
 		if [ "x$1"  = "xmake" ]; then
-			command="make DESTDIR="$YPPATH_DEST" $@ install"		
+			command="make DESTDIR="$destdir" $@ install"		
 		else
-			command="python setup.py install --prefix=/usr --root="$YPPATH_DEST" $@"
+			command="python setup.py install --prefix=/usr --root="$destdir" $@"
 		fi
 		mmsg ">>> $command"
 		$command && return 0
@@ -2060,7 +2060,7 @@ ypkg_mkinstall() {
 		
 	if file_is_exist SConstruct;then
 		if [ x"$@" = x ]; then
-			command="scons --install-sandbox="$YPPATH_DEST" "$@" install"
+			command="scons --install-sandbox="$destdir" "$@" install"
 		else
 			command="scons "$@" install"
 		fi
@@ -2069,7 +2069,7 @@ ypkg_mkinstall() {
 	fi	
 
 	if file_is_exist Makefile || file_is_exist GNUmakefile; then
-		command="make DESTDIR="$YPPATH_DEST" "$@" install"
+		command="make DESTDIR="$destdir" "$@" install"
 	fi	
 	mmsg ">>> $command"
 	$command 
@@ -2077,37 +2077,37 @@ ypkg_mkinstall() {
 }
 
 # Cp src file to specified dir
-ypkg_dosrc() {
+dosrc() {
 	mmsg ">>> Copy source files: /usr/src/"${N}_$V$R""
-	mkdir -p "$YPPATH_DEST"/usr/src/"${N}_$V$R"
-	cp -a "$@" "$YPPATH_DEST"/usr/src/"${N}_$V$R"/
+	mkdir -p "$destdir"/usr/src/"${N}_$V$R"
+	cp -a "$@" "$destdir"/usr/src/"${N}_$V$R"/
 }
 
 # Cp supported to specified dir
-ypkg_dosupported() {
+dosupported() {
 	mmsg ">>> Copy supported file: $1"
-	mkdir -p "$YPPATH_DEST"/usr/src/"${N}_$V$R"
-	install -m755 "$FILES_PATH"/files/"$1" "$YPPATH_DEST"/usr/src/"${N}_$V$R"
+	mkdir -p "$destdir"/usr/src/"${N}_$V$R"
+	install -m755 "$filesfir/$1" "$destdir"/usr/src/"${N}_$V$R"
 }
 
 # Cp ykms.conf to specified dir
-ypkg_doykms() {
+doykms() {
 	mmsg ">>> Copy ykms file: ykms.conf"
-	mkdir -p "$YPPATH_DEST"/usr/src/"${N}_$V$R"
-	install -m755 "$FILES_PATH"/files/ykms.conf "$YPPATH_DEST"/usr/src/"${N}_$V$R"
+	mkdir -p "$destdir"/usr/src/"${N}_$V$R"
+	install -m755 "$filesdir/ykms.conf" "$destdir"/usr/src/"${N}_$V$R"
 }
 
 
 # Cp doc to specified dir
-ypkg_dodoc() {
+dodoc() {
 	mmsg ">>> Copy documents: $@"
-	install -m755 -d "$YPPATH_DEST"/usr/share/doc/"$N"/"$V$R"
-	cp -a "$@" "$YPPATH_DEST"/usr/share/doc/"$N"/"$V$R"
+	install -m755 -d "$destdir"/usr/share/doc/"$N"/"$V$R"
+	cp -a "$@" "$destdir"/usr/share/doc/"$N"/"$V$R"
 }
 
 #
 # Ypkg useradd
-ypkg_useradd() {
+douseradd() {
 	local end=${!#}
 	local N=$end
 	if ! getent passwd "$N" >/dev/null; then 
@@ -2118,7 +2118,7 @@ ypkg_useradd() {
 
 #
 # Ypkg userdel
-ypkg_userdel() {
+douserdel() {
 	local end=${!#}
 	local N=$end
 	if getent passwd "$N" >/dev/null; then 
@@ -2129,7 +2129,7 @@ ypkg_userdel() {
 
 #
 # Ypkg groupadd
-ypkg_groupadd() {
+dogroupadd() {
 	local end=${!#}
 	local N=$end
 	if ! getent group "$N" >/dev/null; then
@@ -2141,7 +2141,7 @@ ypkg_groupadd() {
 #
 #
 # Ypkg groupdel
-ypkg_groupdel() {
+dogroupdel() {
 	local end=${!#}
 	local N=$end
 	if getent group "$N" >/dev/null; then
@@ -2152,7 +2152,7 @@ ypkg_groupdel() {
 
 #
 #
-ypkg_libtool_finish () {
+dolibtool_finish () {
 	local dir="$@"
 	msg ">>> Libtool finish: $dir"
 	libtool --finish --silent $dir
@@ -2161,8 +2161,8 @@ ypkg_libtool_finish () {
 #
 perl_cleanup () {
 	msg ">>> Delete: .packlist *.pod files"
-	find "$YPPATH_DEST" -name '.packlist' -delete
-	find "$YPPATH_DEST" -name '*.pod' -delete
+	find "$destdir" -name '.packlist' -delete
+	find "$destdir" -name '*.pod' -delete
 }
 
 #
@@ -2175,6 +2175,22 @@ glib_compile_schemas() {
 		return 1
 	fi
 	return 0
+}
+
+#
+doinstall_catalog() {
+	local bin=$(which install-catalog)
+	if [ -x $bin ]; then
+		$bin --add $@
+	fi
+}
+
+doremove_catalog() {
+	local bin=$(which install-catalog)
+	if [ -x $bin ]; then
+		$bin --remove $@
+	fi
+	
 }
 
 # Install defaut settings
@@ -2522,7 +2538,7 @@ ypkg_begininstall() {
 	pbs_unpack
 	err_check "* [Error]: $T/${N}_$V$R call pbs_unpack failed"
 
-	YPPATH_DEST="$workdir/${N}_$V$R"
+	destdir="$workdir/${N}_$V$R"
 	buildlog="$YPPATH_SCRIPT/${N}_$V$R-$YARCH.buildlog"
 
 	local 	 configpipe="$PWD/config.pipe"
@@ -2568,10 +2584,10 @@ ypkg_begininstall() {
 	[ -e $buildlog ] && gzip -f $buildlog
 	
 	ORIG_N=${N}
-	YPPATH_DEST_OLD=$YPPATH_DEST
+	destdir_OLD=$destdir
 	packs=""
 	#make package
-	if [ -d "$YPPATH_DEST" ]; then
+	if [ -d "$destdir" ]; then
 		ymsg ">> $T/${N}_$V$R make package..."
 		packs="$(ypkg_mkpackage) "
 		err_check "* [Error]: $T/${N}_$V$R make binary package failed"
@@ -2583,12 +2599,12 @@ ypkg_begininstall() {
 		ymsg ">> $T/${N}_$V$R splite $PROVIDE..."
 		for i in $PROVIDE; do
 			N=${i}
-			YPPATH_DEST="$workdir/${N}_$V$R"
+			destdir="$workdir/${N}_$V$R"
 			${i}_install
 		        err_check "* [Error]: $T/${ORIG_N}_$V$R ${N} call ${i}_install failed"
 
 			#make package
-			if [ -d "$YPPATH_DEST" ]; then
+			if [ -d "$destdir" ]; then
 				ymsg ">> $T/${ORIG_N}_$V$R ${N} make package..."
 				packs+="$(ypkg_mkpackage) "
 				err_check "* [Error]: $T/${ORIG_N}_$V$R ${N} make binary package failed"

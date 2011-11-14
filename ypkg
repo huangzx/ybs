@@ -9,7 +9,7 @@
 version=0.8
 [ -f /usr/lib/ybs/funcs ] && . /usr/lib/ybs/funcs
 #trap clean_up INT
-mkdir -p $YPPATH_PACKAGE $YPPATH_DB $YPPATH_FIELD $YPPATH_DEST
+mkdir -p $YPPATH_PACKAGE $YPPATH_DB $YPPATH_FIELD
 
 #
 YPKG_ROOT="/"

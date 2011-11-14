@@ -15,7 +15,7 @@
 UNIVERSE="universe"
 
 # creat paths
-mkdir -p $YPPATH_FIELD $YPPATH_DEST $YPPATH_PKGDEST
+mkdir -p $YPPATH_FIELD $YPPATH_PKGDEST
 TMPDIR="/tmp/yget_work"
 #trap "rm -r $TMPDIR 2>/dev/null" INT
 
