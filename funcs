@@ -853,13 +853,13 @@ ypkg_begin_download() {
 
 	config="$YPINST_PREFIX "
 	config="--prefix=/usr
-		    --sysconfdir=/etc
-		    --libdir=/usr/lib
-		    --localstatedir=/var
-		    --infodir=/usr/share/info
-		    --mandir=/usr/share/man
-		    --enable-shared "
-		    #--disable-static
+		--sysconfdir=/etc
+		--libdir=/usr/lib
+		--localstatedir=/var
+		--infodir=/usr/share/info
+		--mandir=/usr/share/man
+		--enable-shared "
+		#--disable-static
 
 	YPPATH_SCRIPT="$YPPATH_LIB/$T/$N"
 
@@ -956,19 +956,19 @@ ypkg_upx_bin () {
 # Strip binary in directory $1
 ypkg_strip_bin() {
 	#msg ">>> strip debug info.."
-	find $1/{,usr/}{bin,sbin} -type f -exec strip --strip-all '{}' ';' 2>/dev/null
-	find $1/{,usr/}{lib,local/lib} -type f -exec strip --strip-debug '{}' ';' 2>/dev/null
+	#find $1/{,usr/}{bin,sbin} -type f -exec strip --strip-all '{}' ';' 2>/dev/null
+	#find $1/{,usr/}{lib,local/lib} -type f -exec strip --strip-debug '{}' ';' 2>/dev/null
+	find $1 |xargs file |grep "executable" |grep ELF |cut -f 1 -d : |xargs strip --strip-unneeded 2> /dev/null
+	find $1 |xargs file |grep "shared object" |grep ELF |cut -f 1 -d : |xargs strip --strip-unneeded 2> /dev/null
 }
 
 
-# Compress man and info 
+# Compress man doc and info 
 ypkg_gzip_extra() {
 	#msg ">>> compress man info"
-	file_is_exist "$1/usr/share/info/dir" && rm $1/usr/share/info/dir 2>/dev/null
-	#find $1/usr/{,share/}{man,doc,info} -type f -exec gzip '{}' ';' 2>/dev/null
-	find $1/usr/{,share/}{man,info} -type f -exec gzip '{}' ';' 2>/dev/null
+	rm $1/usr/share/info/dir 2>/dev/null
+	find $1/usr/{,share/}{man,doc,info} -type f -exec gzip -9 '{}' ';' 2>/dev/null
 }
-
 
 # System Xorg Desktop Utilities Network Games Graphics Video             
 # Audio Office Development Security Science-education Drivers
@@ -2101,8 +2101,8 @@ doykms() {
 # Cp doc to specified dir
 dodoc() {
 	mmsg ">>> Copy documents: $@"
-	install -m755 -d "$destdir"/usr/share/doc/"$N"/"$V$R"
-	cp -a "$@" "$destdir"/usr/share/doc/"$N"/"$V$R"
+	install -m755 -d "$destdir"/usr/share/doc/"$N"/
+	cp -a "$@" "$destdir"/usr/share/doc/"$N"/
 }
 
 #
@@ -2581,7 +2581,7 @@ ypkg_begininstall() {
 	[ -e $makelog ] &&   cat $makelog >> $buildlog
 	[ -e $checklog ] &&  cat $checklog >> $buildlog
 	[ -e $mkinstalllog ] &&  cat $mkinstalllog >> $buildlog
-	[ -e $buildlog ] && gzip -f $buildlog
+	[ -e $buildlog ] && gzip -9 -f $buildlog
 	
 	ORIG_N=${N}
 	destdir_OLD=$destdir
