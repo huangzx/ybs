@@ -41,6 +41,7 @@ wmsg_() { wmsg "$@" | tr -d '\n'; }
 
 #
 # Path defines
+YPVERSION="1.0"
 YPPATH="/var/ybs"
 YPPATH_LIB="$YPPATH/pbslib"
 YPPATH_SOURCE="$YPPATH/sources"

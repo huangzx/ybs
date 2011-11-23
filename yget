@@ -20,7 +20,7 @@ TMPDIR="/tmp/yget_work"
 #trap "rm -r $TMPDIR 2>/dev/null" INT
 
 #
-yget_version="0.1"
+yget_version="$YPVERSION"
 
 #
 #

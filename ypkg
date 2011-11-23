@@ -6,10 +6,11 @@
 #
 
 #
-version=0.8
 [ -f /usr/lib/ybs/funcs ] && . /usr/lib/ybs/funcs
 #trap clean_up INT
 mkdir -p $YPPATH_PACKAGE $YPPATH_DB $YPPATH_FIELD
+
+ypkg_version="$YPVERSION"
 
 #
 YPKG_ROOT="/"
@@ -17,7 +18,7 @@ YPKG_ROOT="/"
 #
 ypkg_show_usage() {
 	cat <<EOF
-$0 $version 
+$0 $ypkg_version 
 
 Usage: $0 command pkg1 [pkg2 ...]
 
@@ -64,7 +65,6 @@ done
 
 #
 case "${1}" in
-
 -wp|--whatprovides)
 	#search file belongs to package.
 	msg_ "* Searching for "

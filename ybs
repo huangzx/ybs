@@ -6,14 +6,14 @@
 #
 
 #
-# version
-ybs_version=0.8
 
 #
 [ -f /etc/ybs.conf ] && . /etc/ybs.conf
 [ -f /tools/usr/lib/ybs/funcs ] && . /tools/usr/lib/ybs/funcs
 [ -f /usr/lib/ybs/funcs ] && . /usr/lib/ybs/funcs
 #trap clean_up INT
+
+ybs_version=$YPVERSION
 
 # creat paths
 mkdir -p $YPPATH_LIB $YPPATH_SOURCE $YPPATH_PACKAGE $YPPATH_DB $YPPATH_FIELD
@@ -77,7 +77,6 @@ ybs (ylmfos build system) is a simple command line for downloading/compile/insta
 souce codes.
 
 Commands:
-       -v|--version                            show version    
        -h|--help                               show usage   
        -s|--search                             search pkg
        -d|--download                           download source of pkg
@@ -124,11 +123,6 @@ done
 
 #
 case "${1}" in
--v|--version)
-	#show version.
-	gmsg $ypkg_version
-	;;
-
 -info|--info)
 	#show build info
 	grep -v ^# "/etc/ypkg.conf"
