@@ -67,6 +67,12 @@ XZ="/usr/bin/xz"
 YLMFOS="YLMFOS"
 
 #
+DOWNLOAD_TOOL="wget"
+WGET_OPINION="--tries=3 --retry-connrefused --wait=2"
+DOWNLOAD_TOOL="curl"
+CURL_OPINION="-L"
+
+#
 WORLD_LOCKFILE="/tmp/.ypkg_lock"
 UNI_LOCKFILE="/tmp/.ybs_lock"
 
@@ -742,68 +748,93 @@ ypkg_search() {
 #
 # Download packeage
 #
-wget_do () {
+do_download () {
 	local uri="$1"
 	local fname="$2"
-	msg "* downloading from ${uri}..."
-	if [ "x$(echo $uri |cut -c 1-5)" == "xhttps" ];then	
-		wget --tries=3 --retry-connrefused --wait=2 --no-check-certificate $uri -O ${YPPATH_SOURCE}/${fname}.tmp && return 0
-	else
-		wget --tries=3 --retry-connrefused --wait=2 $uri -O ${YPPATH_SOURCE}/${fname}.tmp && return 0
-	fi
+	local target="$YPPATH_SOURCE/$fname.tmp"
+	local wget="wget $WGET_OPINION"
+	local curl="curl $CURL_OPINION"
+
+	msg ">>> Downloading: ${uri}"
+	case $DOWNLOAD_TOOL in
+		wget)
+		if [ "x$(echo $uri |cut -c 1-5)" == "xhttps" ];then	
+			$wget --no-check-certificate $uri -O "$target" && return 0
+		else
+			$wget $uri -O "$target" && return 0
+		fi	;;
+		curl)
+			$curl $uri -o "$target" && return 0
+	esac
+
 	return 1
 }
 
-# Check and download package, $1 is URL, $2 is local file name.
+# Check and download package, $1 is URL, $2 is local file name, $3 is md5sum value
 check_and_download_raw() {
 	local uri=$1
 	local fname=$2
+	local md5sum_value=$3
 	local download
+	local target="${YPPATH_SOURCE}/${fname}"
+
 	#
 	case ${uri%%:*} in
-		svn)	;;
-		git)	
-		name=${fname%*.git}
+		svn)
 		cd ${YPPATH_SOURCE}
-		if [ -d $name ];then
-			cd $name && git pull
-		else
-			git clone ${1} 
-		fi
+		local name="$N"
+		cd $name && svn update || svn checkout ${1} "$N" ;;
+
+		git)	
+		local name=${fname%*.git}
+		cd ${YPPATH_SOURCE}
+		cd $name && git pull || git clone ${1} 
 		[ "$?" == "0" ] && return 0 ;;
+
     http|https|ftp|*)	
-		if file_is_exist "${YPPATH_SOURCE}/${fname}"; then
-			#printf "%s exists, Skip.\n" $fname
-			msg "* $YPPATH_SOURCE/$fname exists, Skip."
-			return 0
-		else
-			rm -f ${YPPATH_SOURCE}/${fname}.tmp 2>/dev/null
-			if wget_do $uri $fname; then
-				download="done"
-			else
-				#try ylmfos dist source
-				uri="$YPPATH_DIST_URI/${fname}"
-				wget_do $uri $fname && download="done" || download="error"
+		local md5sum_server="$md5sum_value"
+		local md5sum_local=($(md5sum "$target" 2>/dev/null))
+		local md5sum_local="${md5sum_local[0]}"
+
+		# target is exists and md5sum_server is empty or md5sum check correct
+		if [ "x$md5sum_local" != "x" ]; then
+			if [ "x$md5sum_server" = "x" ]; then
+				msg ">>> $target exists." 
+				return 0
 			fi
-			if [ "x$download" = "xdone" ]; then
-				gmsg "* rename ${YPPATH_SOURCE}/${fname}"
-				mv ${YPPATH_SOURCE}/${fname}.tmp ${YPPATH_SOURCE}/${fname}
+			if [ "x$md5sum_local" = "x$md5sum_server" ]; then
+				msg ">>> $target exists and md5sum check correctly." 
 				return 0
 			fi
 		fi
+
+		# target is not exists or md5sum check fail 
+		if [ "x$md5sum_local" = "x" ] || [ "x$md5sum_local" != "x$md5sum_server" ]; then
+			rm -f "$target".tmp 2>/dev/null
+			if do_download $uri $fname; then
+				download="done"
+			else
+				# Try ylmfos dist source
+				uri="$YPPATH_DIST_URI/${fname}"
+				do_download $uri $fname && download="done" || download="error"
+			fi
+			if [ "x$download" = "xdone" ]; then
+				# check again
+				md5sum_local=($(md5sum "$target".tmp 2>/dev/null))
+				md5sum_local="${md5sum_local[0]}"
+				if [ "x$md5sum_local" = "x$md5sum_server" ] || [ "x$md5sum_server" = "x" ]; then
+					gmsg ">>> Rename: $target md5sum: $md5sum_local"
+					mv "$target".tmp "$target" && return 0
+				else
+					rmsg ">>> "$target".tmp download successfully but md5sum check failed."
+					return 1
+				fi
+			fi
+		fi
 	esac
-	printf "download failed, quit.\n"
+
 	return 1
 }
-
-# Check and download package, $1 is URL.
-check_and_download() {
-	#local fname=${1##*/}
-	local url="$1"
-	local fname=$(basename $url)
-	check_and_download_raw $1 $fname
-}
-
 
 # Return specifid pbs files in $NEWEST, with full path
 ypkg_getpbsfile() {
@@ -878,12 +909,18 @@ ypkg_begin_download() {
 	mkdir -p $YPPATH_SOURCE
 	err_check "* [Error]: Create dir $YPPATH_SOURCE failed."
 
-	#download all files
+	# Download all files
 	if [ "x${SRC_URI}" != "x" ]; then
+		local count=0
+		#
+		# MD5SUM: $SRC_URI in pbs file has md5sum value one by one.
+		#
+		MD5SUM=($MD5SUM)
 		for url in ${SRC_URI}; do
-			#echo $url
-			check_and_download $url
-			err_check "* [Error]: download $url failed."
+			# url localfile md5sum
+			check_and_download_raw $url $(basename $url) ${MD5SUM[$count]}
+			err_check "* [Error]: Download $url failed."
+			let count=count+1
 		done
 	fi
 
