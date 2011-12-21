@@ -59,7 +59,9 @@ YPPATH_WORLD="$YPPATH_DB/world"
 PACK_SUFFIX="ypk"
 
 #
-XZ="xz"
+CPIO="/bin/cpio"
+#CPIO="/usr/bin/bsdcpio"
+XZ="/usr/bin/xz"
 
 #
 YLMFOS="YLMFOS"
@@ -558,14 +560,14 @@ ypkg_get_packages() {
 	ypkg_packs=`ls $YPPATH_LIB/$1 2>/dev/null`
 }
 
-# Get Newest file in dir $1
-# Return path of the newest on in $newest
+# Get newest file in dir $1
+# Return path of the newest on in $NEWEST
 ypkg_getnewest() {
 	local files file files_ready
-	newest=""
+	NEWEST=""
 	#specify $V$R
 	if [ "x$V$R" != "x" ]; then
-		newest=$(ls $1/${N}_$V$R.pbs 2>/dev/null)
+		NEWEST=$(ls $1/${N}_$V$R.pbs 2>/dev/null)
 		return 0
 	fi
 	files=$(ls $1/*.pbs 2>/dev/null)
@@ -578,12 +580,12 @@ ypkg_getnewest() {
 		esac
 	done
 	for file in $files_ready;do
-		if [ -z $newest ]; then
-			newest=$file
+		if [ -z $NEWEST ]; then
+			NEWEST=$file
 		else
-			#compare 
-			atom_cmp_path $file $newest
-			[ "$?" == "1" ] && newest=$file
+			# Compare 
+			atom_cmp_path $file $NEWEST
+			[ "$?" == "1" ] && NEWEST=$file
 		fi
 	done
 	return 1
@@ -626,62 +628,60 @@ ypkg_getallpbsver() {
 }
 
 #
+# ypkg_searchInstalled $T $N
+#
 ypkg_searchInstalled() {
-	local searchpath=$YPPATH_DB/$2	
-	local findcnt=0
-
-	local files=$(ls $searchpath/*.pbs 2>/dev/null)
-	local file
-	local -a value
-	local t1
-	local t2
-	local tsize
-	local tmpfile
-
-	tmpfile=$(mktemp -p $workdir)
-	status=""
-	for file in $files; do
-		atom_parse_path $file
-		. $file
-		#	blank_funcs desc
-		#for install time
-		desc=${file%*.pbs}.desc
-		. $desc
-		if [ "xINSTALL_TIME" != "x" ]; then
-			INSTALL_TIME=$(date -d "1970-01-01 UTC $INSTALL_TIME seconds" +%F,%T 2>/dev/null)
-		fi
-		echo "$(gmsg Installed:) $(ymsg $V$R)    $INSTALL_TIME"
-		let "findcnt++"
-		status="installed"
-	done
-
-	if [ "$findcnt" == "0" ];then
-		#echo -e "\tInstalled:\t None"
-		echo "$(gmsg "Installed:") None"
-		status="uninstall"
-	fi	
-	rm -rf $tmpfile 2>/dev/null
+	local pkgtype=$1
+	local pkgname=$2
+	INSTALL_STATUS=$(yget2 --show $pkgname |grep Status |head -n1 |awk '{print $2}')
+	
+	case "x$INSTALL_STATUS" in
+	 	x[IUD])
+	   	  	INSTALL_TIME=$(yget2 --show $pkgname |grep Install_date |head -n1 |awk '{print $2" "$3}')
+			INSTALL_VERSION=$(yget2 --show $pkgname |grep Version |head -n1 |awk '{print $2}')
+			ypkg_getpbsfile $pkgtype/$pkgname
+			atom_parse_path $NEWEST
+			new=$V$R
+			old=$INSTALL_VERSION
+			# Compare 2 versions
+			# Return 0 if same.
+			# Return 1 if $1 is grater than $2
+			# Return 2 if $1 is lesser then $2
+	       		atom_vercmp $old $new
+			case $? in
+				1) 
+				   INSTALL_STATUS="downgrade"
+				   gmsg_ "[D] "  ;;
+			        2) 
+				   INSTALL_STATUS="upgrade"
+				   gmsg_ "[U] " ;; 
+				0) 
+				   INSTALL_STATUS="installed"
+				   gmsg_ "[I] "
+			esac 
+			echo "$(wmsg $pkgtype/$pkgname)"
+			echo -e "\t$(gmsg Installed:) $(ymsg $INSTALL_VERSION) $INSTALL_TIME" ;;
+	  	    *) 
+			msg_ "[*] "
+			echo "$(wmsg $pkgtype/$pkgname)"
+	   		echo -e "\t$(gmsg "Installed:") None"
+	  		INSTALL_STATUS="uninstall"
+	esac
 }
+
 
 # Find one packge.
 # $1 is type, $2 is package name, $3 is index
 #
 ypkg_searchOK() {
+	local pkgtype=$1
+	local pkgname=$2
 	local allver
 	local install_result
-	
-	tmpfile=$(mktemp -p $workdir)
-	ypkg_searchInstalled $1 $2  >$tmpfile
-	
-	[ "x$status" == "xinstalled" ] && gmsg_ "[I] " || msg_ "[*] "
-	echo "$(wmsg $2)"
-	
-	cat $tmpfile |while read line; do
-		echo -e "\t$line"
-	done
 
-	# get newest version
-	ypkg_getallpbsver $YPPATH_LIB/$1/$2        #$YPPATH_DB/$2
+	ypkg_searchInstalled $pkgtype $pkgname
+
+	ypkg_getallpbsver $YPPATH_LIB/$pkgtype/$pkgname
 	echo -e "\t$(gmsg "Available:") $allver"
 	echo -e "\t$(gmsg "Homepage:") $HOMEPAGE"
 	echo -e "\t$(gmsg "Description:") $DESCRIPTION"
@@ -690,7 +690,6 @@ ypkg_searchOK() {
 	blank_funcs pbs
 	blank_funcs desc
 	echo 
-	file_is_exist $tmpfile && rm -r $tmpfile
 }
 
 #
@@ -705,35 +704,38 @@ ypkg_search() {
 	workdir="$(mktemp -d)"
 	trap "rm -r $workdir; return 1" INT
 
-	#parae input files
 	atom_parse_type $1
 	iname="*"$N"*.pbs"
+	
 	if [ "x$T" != "x" ]; then
-		results=$(find $YPPATH_LIB $YPPATH_DB -iname "$iname" | grep "/$T/")
+		results=$(find $YPPATH_LIB -iname "$iname" | grep "/$T/")
 	else
 		results=$(find $YPPATH_LIB -iname "$iname")
 	fi
-	#
+	
 	if [ "x$results" = "x" ];then 
 		rmsg "* [Error]: $1 not found."
 		echo 
 		return
 	fi
-	#
+	
 	tempfile=$(mktemp -p $workdir)
+	
 	for pack in $results; do
 		atom_parse_path $pack
 		if [ "x$T" = "x$lastitype" -a "x$N" = "x$lastiname" ]; then
-			#skip.
 			continue
 		fi
+		
 		if grep -q "$T/$N/${N}_$V$R" $tempfile; then
 			continue
 		fi
+		
 		lastitype="$T"
 		lastiname="$N"
 		ypkg_searchOK "$T" "$N" "$pack"
 	done
+
 	[ -d $workdir ] && rm -r $workdir
 }
 
@@ -803,7 +805,7 @@ check_and_download() {
 }
 
 
-# Return specifid pbs files in $newest, with full path
+# Return specifid pbs files in $NEWEST, with full path
 ypkg_getpbsfile() {
 	local results
 	local pack
@@ -845,7 +847,7 @@ ypkg_getpbsfile() {
 ypkg_begin_download() {
 	local url
 
-	#find newest version.
+	# find newest version.
 	atom_parse_path $1
 	ymsg ">> $T/${N}_$V$R begin download..."
 
@@ -893,7 +895,7 @@ ypkg_download() {
 	ypkg_getpbsfile "$1"
 	if [ "$?" == "0" ]; then
 		#found, download it
-		ypkg_begin_download $newest
+		ypkg_begin_download $NEWEST
 		return 0
 	fi
 	rmsg "* $1 not found."
@@ -1153,7 +1155,7 @@ mkpackage() {
 	cd $source_dir
 	
 	find |sort -r |fileinfo > $workdir/${N}_$V$R.list
-	mkdir -p $dbdir
+
 	install=$INSTALL
 	if file_is_exist $YPPATH_SCRIPT/${N}_$V$R.pbs; then
 		pbsfile="$(ls $YPPATH_SCRIPT/${N}_$V$R.pbs)"
@@ -1161,16 +1163,17 @@ mkpackage() {
 		TT=$T
 		. $pbsfile
 		install=$INSTALL
-		cp $pbsfile $dbdir
+		#cp $pbsfile $dbdir
 	fi
 	if [ "x$install" != "x" ] && file_is_exist $YPPATH_SCRIPT/files/$install; then
+		mkdir -p $dbdir
 		cp $YPPATH_SCRIPT/files/$install  $dbdir
 	fi
 	
 	build_date="$(date +%s)"
 	declare -a install_size=($(du $source_dir -sb))
 	install_size=${install_size[0]}
-	file_is_exist $workdir/${N}_$V$R.list &&  cp $workdir/${N}_$V$R.list $dbdir
+	#file_is_exist $workdir/${N}_$V$R.list &&  cp $workdir/${N}_$V$R.list $dbdir
 	
 	#creat pkginfo
 	#
@@ -1207,25 +1210,25 @@ mkpackage() {
 	fi
 	#
 	cd $source_dir
-	cat >$dbdir/${N}_$V$R.desc <<OOO
-NAME="$name"
-DESCRIPTION="$description"
-HOMEPAGE="$HOMEPAGE"
-REPO="$repo"
-ARCH="$arch"
-LICENSE="$license"
-PACKAGER="$packager"
-PRIORITY="$priority"
-SRC_URI="$SRC_URI"
-RDEPEND="$depend"
-BDEPEND="$bdepend"
-RECOMMENDED="$redepend"
-CONFLICT="$conflict"
-BUILD_TIME="$build_date"
-INSTALL_SIZE="$install_size"
-INSTALL="$INSTALL"
-OOO
-	find . |cpio --quiet -o -H newc |$XZ -7 >../$pkgdata
+	#cat >$dbdir/${N}_$V$R.desc <<OOO
+#NAME="$name"
+#DESCRIPTION="$description"
+#HOMEPAGE="$HOMEPAGE"
+#REPO="$repo"
+#ARCH="$arch"
+#LICENSE="$license"
+#PACKAGER="$packager"
+#PRIORITY="$priority"
+#SRC_URI="$SRC_URI"
+#RDEPEND="$depend"
+#BDEPEND="$bdepend"
+#RECOMMENDED="$redepend"
+#CONFLICT="$conflict"
+#BUILD_TIME="$build_date"
+#INSTALL_SIZE="$install_size"
+#INSTALL="$INSTALL"
+#OOO
+	find . |$CPIO --quiet -o -H newc |$XZ -7 >../$pkgdata
 	declare -a size=($(du ../$pkgdata -sb))
 	size=${size[0]}
 	cd ..
@@ -1348,6 +1351,8 @@ check_perm_dirs () {
 			chmod 755       $dir/${i}
 		fi
 	done
+
+	chmod +r /usr/share/applications/*.desktop 2>/dev/null
 }
 
 #
@@ -1428,38 +1433,45 @@ ypkg_rm_packgeinfo() {
 	ypkg_rm_dir_safe $YPPATH_DB/$N
 }
 
+#
 # Check if already insalled. $T/"$N"$V 
+#
+# N -- new install
+# U -- upgrade
+# D -- downgrade
+# E -- same version
 ypkg_checkinst() {
-	local statu tmp
-	# N -- new install
-	# U -- upgrade
-	# D -- downgrade
-	# E -- same version
-	if ! ls $YPKG_ROOT/$YPPATH_DB/$N/${N}_*.list >/dev/null 2>&1;then
+	local pkgtype=$T
+	local pkgname=$N
+	local pkgversion=$V$R
+	
+	ypkg_searchInstalled $pkgtype $pkgname >/dev/null
+	
+	if [ "x$INSTALL_STATUS" = "xuninstall" ]; then
 		echo "$V$R N"
 		return 0
 	fi	
-	new=$V$R
-	if [ $(ls -1 $YPKG_ROOT/$YPPATH_DB/$N/${N}_*.list |wc -l) -eq 1 ];then
-		atom_parse_path "$(ls $YPKG_ROOT/$YPPATH_DB/$N/${N}_*.list)"
-		old=$V$R
-		#compare 2 versions, such 2.6.9 and 2.6.10
-		#return 0 if same. 
-		#return 1 if $1 is grater than $2 
-		#return 2 if $1 is lesser then $2
-		atom_vercmp $old $new 
-		case $? in
-			1)   
-			echo $old "D" 
-			return 0   ;;
-			2)
-			echo $old "U" 
-			return 0   ;;
-			0) 
-			echo "$old E"
-			return 0  ;;
-		esac
-	fi
+	
+	new=$pkgversion
+	old=$INSTALL_VERSION
+
+	# Compare 2 versions
+	# Return 0 if same. 
+	# Return 1 if $1 is grater than $2 
+	# Return 2 if $1 is lesser then $2
+
+	atom_vercmp $old $new 
+	case $? in
+		1) echo $old "D" 
+		   return 0   ;;
+	 	2)
+		   echo $old "U" 
+		   return 0   ;;
+	 	0) 
+	   	   echo "$old E"
+	   	   return 0  ;;
+	esac
+	
 	return 0
 }
 
@@ -2088,7 +2100,7 @@ dosrc() {
 dosupported() {
 	mmsg ">>> Copy supported file: $1"
 	mkdir -p "$destdir"/usr/src/"${N}_$V$R"
-	install -m755 "$filesfir/$1" "$destdir"/usr/src/"${N}_$V$R"
+	install -m755 "$filesdir/$1" "$destdir"/usr/src/"${N}_$V$R"
 }
 
 # Cp ykms.conf to specified dir
@@ -2451,7 +2463,7 @@ install_pack () {
 		fi
 	fi
 	tar xf $pack $pkgdata
-	cd "$YPKG_ROOT" && $XZ -d -c $workdir/$pkgdata |cpio -idum --quiet
+	cd "$YPKG_ROOT" && $XZ -d -c $workdir/$pkgdata |$CPIO -idum --quiet
 	err_check "* [Error]: ${N}_$V$R copy binary package to / failed"
 	
 	#check /dir permissions
@@ -2611,7 +2623,7 @@ ypkg_begininstall() {
 				err_check "* [Error]: $T/${ORIG_N}_$V$R ${N} make binary package failed"
 			fi
 			YARCH=$(uname -m)
-			INSTALL=""
+			blank_funcs
 		done
 	fi
 
@@ -2622,8 +2634,8 @@ ypkg_begininstall() {
 	for pack in $packs; do
 		case "x$AUTO_INSTALL" in
 		xyes) mmsg ">>> Install: $pack"
-		      install_pack $pack ;;
-		      #ypkg2 -i $pack ;;
+		      #install_pack $pack ;;
+		      ypkg2 -I -f $pack ;;
 		   *) gmsg ">>> $pack"
 		esac
 	done
@@ -2646,7 +2658,7 @@ ypkg_install() {
 	irver=$R
 	ypkg_getpbsfile $1
 	if [ $? == 0 ]; then
-		atom_parse_path $newest
+		atom_parse_path $NEWEST
 		declare -a tmp=($(ypkg_checkinst))
 		pre_version=${tmp[0]}
 		stat=${tmp[1]}
@@ -2667,11 +2679,11 @@ ypkg_install() {
 		#
 		[ "x$PRETEND" = "xyes" ] && return 0
 		#
-		ypkg_begin_download $newest
+		ypkg_begin_download $NEWEST
 		ret=$?
 		if [ $? == 0 ]; then
 			#download ok, install it.
-			ypkg_begininstall $newest
+			ypkg_begininstall $NEWEST
 		else
 			return $ret
 		fi
@@ -2712,14 +2724,14 @@ ypkg_showdep() {
 	ypkg_getpbsfile $1
 	if [ $? == 0 ]; then
 		#check if installed.
-		atom_parse_path $newest
+		atom_parse_path $NEWEST
 		itype=$T
 		iname="$N"
 		iver=$V
 		irver=$R
 		#ypkg_checkinst && echo ""$N"_$V$R already installed." && return 0
 		#found, include and print deps
-		ypkg_begin_showdep $newest
+		ypkg_begin_showdep $NEWEST
 	else
 		rmsg "* [Error]: $1 not found!"
 		return 1
@@ -2735,12 +2747,12 @@ ypkg_shownotes() {
 	atom_parse_type $1
 	ypkg_getpbsfile $1
 	if [ $? == 0 ]; then
-		atom_parse_path $newest
+		atom_parse_path $NEWEST
 		itype=$T
 		iname="$N"
 		iver=$V
 		irver=$R
-		. "${newest}"
+		. "$NEWEST"
 		echo -e "$NOTES"
 	else
 		rmsg "* [Error]: $1 not found!"
@@ -3225,8 +3237,8 @@ ypkg_showpbs() {
         atom_parse_type $1
         ypkg_getpbsfile $1
        	if [ $? == 0 ]; then
-		atom_parse_path $newest
-		echo "$newest"
+		atom_parse_path $NEWEST
+		echo "$NEWEST"
 		return 0
 	else
 		#rmsg "* [Error]: $1 not found."
@@ -3288,7 +3300,7 @@ ypkg_unpack_binary() {
 			mkdir -p "$YLMFOS"
 			if tar xjpf "$pkginfo" -C "$YLMFOS"; then  
 				msg ">> $pkgdata"
-				"$XZ" -d -c "$pkgdata" |cpio -idum --quiet
+				"$XZ" -d -c "$pkgdata" |$CPIO -idum --quiet
 			fi
 		fi
 	fi
