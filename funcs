@@ -68,9 +68,9 @@ YLMFOS="YLMFOS"
 
 #
 DOWNLOAD_TOOL="wget"
-WGET_OPINION="--tries=3 --retry-connrefused --wait=2"
+WGET_OPTIONS="--tries=3 --retry-connrefused --wait=2"
 DOWNLOAD_TOOL="curl"
-CURL_OPINION="-L"
+CURL_OPTIONS="-L"
 
 #
 WORLD_LOCKFILE="/tmp/.ypkg_lock"
@@ -85,6 +85,7 @@ filelist="filelist"
 #
 blank_funcs () {
 	DESCRIPTION=""
+	COMMENTS=""
 	HOMEPAGE=""
 	REPO=""
 	YARCH="$(uname -m)"
@@ -92,6 +93,7 @@ blank_funcs () {
 	PRIORITY=""
 	PACKAGER=""
 	SRC_URI=""
+	MD5SUM=""
 	RDEPEND=""
 	BDEPEND=""
 	RECOMMENDED=""
@@ -100,7 +102,7 @@ blank_funcs () {
 	OPIONAL=""
 	PROVIDE=""
 	INSTALL=""
-	OPINION=""
+	OPTIONS=""
 	
 	INAME=""
 	CATEGORY=""
@@ -252,35 +254,68 @@ err_check() {
 
 
 #
+#
 atom_parse() {
-	local ATOM
-	local RR
+	T=""
+	N=""
+	V=""
+	R=""
+	local atom
+	local string="$1"
 
-	case x${1##*.} in
+	if echo "$string" |grep -q "/"; then
+		# /var/ybs/pbslib/net-ftp/lftp/lftp_4.3.3.pbs
+		if echo "$string" |grep -q "$YPPATH_LIB"; then
+			atom=${string##*/}
+			T=${string%/*}
+			T=${T%/*}
+			T=${T##*/}
+	
+			# filesdir is with *.pbs, contains patchs and user-defined files 
+			filesdir="${string%/*}"/files/
+		
+			string="$atom"
+		fi
+	
+		# net-ftp/lftp_4.3.3.pbs
+		if echo "$string" |grep ^[a-z] |grep -q "/"; then
+			T=${string%%/*}
+			atom=${string##$T/}
+			string=$atom
+		fi
+		[ "x$atom" = "x" ] && string=${string##*/}
+	fi
+
+	case x${string##*.} in
 	xpbs)           
-		ATOM="${1%.pbs}" ;;
+		atom="${string%.pbs}" ;;
 	x$PACK_SUFFIX)     
 		if [ "x$YARCH" != "x" ]; then
-			ATOM="${1%-$YARCH.$PACK_SUFFIX}"
+			atom="${string%-$YARCH.$PACK_SUFFIX}"
 		else
-			ATOM="${1%.$PACK_SUFFIX}"
+			atom="${string%.$PACK_SUFFIX}"
 		fi		     ;;
 	xlist)	
-		ATOM="${1%.list}" ;;
+		atom="${string%.list}" ;;
 	xdesc)	
-		ATOM="${1%.desc}" ;;
+		atom="${string%.desc}" ;;
 	*)      
-		ATOM="$1"
+		atom="$string"
 	esac
+
+	# Only digit
+	if [ "x$(echo $atom |tr -d '[:digit:]' |tr -d '.' |tr -d '-')" = "x" ]; then
+		atom=foo_$atom
+	fi
 
 	[ "x$ARCH" = "x" ] && ARCH="$(uname -m)"
 
-	ATOM=${ATOM%-$ARCH}
-	ATOM=${ATOM%-any}
+	atom=${atom%-$ARCH}
+	atom=${atom%-any}
 
-	N=${ATOM%%_[0-9]*}
+	N=${atom%%_[0-9]*}
 	N=${N%%_}
-	VR=${ATOM#$N}
+	VR=${atom#$N}
 	VR=${VR#_}
 	#V=${VR%%-[a-zA-z]*}
 	V=${VR%%-*}
@@ -288,54 +323,40 @@ atom_parse() {
 }
 
 #
-# Return type and name. 
-atom_parse_type() {
-	if echo $1 |grep "/" >/dev/null 2>/dev/null; then
-		T=${1%%/*}
-	else
-		T=
-	fi
-	NV=${1##$T/}
-	atom_parse $NV
-}
-
+# Compare 2 atoms
+# 1、linux_2.6.9.pbs and linux_2.6.10.pbs
+# 2、2.6.9 2.6.10
+# 3、/var/ybs/pbslib/app-editors/leafpad/leafpad_0.8.17.pbs /var/ybs/pbslib/app-editors/leafpad/leafpad_0.8.18.pbs
+# 4、1.2.3 3.2.1
+# the former > the latter, return 1
+# the former < the latter, return 2
+# the former = the latter, return 0
 #
-#
-atom_parse_path() {
-	local atom
+atom_cmp() {
+	local r1 r2
+	local v1 v2 
+	local n1 n2
 
-	atom=${1##*/}
-	T=${1%/*}
-	T=${T%/*}
-	T=${T##*/}
+	atom_parse $1
+	n1="$N"
+	v1=$V$R
 
-	#files dir is with *.pbs, contains patchs and user-defined files 
-	filesdir="${1%/*}"/files/
+	atom_parse $2
+	n2="$N"
+	v2=$V$R
+
+	# Compare version
+	# alpha < beta < rc 
 	
-	atom_parse "$atom"
-}
-
-#
-# Compare 2 versions
-# alpha < beta < rc 
-atom_vercmp() {
-	if [ "x$2" = "x" ];then
-		msg "* atom_vercmp: you must specify at least two package versions."
-		msg "* the former > the latter, return 1"
-		msg "* the former < the latter, return 2"
-		msg "* the former = the latter, return 0" 
-	        msg "* i.e. 'atom_vercmp 2.6.9 2.6.10'"
-		 return 1
-	fi
-	v1=$1
-	v2=$2
 	if [ "x$v1" = "x$v2" ];then
 		return 0
 	fi
-	a=($(echo $v1 |awk -F- '{print $1" "$2" "$3" "$4" "$6" "$7}'))
-	b=($(echo $v2 |awk -F- '{print $1" "$2" "$3" "$4" "$6" "$7}'))
+
+	local a=($(echo $v1 |awk -F- '{print $1" "$2" "$3" "$4" "$6" "$7}'))
+	local b=($(echo $v2 |awk -F- '{print $1" "$2" "$3" "$4" "$6" "$7}'))
 	maxnum=${#a[@]}
 	[ "1${#a[@]}" -lt "1${#b[@]}" ] && maxnum=${#b[@]}
+	
 	for ((i=0; i<maxnum; i++)); do
 		a=${a[i]} 
 		b=${b[i]}
@@ -343,20 +364,22 @@ atom_vercmp() {
 		aoa=$(echo $a |tr -d '[:digit:]' |tr -d '[:punct:]')
 		boa=$(echo $b |tr -d '[:digit:]' |tr -d '[:punct:]')
 		case $aoa$boa in
+			
 			# 1.2.3 3.2.1
 			"")	
-				[ "x$a" = "x$b" ] && continue
+			[ "x$a" = "x$b" ] && continue
 				v1=$a.
 				v2=$b.
-				while true; do
-					a=${v1%%.*}
-					b=${v2%%.*}
-					[ "$a"0 -gt "$b"0 ] && return 1
-					[ "$a"0 -lt "$b"0 ] && return 2
-					v1="${v1#*.}"
-				        v2="${v2#*.}"
-				done
-				continue ;;
+			while true; do
+				a=${v1%%.*}
+				b=${v2%%.*}
+				[ "$a"0 -gt "$b"0 ] && return 1
+				[ "$a"0 -lt "$b"0 ] && return 2
+				v1="${v1#*.}"
+				v2="${v2#*.}"
+			done
+			continue ;;
+			
 			# "" rc1 
 			# "" beta1
 			# "" alpha1
@@ -364,16 +387,17 @@ atom_vercmp() {
 				[ "x$aoa" = "x" ] && return 1
 				[ "x$boa" = "x" ] && return 2
 				continue ;;
+			
 			# "" ylmf1 
 			ylmf|YLMF)
 				[ "x$b" != "x" ]  && return 2
 				[ "x$a" != "x" ]  && return 1
 				[ "x$aoa" = "x" ] && return 2
 				[ "x$boa" = "x" ] && return 1
-
 				continue 	;;
+
 			# rc1  rc2 
-			rcrc|RCRC)
+				rcrc|RCRC)
 				a=${a##rc}
 				a=${a##RC}
 				b=${b##rc}
@@ -381,8 +405,9 @@ atom_vercmp() {
 				[ "1$a" -gt "1$b" ] && return 1
 				[ "1$a" -lt "1$b" ] && return 2
 				continue 	;;
+				
 			# beta1 beta2 
-			betabeta|BETABETA)
+				betabeta|BETABETA)
 				a=${a##beta}
 				a=${a##BETA}
 				b=${b##beta}
@@ -390,8 +415,9 @@ atom_vercmp() {
 				[ "1$a" -gt "1$b" ] && return 1
 				[ "1$a" -lt "1$b" ] && return 2
 				continue 	;;
+			
 			# alpha1  alpha2 
-			alphaalpha|ALPHAALPHA)
+				alphaalpha|ALPHAALPHA)
 				a=${a##alpha}
 				a=${a##ALPHA}
 				b=${b##alpha}
@@ -399,8 +425,9 @@ atom_vercmp() {
 				[ "1$a" -gt "1$b" ] && return 1
 				[ "1$a" -lt "1$b" ] && return 2
 				continue 	;;
+			
 			# ylmf1 ylmf2
-			ylmfylmf|YLMFYLMF)
+				ylmfylmf|YLMFYLMF)
 				a=${a##ylmf}
 				a=${a##YLMF}
 				b=${b##ylmf}
@@ -408,56 +435,62 @@ atom_vercmp() {
 				[ "1$a" -gt "1$b" ] && return 1
 				[ "1$a" -lt "1$b" ] && return 2
 				continue 	;;
+			
 			# rc1 beta1
 			# beta1 rc1
-			rcbeta|betarc)
+				rcbeta|betarc)
 				a=${a##rc*}
 				[ "x$a" = "x" ] && return 1
 				a=${a##beta*}
 				[ "x$a" = "x" ] && return 2
 				continue	;;
+			
 			# rc1 alpha1
 			# alpha1 rc1
-			rcalpha|alpharc)
+				rcalpha|alpharc)
 				a=${a##rc*}
 				[ "x$a" = "x" ] && return 1
 				a=${a##alpha*}
 				[ "x$a" = "x" ] && return 2
 				continue	;;
+			
 			# beta1 alpha1
 			# alpha1 beta1
-			betaalpha|alphabeta)
+				betaalpha|alphabeta)
 				a=${a##beta*}
 				[ "x$a" = "x" ] && return 1
 				a=${a##alpha*}
 				[ "x$a" = "x" ] && return 2
 				continue  	;;
+			
 			# rc1 ylmf1
 			# ylmf1 rc1
-			rcylmf|ylmfrc)
+				rcylmf|ylmfrc)
 				a=${a##rc*}
 				[ "x$a" = "x" ] && return 2
 				a=${a##ylmf*}
 				[ "x$a" = "x" ] && return 1
 				continue	;;
+			
 			# beta1 ylmf1
 			# ylmf1 beta1
-			betaylmf|ylmfbeta)
+				betaylmf|ylmfbeta)
 				a=${a##beta*}
 				[ "x$a" = "x" ] && return 2
 				a=${a##ylmf*}
 				[ "x$a" = "x" ] && return 1
 				continue	;;
+			
 			# alpha ylmf1
 			# ylmf1 alpha1
-			alphaylmf|ylmfalpha)
+				alphaylmf|ylmfalpha)
 				a=${a##alpha*}
 				[ "x$a" = "x" ] && return 2
 				a=${a##ylmf*}
 				[ "x$a" = "x" ] && return 1
 				continue	;;
 			#
-			*)
+				*)
 				[ "x$a" = "x$b" ] && continue
 				v1=$a.
 				v2=$b.
@@ -469,72 +502,12 @@ atom_vercmp() {
 					[ "$a"0 -gt "$b"0 ] && return 1
 					[ "$a"0 -lt "$b"0 ] && return 2
 					v1="${v1#*.}"
-				        v2="${v2#*.}"
+					v2="${v2#*.}"
 				done
-				continue ;;
-			esac
-		done
+					continue ;;
+				esac
+	done
 	return 0
-}
-
-# Compare 2 atoms, such as linux_2.6.9.pbs and linux_2.6.10.pbs
-atom_cmp() {
-	if [ "x$2" = "x" ];then
-		msg "* atom_cmp: you must specify at least two packages atoms."
-		msg "* the former > the latter, return 1"
-		msg "* the former < the latter, return 2"
-		msg "* the former = the latter, return 0" 
-	        msg "* i.e. 'atom_cmp linux_2.6.9 linux_2.6.10'"
-		return 1
-	fi
-	local R1 R2
-	local V1 V2 
-	local N1 N2
-
-	atom_parse $1
-	R1=$R
-	V1=$V
-	N1="$N"
-
-	atom_parse $2
-	N2="$N"
-	V2=$V
-	R2=$R
-
-	#compare version
-	return $(atom_vercmp $V1$R1 $V2$R2)
-}
-
-# Compare 2 atoms path
-atom_cmp_path() {
-	if [ "x$2" = "x" ];then
-	        msg "* atom_cmp_path: you must specify at least two package atom paths"
-	        msg "* the former > the latter, return 1"
-	        msg "* the former < the latter, return 2"
-	        msg "* the former = the latter, return 0"
-	        msg "* i.e."
-		msg "atom_cmp_path /var/ybs/pbslib/sys-apps/linux-kernel/linux-kernel_2.6.38.3-ylmf1.pbs /var/ybs/pbslib/sys-apps/linux-kernel/linux-kernel_2.6.38.3.pbs"
-	        return 1
-	fi
-	local R1
-	local V1
-	local N1
-
-	# echo "Begin Compare: $1 $2"
-	atom_parse_path $1
-	R1=$R
-	V1=$V
-	N1="$N"
-	#echo "N1="$N"1, V1=$V1, R1=$R1"
-
-	atom_parse_path $2
-	R2=$R
-	V2=$V
-	N2=$N
-	#echo "N2="$N", V2=$V, R2=$R"
-
-	# Compare version
-	return $(atom_vercmp $V1$R1 $V2$R2)
 }
 
 #
@@ -554,48 +527,22 @@ csv_split() {
 }
 
 #
-# Sarch packages
+# Search packages
 #
 
+#
 # List all pack types
 ypkg_get_types() {
 	ypkg_types=`ls $YPPATH_LIB 2>/dev/null`
 }
 
+#
+#
 ypkg_get_packages() {
 	ypkg_packs=`ls $YPPATH_LIB/$1 2>/dev/null`
 }
 
-# Get newest file in dir $1
-# Return path of the newest on in $NEWEST
-ypkg_getnewest() {
-	local files file files_ready
-	NEWEST=""
-	#specify $V$R
-	if [ "x$V$R" != "x" ]; then
-		NEWEST=$(ls $1/${N}_$V$R.pbs 2>/dev/null)
-		return 0
-	fi
-	files=$(ls $1/*.pbs 2>/dev/null)
-	for file in $files;do
-		blank_funcs pbs
-		. $file
-		case $REPO in
-		 [Tt]esting)  [ "x$ACCEPT_REPO" = "xtesting" ] && files_ready+="$file " || continue  ;;
-		    	  *)  files_ready+="$file "
-		esac
-	done
-	for file in $files_ready;do
-		if [ -z $NEWEST ]; then
-			NEWEST=$file
-		else
-			# Compare 
-			atom_cmp_path $file $NEWEST
-			[ "$?" == "1" ] && NEWEST=$file
-		fi
-	done
-	return 1
-}
+
 
 # Get all pbs versions, ret to $allver
 # $1 is path 
@@ -609,7 +556,7 @@ ypkg_getallpbsver() {
 		blank_funcs pbs
 		blank_funcs desc
 		. $file
-		atom_parse_path $file
+		atom_parse $file
 		case $REPO in 
 			[Tt]esting)  repo="t" ;;
 			[Ss]table)   repo="s" ;;
@@ -646,14 +593,14 @@ ypkg_searchInstalled() {
 	   	  	INSTALL_TIME=$(yget2 --show $pkgname |grep Install_date |head -n1 |awk '{print $2" "$3}')
 			INSTALL_VERSION=$(yget2 --show $pkgname |grep Version |head -n1 |awk '{print $2}')
 			ypkg_getpbsfile $pkgtype/$pkgname
-			atom_parse_path $NEWEST
+			atom_parse $NEWEST
 			new=$V$R
 			old=$INSTALL_VERSION
 			# Compare 2 versions
 			# Return 0 if same.
 			# Return 1 if $1 is grater than $2
 			# Return 2 if $1 is lesser then $2
-	       		atom_vercmp $old $new
+	       		atom_cmp $old $new
 			case $? in
 				1) 
 				   INSTALL_STATUS="downgrade"
@@ -699,6 +646,7 @@ ypkg_searchOK() {
 }
 
 #
+#
 ypkg_search() {
 	local results
 	local pack
@@ -710,10 +658,12 @@ ypkg_search() {
 	workdir="$(mktemp -d)"
 	trap "rm -r $workdir; return 1" INT
 
-	atom_parse_type $1
-	iname="*"$N"*.pbs"
+	atom_parse $1
 	
+	iname="*$N*.pbs"
+
 	if [ "x$T" != "x" ]; then
+		iname="*${N}_*.pbs"
 		results=$(find $YPPATH_LIB -iname "$iname" | grep "/$T/")
 	else
 		results=$(find $YPPATH_LIB -iname "$iname")
@@ -728,7 +678,7 @@ ypkg_search() {
 	tempfile=$(mktemp -p $workdir)
 	
 	for pack in $results; do
-		atom_parse_path $pack
+		atom_parse $pack
 		if [ "x$T" = "x$lastitype" -a "x$N" = "x$lastiname" ]; then
 			continue
 		fi
@@ -752,8 +702,8 @@ do_download () {
 	local uri="$1"
 	local fname="$2"
 	local target="$YPPATH_SOURCE/$fname.tmp"
-	local wget="wget $WGET_OPINION"
-	local curl="curl $CURL_OPINION"
+	local wget="wget $WGET_OPTIONS"
+	local curl="curl $CURL_OPTIONS"
 
 	msg ">>> Downloading: ${uri}"
 	case $DOWNLOAD_TOOL in
@@ -836,42 +786,82 @@ check_and_download_raw() {
 	return 1
 }
 
-# Return specifid pbs files in $NEWEST, with full path
+#
+# $1 - strings
+# return specifid pbs files in $NEWEST, with full path
+#
 ypkg_getpbsfile() {
-	local results
+	NEWEST=""	
+	local dir
 	local pack
 	local count=0
-	local iname
 	local find_dir
-	atom_parse_type $1
-	find_dir=$2
-	case $find_dir in 
-		DB)	find_dir=$YPPATH_DB	;;
-		*)	find_dir=$YPPATH_LIB	
-	esac
-	iname="$N"
+	local files 
+	local file 
+	local files_ready
+	      
+	atom_parse "$1"
+	find_dir=$YPPATH_LIB	
+
 	if [ "x$N" == "x" ]; then
 		echo "No package specified."
 		return 1
 	fi
+
 	if [ "x$T" != "x" ]; then
-		results=$(find $find_dir -maxdepth 2 -type d -iname "$iname" | grep "/$T/")
+		dir=$(find $find_dir -maxdepth 2 -type d -iname "$N" | grep "/$T/")
 	else
-		results=$(find $find_dir -maxdepth 2 -type d -iname "$iname")
+		dir=$(find $find_dir -maxdepth 2 -type d -iname "$N")
 	fi
-	for pack in $results; do
+
+	for pack in $dir; do
 		let "count++"
 	done
-	if [ "$count" == "1" ]; then
-		ypkg_getnewest $results
-		return 0
-	fi
+
 	if [ "$count"0 -gt 10 ]; then
-		#more results
 		rmsg "Too more results: "
-		echo $results
+		echo $dir
 		return 1
 	fi
+
+	if [ "$count" == "1" ]; then
+		#
+		# Get newest file in $dir:
+		# e.g. /var/ybs/pbslib/app-editors/leafpad
+		# Return path of the newest on in $NEWEST
+		#	
+		
+		# Specify $V$R
+		if [ "x$V$R" != "x" ]; then
+			NEWEST=$(ls "$dir"/${N}_$V$R.pbs 2>/dev/null)
+			[ "x$NEWEST" != "x" ] && return 0
+		fi
+
+		files=$(ls "$dir"/*.pbs 2>/dev/null)
+			
+		for file in $files;do
+			blank_funcs pbs
+			. $file
+			case $REPO in
+				[Tt]esting)  
+			[ "x$ACCEPT_REPO" = "xtesting" ] && files_ready+="$file " || continue  ;;
+			           *)  
+			files_ready+="$file "
+			esac
+	        done
+
+		files_ready=($files_ready)
+		NEWEST=${files_ready[0]}	
+
+		for file in ${files_ready[@]}; do
+			atom_cmp $file $NEWEST
+			if [ "$?" == "1" ]; then
+				NEWEST=$file
+			fi
+		done
+	fi
+
+	[ "x$NEWEST" = "x" ] && return 1 || return 0
 }
 
 #
@@ -879,7 +869,7 @@ ypkg_begin_download() {
 	local url
 
 	# find newest version.
-	atom_parse_path $1
+	atom_parse $1
 	ymsg ">> $T/${N}_$V$R begin download..."
 
 	#clear all routines by include template file
@@ -928,14 +918,16 @@ ypkg_begin_download() {
 }
 
 #
+#
 ypkg_download() {
-	ypkg_getpbsfile "$1"
+	local string="$1"
+	ypkg_getpbsfile "$string"
 	if [ "$?" == "0" ]; then
-		#found, download it
+		# found, download it
 		ypkg_begin_download $NEWEST
 		return 0
 	fi
-	rmsg "* $1 not found."
+	rmsg "* $string not found."
 	return 1
 }
 
@@ -951,13 +943,14 @@ ypkg_strip_i18n() {
 		name=${i##*/}
 		str_isIn "$YP_I18N" $name 
 		if [ "$?" == "1" ]; then
-			#not in YP_I18N, remove.
-			#msg ">>> strip i18n $name.."
+			# not in YP_I18N, remove.
+			# msg ">>> strip i18n $name.."
 			rm -rf $ipath/$name
 		fi
 	done
 }
 
+#
 # strip unnessesary i18n in man path.
 ypkg_strip_mani18n() {
 	local ipath="$1/usr/share/man"
@@ -967,7 +960,7 @@ ypkg_strip_mani18n() {
 	for i in $i18ns; do
 		name=${i##*/}
 
-		#skip man1 -- man9
+		# skip man1 -- man9
 		str_isIn "$name" "man"
 		if [ "$?" == "1" ]; then
 			continue
@@ -975,39 +968,40 @@ ypkg_strip_mani18n() {
 
 		str_isIn "$YP_I18N" $name 
 		if [ "$?" == "1" ]; then
-			#not in YP_I18N, remove.
-			#msg ">>> strip man-i18n $name.."
+			# not in YP_I18N, remove.
+			# msg ">>> strip man-i18n $name.."
 			rm -rf $ipath/$name
 		fi
 	done
 }
 
-
+#
 # Upx for compressing eXecutables files
 ypkg_upx_bin () {
-	find $1/{,usr/}{bin,sbin} -type f -executable 2>/dev/null |while read file; do
+	local dir="$1"
+	find "$dir"/{,usr/}{bin,sbin} -type f -executable 2>/dev/null |while read file; do
 		if ! upx -9 $file >/dev/null 2>&1; then
 			[ -f $file.upx ] && rm -rf $file.upx
 		fi
 	done
 }
 
-
+#
 # Strip binary in directory $1
 ypkg_strip_bin() {
-	#msg ">>> strip debug info.."
-	#find $1/{,usr/}{bin,sbin} -type f -exec strip --strip-all '{}' ';' 2>/dev/null
-	#find $1/{,usr/}{lib,local/lib} -type f -exec strip --strip-debug '{}' ';' 2>/dev/null
-	find $1 |xargs file |grep "executable" |grep ELF |cut -f 1 -d : |xargs strip --strip-unneeded 2> /dev/null
-	find $1 |xargs file |grep "shared object" |grep ELF |cut -f 1 -d : |xargs strip --strip-unneeded 2> /dev/null
+	local dir="$1"
+	#find "$dir"/{,usr/}{bin,sbin} -type f -exec strip --strip-all '{}' ';' 2>/dev/null
+	#find "$dir"/{,usr/}{lib,local/lib} -type f -exec strip --strip-debug '{}' ';' 2>/dev/null
+	find "$dir" |xargs file |grep "executable" |grep ELF |cut -f 1 -d : |xargs strip --strip-unneeded 2> /dev/null
+	find "$dir" |xargs file |grep "shared object" |grep ELF |cut -f 1 -d : |xargs strip --strip-unneeded 2> /dev/null
 }
 
-
+#
 # Compress man doc and info 
 ypkg_gzip_extra() {
-	#msg ">>> compress man info"
-	rm $1/usr/share/info/dir 2>/dev/null
-	find $1/usr/{,share/}{man,doc,info} -type f -exec gzip -9 '{}' ';' 2>/dev/null
+	local dir="$1"
+	rm "$dir"/usr/share/info/dir 2>/dev/null
+	find "$dir"/usr/{,share/}{man,doc,info} -type f -exec gzip -9 '{}' ';' 2>/dev/null
 }
 
 # System Xorg Desktop Utilities Network Games Graphics Video             
@@ -1184,11 +1178,10 @@ mkpackage() {
 	local pbsfile
 	local atom
 	local source_dir="$1"  
-	atom_parse_path $source_dir
+	atom_parse $source_dir
 	local dbdir="${YPPATH_DB#/}/$N"
 	
-	#creat pkgdate
-	#
+	# Creat pkgdate
 	cd $source_dir
 	
 	find |sort -r |fileinfo > $workdir/${N}_$V$R.list
@@ -1196,7 +1189,7 @@ mkpackage() {
 	install=$INSTALL
 	if file_is_exist $YPPATH_SCRIPT/${N}_$V$R.pbs; then
 		pbsfile="$(ls $YPPATH_SCRIPT/${N}_$V$R.pbs)"
-		atom_parse_path $pbsfile
+		atom_parse $pbsfile
 		TT=$T
 		. $pbsfile
 		install=$INSTALL
@@ -1409,12 +1402,12 @@ ypkg_mkpackage() {
 		ypkg_strip_mani18n $destdir
 	fi
 	# Strip bin
-	if ! str_isIn "$OPINION" "nostrip"; then
+	if ! str_isIn "$OPTIONS" "nostrip"; then
 		ypkg_strip_bin $destdir
 	fi
 
 	# Upx executables files
-	if str_isIn "$OPINION" "upx"; then
+	if str_isIn "$OPTIONS" "upx"; then
 		ypkg_upx_bin $destdir
 	fi
 
@@ -1422,7 +1415,7 @@ ypkg_mkpackage() {
 	#spacks+="$(split_i18n $destdir) "
 
 	# Split dev
-	if ! str_isIn "$OPINION" "nodev"; then
+	if ! str_isIn "$OPTIONS" "nodev"; then
 		spacks+="$(split_dev $destdir) "
 	fi
 
@@ -1497,7 +1490,7 @@ ypkg_checkinst() {
 	# Return 1 if $1 is grater than $2 
 	# Return 2 if $1 is lesser then $2
 
-	atom_vercmp $old $new 
+	atom_cmp $old $new 
 	case $? in
 		1) echo $old "D" 
 		   return 0   ;;
@@ -2465,7 +2458,7 @@ install_pack () {
 	#current_version
 	c_version="$V$R"
 	pre_install_listfile=$(ypkg_getlistfile all |tr ' ' '\n' |grep -v "${N}_$V$R".list)
-	atom_parse_path $pre_install_listfile
+	atom_parse $pre_install_listfile
 	#pre_version
 	if [ "x$V$R" != "x" ]; then
 		p_version="$V$R"	
@@ -2564,9 +2557,9 @@ install_pack () {
 	. $YPPATH_DB/$c_name/${c_name}_$c_version.pbs 2>/dev/null
 	if [ "x$CONFLICT" != "x" ]; then
 		for i in $CONFLICT; do
-			atom_parse_type $i
+			atom_parse $i
 			if is_installed $N ; then
-				atom_parse_path "$(ypkg_getlistfile)"
+				atom_parse "$(ypkg_getlistfile)"
 				msg "Remove conflicting packages: ${N} $V$R"
 				ypkg_conflict_remove "${N}" "$V$R" "${c_name}" "$c_version"
 			fi
@@ -2576,7 +2569,46 @@ install_pack () {
 }
 
 #
-ypkg_begininstall() {
+
+#
+# Install package
+# $1 - as follows:
+# pkgname - lftp
+# pkgtype/pkgname -net-ftp/lftp
+# pbsfile - lftp_4.3.3.pbs 
+#
+ypkg_install() {
+	local ret
+	local string="$1"
+	local break="$2"
+
+	ypkg_getpbsfile "$string" || return 1
+
+	atom_parse $NEWEST
+	declare -a tmp=($(ypkg_checkinst))
+	pre_version=${tmp[0]}
+	stat=${tmp[1]}
+
+	[ "x$FORCE_INSTALL" != "xyes" ] && gmsg_ "[$stat]" || gmsg_ "["$stat"F]"
+
+	case $stat in
+        	E)	
+			msg " $T/${N}_$V$R "	
+			[ "x$FORCE_INSTALL" != "xyes" ] && return 0    		;;
+		N)      msg " $T/${N}_$V$R "
+			pre_version=  ;;
+		U)      msg " $T/${N}_$pre_version ----> $T/${N}_$V$R " ;;
+		D)      msg " $T/${N}_$pre_version ----> $T/${N}_$V$R " ;;
+	esac
+		
+	[ "x$PRETEND" = "xyes" ] && return 0
+		
+	ypkg_begin_download $NEWEST || return 1
+
+	#
+	# Download ok, install it.
+	#		
+	
 	local ret=0
 	workdir="$YPPATH_FIELD/$N"
 	mkdir -p $workdir
@@ -2584,9 +2616,14 @@ ypkg_begininstall() {
 	
 	cd $workdir
 
-	ymsg ">> $T/${N}_$V$R unpacking..."
+	ymsg ">> $T/${N}_$V$R unpack"
 	pbs_unpack
 	err_check "* [Error]: $T/${N}_$V$R call pbs_unpack failed"
+
+	if [ "x$BREAK" = "xunpack" ]; then
+		pwd
+		return 0
+	fi
 
 	destdir="$workdir/${N}_$V$R"
 	buildlog="$YPPATH_SCRIPT/${N}_$V$R-$YARCH.buildlog"
@@ -2602,43 +2639,64 @@ ypkg_begininstall() {
 
 	cd "$N-$V$R" 2>/dev/null
 
-	ymsg ">> $T/${N}_$V$R configure..."
+	ymsg ">> $T/${N}_$V$R configure"
 	[ -p $configpipe ] || mkfifo $configpipe
 	tee $configlog < $configpipe & 
 	pbs_config > $configpipe
 	err_check "* [Error]: $T/${N}_$V$R call pbs_config failed"
 
-	ymsg ">> $T/${N}_$V$R compiling..."
+	if [ "x$BREAK" = "xconfig" ]; then
+		pwd
+		return 0
+	fi
+
+	ymsg ">> $T/${N}_$V$R compile"
 	[ -p $makepipe ] || mkfifo $makepipe
 	tee $makelog < $makepipe & 
 	pbs_build > $makepipe
 	err_check "* [Error]: $T/${N}_$V$R call pbs_build failed"
 
-	ymsg ">> $T/${N}_$V$R make check..."
+	if [ "x$BREAK" = "xbuild" ]; then
+		pwd
+		return 0
+	fi
+
+	ymsg ">> $T/${N}_$V$R make check"
 	[ -p $checkpipe ] || mkfifo $checkpipe
 	tee $checklog < $checkpipe & 
 	pbs_check > $checkpipe
 	err_check "* [Error]: $T/${N}_$V$R call pbs_check failed"
 
-	ymsg ">> $T/${N}_$V$R make install..."
+	if [ "x$BREAK" = "xcheck" ]; then
+		pwd
+		return 0
+	fi
+
+	ymsg ">> $T/${N}_$V$R make install"
 	[ -p $mkinstallpipe ] || mkfifo $mkinstallpipe
 	tee $mkinstalllog < $mkinstallpipe & 
 	pbs_install > $mkinstallpipe
 	err_check "* [Error]: $T/${N}_$V$R call pbs_install failed"
 	
+	if [ "x$BREAK" = "xinstall" ]; then
+		pwd
+		return 0
+	fi
+
 	>$buildlog
 	[ -e $configlog ] && cat $configlog >> $buildlog
 	[ -e $makelog ] &&   cat $makelog >> $buildlog
 	[ -e $checklog ] &&  cat $checklog >> $buildlog
 	[ -e $mkinstalllog ] &&  cat $mkinstalllog >> $buildlog
 	[ -e $buildlog ] && gzip -9 -f $buildlog
-	
+			
 	ORIG_N=${N}
 	destdir_OLD=$destdir
 	packs=""
-	#make package
+	#
+	# Make ypk package
 	if [ -d "$destdir" ]; then
-		ymsg ">> $T/${N}_$V$R make package..."
+		ymsg ">> $T/${N}_$V$R make package"
 		packs="$(ypkg_mkpackage) "
 		err_check "* [Error]: $T/${N}_$V$R make binary package failed"
 	fi
@@ -2651,29 +2709,34 @@ ypkg_begininstall() {
 			N=${i}
 			destdir="$workdir/${N}_$V$R"
 			${i}_install
-		        err_check "* [Error]: $T/${ORIG_N}_$V$R ${N} call ${i}_install failed"
+			err_check "* [Error]: $T/${ORIG_N}_$V$R ${N} call ${i}_install failed"
 
-			#make package
+			# make package
 			if [ -d "$destdir" ]; then
-				ymsg ">> $T/${ORIG_N}_$V$R ${N} make package..."
-				packs+="$(ypkg_mkpackage) "
-				err_check "* [Error]: $T/${ORIG_N}_$V$R ${N} make binary package failed"
-			fi
-			YARCH=$(uname -m)
-			blank_funcs
+				ymsg ">> $T/${ORIG_N}_$V$R ${N} make package"
+					packs+="$(ypkg_mkpackage) "
+					err_check "* [Error]: $T/${ORIG_N}_$V$R ${N} make binary package failed"
+				fi
+				YARCH=$(uname -m)
+				blank_funcs
 		done
 	fi
 
-	#install to /
+	if [ "x$BREAK" = "xpackage" ]; then
+		pwd
+		return 0
+	fi
+
+	# Install to /
 	#
-	ymsg ">> $T/${ORIG_N}_$V$R $PROVIDE install to system..."
+	ymsg ">> $T/${ORIG_N}_$V$R $PROVIDE install to system"
 	packs=$(echo $packs |tr ' ' '\n' |sort -u |xargs)
 	for pack in $packs; do
 		case "x$AUTO_INSTALL" in
-		xyes) mmsg ">>> Install: $pack"
-		      #install_pack $pack ;;
-		      ypkg2 -I -f $pack ;;
-		   *) gmsg ">>> $pack"
+			xyes) mmsg ">>> Install: $pack"
+			      #install_pack $pack ;;
+		      	      ypkg2 -I -f $pack ;;
+		   	   *) gmsg ">>> $pack"
 		esac
 	done
 	[ -d $workdir ] && rm -r $workdir
@@ -2681,116 +2744,44 @@ ypkg_begininstall() {
 	return 0
 }
 
-# Install packge
-ypkg_install() {
-	local ret
-	local itype
-	local iname
-	local iver
-	local irver
-	atom_parse_type $1
-	itype=$T
-	iname="$N"
-	iver=$V
-	irver=$R
-	ypkg_getpbsfile $1
-	if [ $? == 0 ]; then
-		atom_parse_path $NEWEST
-		declare -a tmp=($(ypkg_checkinst))
-		pre_version=${tmp[0]}
-		stat=${tmp[1]}
-		if [ "x$2" != "xforce" ];then
-			gmsg_ "[$stat]"
-		else
-			gmsg_ "["$stat"F]"
-		fi
-		case $stat in
-                	E)	
-				msg " $T/${N}_$V$R "	
-				[ "x$2" != "xforce" ] && return 0    		;;
-			N)      msg " $T/${N}_$V$R "
-				pre_version=  ;;
-			U)      msg " $T/${N}_$pre_version ----> $T/${N}_$V$R " ;;
-			D)      msg " $T/${N}_$pre_version ----> $T/${N}_$V$R " ;;
-		esac
-		#
-		[ "x$PRETEND" = "xyes" ] && return 0
-		#
-		ypkg_begin_download $NEWEST
-		ret=$?
-		if [ $? == 0 ]; then
-			#download ok, install it.
-			ypkg_begininstall $NEWEST
-		else
-			return $ret
-		fi
-	else
-		#not found
-		return 1
-	fi
-}
-
 #
-ypkg_begin_showdep() {
-	local a
-	. "$1"
-	a=${1##*/}
-	msg_ ">> Dependencies of "
-	wmsg "${a%*.pbs}:"
-	gmsg "* Build_time"
-	echo $BDEPEND |xargs
-	gmsg "* Run_time"
-	echo $RDEPEND |xargs
-	gmsg "* Recommend"
-	echo $RECOMMENDED |xargs
-	gmsg "* Conflict"
-	echo $CONFLICT |xargs
-	return 0
-}
-
-ypkg_showdep() {
+# $1 pkgname, $2 are notes/comments/depend/pbs
+ypkg_show() {
 	local ret
 	local itype
 	local iname
 	local iver
 	local irver
-
-	#parse input 
-	atom_parse_type $1
-	#get pbs file
-	ypkg_getpbsfile $1
+	ypkg_getpbsfile "$1"
+	
 	if [ $? == 0 ]; then
-		#check if installed.
-		atom_parse_path $NEWEST
-		itype=$T
-		iname="$N"
-		iver=$V
-		irver=$R
-		#ypkg_checkinst && echo ""$N"_$V$R already installed." && return 0
-		#found, include and print deps
-		ypkg_begin_showdep $NEWEST
-	else
-		rmsg "* [Error]: $1 not found!"
-		return 1
-	fi
-}
-
-ypkg_shownotes() {
-	local ret
-	local itype
-	local iname
-	local iver
-	local irver
-	atom_parse_type $1
-	ypkg_getpbsfile $1
-	if [ $? == 0 ]; then
-		atom_parse_path $NEWEST
+		atom_parse $NEWEST
 		itype=$T
 		iname="$N"
 		iver=$V
 		irver=$R
 		. "$NEWEST"
-		echo -e "$NOTES"
+		
+		case $2 in
+		notes)
+			echo -e "$NOTES" ;;
+		comments)
+			echo -e "$COMMENTS" ;;
+		depend)
+			local pbsfile=${NEWEST##*/}
+			msg_ ">> Dependencies of "
+			wmsg "${pbsfile%*.pbs}:"
+			gmsg "* Build_time"
+			echo $BDEPEND |xargs
+			gmsg "* Run_time"
+			echo $RDEPEND |xargs
+			gmsg "* Recommend"
+			echo $RECOMMENDED |xargs
+			gmsg "* Conflict"
+			echo $CONFLICT |xargs ;;
+		pbs)
+			echo "$NEWEST"
+		esac
 	else
 		rmsg "* [Error]: $1 not found!"
 		return 1
@@ -2920,7 +2911,7 @@ ypkg_list_installed() {
 	local tmpfile=$(mktemp)
 	find $YPPATH_DB/* -maxdepth 2 -type f -name "*.desc" |while read line;do
 		. $line
-		atom_parse_path $line
+		atom_parse $line
 		gmsg_ "[I] "
 		echo -e "${N}_$V$R\t$(date -d "1970-01-01 UTC $INSTALL_TIME seconds" +%F,%T 2>/dev/null)\t$INSTALL_SIZE"
 		echo "Description: $DESCRIPTION"
@@ -2955,7 +2946,7 @@ ypkg_list_package() {
 	listfile=$(find $YPPATH_DB/${i##*/} -maxdepth 2 -type f -name "${i##*/}_*.list" 2>/dev/null)
 
 	if [ "x$listfile" !=  "x" ]; then
-		atom_parse_path $listfile
+		atom_parse $listfile
 	else
 		rmsg "* [Error]: $1 not found." 
 		return 1
@@ -3046,7 +3037,7 @@ ypkg_getlistfile() {
 		else
 			local max=${listfiles[0]}
 			for ((i=0; i<=${#listfiles[@]}; i++)); do
-				atom_cmp_path $max ${listfiles[i]}
+				atom_cmp $max ${listfiles[i]}
 				case "$?" in
 				  2) max=${listfiles[i]} ;;
 				  *) continue
@@ -3065,11 +3056,11 @@ ypkg_remove_package() {
 	local i
 	local install_file=
 
-	atom_parse_type "$1"
+	atom_parse "$1"
         declare -a listfile=($(ypkg_getlistfile all))
         if [ "x$listfile" != "x" ]; then
 		for i in ${listfile[@]}; do
-			atom_parse_path $i
+			atom_parse $i
 			if file_is_exist "$YPPATH_DB/$N/${N}_$V$R.desc"; then
 				blank_funcs "pbs"
 				. $YPPATH_DB/$N/${N}_$V$R.desc
@@ -3106,7 +3097,7 @@ ypkg_conflict_remove() {
 	new_listfile="$YPPATH_DB/$new_name/${new_name}_$new_version.list"
 
 	#
-	atom_parse_path $old_listfile
+	atom_parse $old_listfile
 	file_is_exist $YPPATH_DB/$N/${N}_$V$R.desc && . $YPPATH_DB/$N/${N}_$V$R.desc
 	install="$INSTALL"
 	if [ "x$install" != "x" ] && file_is_exist $YPPATH_DB/$N/$install; then
@@ -3143,7 +3134,7 @@ ypkg_conflict_remove() {
 	done
 	
 	#
-	atom_parse_path $old_listfile
+	atom_parse $old_listfile
 	file_is_exist $YPPATH_DB/$N/${N}_$V$R.desc && . $YPPATH_DB/$N/${N}_$V$R.desc
 	install="$INSTALL"
 	if [ "x$install" != "x" ] && file_is_exist $YPPATH_DB/$N/$install; then
@@ -3180,9 +3171,9 @@ ypkg_conflict_remove() {
 ypkg_upgrade_remove() {
 	local old="$1"
 	local new="$2"
-	atom_parse_type $old
+	atom_parse $old
 	old_listfile=$(ypkg_getlistfile)
-	atom_parse_type $new
+	atom_parse $new
 	new_listfile=$(ypkg_getlistfile)
 	cat $old_listfile |while read line; do	
 		csv_split "$line"
@@ -3206,7 +3197,7 @@ ypkg_upgrade_remove() {
 		fi
 	done
 	#
-	atom_parse_path $old_listfile
+	atom_parse $old_listfile
 	#remove infos.
 	ypkg_rm_packgeinfo
         #remove info from word
@@ -3270,26 +3261,14 @@ ypkg_whatprovides() {
 }
 
 #
-ypkg_showpbs() {
-        atom_parse_type $1
-        ypkg_getpbsfile $1
-       	if [ $? == 0 ]; then
-		atom_parse_path $NEWEST
-		echo "$NEWEST"
-		return 0
-	else
-		#rmsg "* [Error]: $1 not found."
-		return 1
-	fi
-}
-
+#
 #
 ypkg_whatrequires() {
 	local depend 
 	local ppkg=$1
 	local file
 	local exits
-	atom_parse_type $ppkg
+	atom_parse $ppkg
 	pkg="$N"
 	exits=$(find "$YPPATH_LIB" -maxdepth 2 -type d -name "$pkg")
 	if [ "x$exits" = "x" ]; then
@@ -3299,7 +3278,7 @@ ypkg_whatrequires() {
 		ymsg "* "$i" is related with:"
 	fi
 	find "$YPPATH_DB" -maxdepth 3 -type f -name "*.pbs" |while read file; do
-		atom_parse_path "$file"
+		atom_parse "$file"
 		. "$file"
 		for depend in RDEPEND BDEPEND RECOMMENDED CONFLICT; do
 			if str_isIn "$(eval "echo \$${depend}")" "$pkg"; then

@@ -186,7 +186,7 @@ get_allver() {
 #
 do_search () {	
 	tmpfile=$(yget_mktemp f)
-	atom_parse_type "$1"
+	atom_parse "$1"
 	local app="$N"
 	apps=$(grep "<Package name=" $universe_local_file |sed -e 's/<Package name="//g' -e 's/">//g' |grep $app |sort -u |tr '\n' ' ')
 	if [ "x$apps" = "x" ]; then
@@ -195,7 +195,7 @@ do_search () {
 		return 1
 	fi
 	for app in $apps; do
-		atom_parse_type $app
+		atom_parse $app
 		ypkg_find_info $universe_local_file >$tmpfile
 		if [ "x$?" = "x1" ]; then
 			rmsg "* $app not found"
@@ -206,7 +206,7 @@ do_search () {
 				wmsg $N
 				desc=$(ls $YPPATH_DB/$N/$N_*.desc 2>/dev/null)
 				if [ -f $desc ]; then
-					atom_parse_path $desc
+					atom_parse $desc
 					[ -f $desc ] && . $desc
 					if [ "x$INSTALL_TIME" != "x" ]; then
 						INSTALL_TIME=$(date -d "1970-01-01 UTC $INSTALL_TIME seconds" +%F,%T 2>/dev/null)
@@ -238,7 +238,7 @@ get_final_ver () {
 	versions="$(get_value version $file)"
 	max_ver="0"
 	for version in $versions; do
-		atom_parse_type ${N}_$version
+		atom_parse ${N}_$version
 		ypkg_find_info $allinfo >$tmpfile
 		repo="$(get_value repo $tmpfile)"
 		if [ "x$ACCEPT_REPO" = "xstable" ]; then
@@ -258,7 +258,7 @@ install_prepare () {
 	allinfo=$(yget_mktemp f)
 	singleinfo=$(yget_mktemp f)
 	local app="$1"
-	atom_parse_type $app
+	atom_parse $app
 	ypkg_find_info $universe_local_file >$allinfo
 	if [ "x$(cat $allinfo)" = "x" ]; then
 		echo "app: $app not found" 1>&2
@@ -286,7 +286,7 @@ install_prepare () {
 		         uri="$(get_value   uri        $singleinfo)"
 		         sha="$(get_value   sha        $singleinfo)"
 		for depend in $depends; do
-			atom_parse_type $depend
+			atom_parse $depend
 			depend_name=$N
 			is_installed $N $V$R && continue 
 			ypkg_find_info $universe_local_file >$allinfo
@@ -300,7 +300,7 @@ install_prepare () {
 				else	
 					depend_final_ver="$V$R"
 				fi
-					 atom_parse_type ${depend_name}_${depend_final_ver}
+					 atom_parse ${depend_name}_${depend_final_ver}
 					 ypkg_find_info $universe_local_file >$singleinfo
 				         depuri="$(get_value   uri        $singleinfo)"
 				         depsha="$(get_value   sha        $singleinfo)"
@@ -311,7 +311,7 @@ install_prepare () {
 		done
 		#
 		for redepend in $redepends; do
-			atom_parse_type $redepend
+			atom_parse $redepend
 			redepend_name=$N
 			is_installed $N $V$R && continue 
 			ypkg_find_info $universe_local_file >$allinfo
@@ -323,7 +323,7 @@ install_prepare () {
 				else	
 					redepend_final_ver="$V$R"
 				fi
-					 atom_parse_type ${redepend_name}_${redepend_final_ver}
+					 atom_parse ${redepend_name}_${redepend_final_ver}
 					 ypkg_find_info $universe_local_file >$singleinfo
 				         redepuri="$(get_value   uri        $singleinfo)"
 				         redepsha="$(get_value   sha        $singleinfo)"
@@ -333,7 +333,7 @@ install_prepare () {
 			fi
 		done
 		for codepend in $codepends; do
-			atom_parse_type $codepend
+			atom_parse $codepend
 			codepend_name=$N
 			if is_installed $N $V$R; then
 				local listfile=$(ypkg_getlistfile $N)
@@ -382,7 +382,7 @@ install_dev_prepare () {
 	allinfo=$(yget_mktemp f)
 	singleinfo=$(yget_mktemp f)
 	local app="$1"
-	atom_parse_type $app
+	atom_parse $app
 	ypkg_find_info $universe_local_file >$allinfo
 	if [ "x$(cat $allinfo)" = "x" ]; then
 		echo "app: $app not found" 1>&2
@@ -611,7 +611,7 @@ do_upgrade () {
 	ymsg "* Searching ..."
 	upgrade_file=$(mktemp)
 	find $YPPATH_DB/ -maxdepth 2 -type f -name "*.desc" |while read line;do
-		atom_parse_path $line
+		atom_parse $line
 		. $line
 		#buildtime_old=$BUILD_TIME
 		#[ "x$buildtime_old" = "x" ] && buildtime_old=$(cat $YPPATH_DB/$N/${N}_$V$R.date 2>/dev/null)
@@ -676,7 +676,7 @@ do_remove () {
 			continue
 		fi
 		app="$1"
-		atom_parse_type $app
+		atom_parse $app
 		app=$N
 		if ! is_installed $N $V$R; then
 			echo "app: $app not found"  1>&2
@@ -689,14 +689,14 @@ do_remove () {
 			 else
 		        	 listfile=$(ls $YPPATH_DB/$N/${N}_$V$R.list 2>/dev/null)
 			 fi
-			 atom_parse_path $listfile
+			 atom_parse $listfile
 			 . ${listfile%.list}.desc
 			 [ "x$INSTALL_SIZE" = "x" ] && INSTALL_SIZE=$(cat ${listfile%.list}.size 2>/dev/null)
 			 echo app: $N $V$R $INSTALL_SIZE  >>$allpacks
 			 find_command='find $YPPATH_DB -maxdepth 2 -name "*.desc" |grep -v "\-dev_"'
 			 eval $find_command |while read line; do
 				. $line
-				atom_parse_path $line
+				atom_parse $line
 				[ "x$RDEPEND" = "x" ] && continue
 				RDEPEND="${RDEPEND//,/ }"
 				str_isIn "$RDEPEND" "$app" && echo remove: $N $V$R $INSTALL_SIZE >>$allpacks

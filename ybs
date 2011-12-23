@@ -6,8 +6,6 @@
 #
 
 #
-
-#
 [ -f /etc/ybs.conf ] && . /etc/ybs.conf
 [ -f /tools/usr/lib/ybs/funcs ] && . /tools/usr/lib/ybs/funcs
 [ -f /usr/lib/ybs/funcs ] && . /usr/lib/ybs/funcs
@@ -73,26 +71,33 @@ $0 $ybs_version
 
 Usage: $0 command [options] pkg1 [pkg2 ...]
 
-ybs (ylmfos build system) is a simple command line for downloading/compile/install package from 
-souce codes.
+ybs (ylmfos build system) is a simple command line for download/compile/install package from source code
 
 Commands:
-       -h|--help                               show usage   
-       -s|--search                             search pkg
-       -d|--download                           download source of pkg
-       -C|--remove                             remove pkg
-       -i|--install                            compile and install pkg and dependencies
-      -is|--install-single                     forced install single pkg without checking dependency
-       -n|--notes                              show user notes of pkg
-       -k|--depend                             show dependency of pkg
-       -w|--showpbs                            show avaliable pbsfile of pkg
-      -wr|--whatrequires                       show which pkgs depends on this pkg
-       --sync [path]                           sync pbslib via git to [path]/var/ypkg
-       --info                                  show $0 parameters. to modify parameters, edit /etc/ypkg.conf
+       -h|--help                               Show usage   
+       -s|--search                             Search pkg
+       -d|--download                           Download source tartall of pkg
+       -r|--remove                             Remove pkg
+       -i|--install                            Compile and install pkg and dependencies
+      -is|--install-single                     Forced install single pkg without checking dependency
+       -n|--notes                              Show user notes of pkg
+       -c|--comments                           Show user comments of pkg
+       -k|--depend                             Show dependency of pkg
+       -w|--showpbs                            Show avaliable pbsfile of pkg
+      -wr|--whatrequires                       Show which pkgs depends on this pkg
+       --sync [path]                           Sync pbslib via git to $YPPATH/pbslib
+       --info                                  Show $0 parameters of /etc/ybs.conf
 
-Options:
-	-p|--pretend                           instead of actually install, simply display what to do  
-	-F|--force                             force install
+Options for install:
+	-p|--pretend                           Instead of actually install, simply display what to do  
+	-F|--force                             Force install
+	--fetch                                Break after download source tarball
+	--unpack   			       Break after unpack source tarball
+  	--config         		       Break after configure	
+	--build                                Break after make a.k.s compile
+	--check				       Break after make check/test
+	--install                              Break after make install    
+	--package                              Break after make ypk package    
 
 Base is at $YPPATH
 EOF
@@ -116,25 +121,27 @@ done
 #
 for i in ${argvs[@]}; do
 	case ${i} in
-		-p|-pv|--pretend) PRETEND="yes" ;;
-		-F|--force) 	  FORCE_INSTALL="yes"
+		-p|-pv|--pretend) PRETEND="yes"       ;;
+		-F|--force) 	  FORCE_INSTALL="yes" ;;
+		--fetch)          BREAK="fetch"       ;;
+		--unpack)	  BREAK="unpack"      ;;	
+		--config)	  BREAK="config"      ;;
+		--build)          BREAK="build"       ;;
+		--check)          BREAK="check"       ;;
+		--install)        BREAK="install"     ;;
+		--package)        BREAK="package"     
 	esac
 done
 
 #
 case "${1}" in
 -info|--info)
-	#show build info
-	grep -v ^# "/etc/ypkg.conf"
-	;;
-
--clean|--clean) 
-	#clean packages dirs
-	gmsg "* Use \"yget clean \" instead"
+	# show build info
+	grep -v ^# "/etc/ybs.conf"
 	;;
 
 -s|--search)
-	#search package.
+	# search package.
 	msg_ "* Searching for "
 	wmsg_ "${args[@]} "
 	msg "..."
@@ -144,7 +151,7 @@ case "${1}" in
 	;;
 
 -d|--download)
-	#download source
+	# download source
 	check_root
 	msg_ "* Source downloading "
 	wmsg_ "${args[@]} "
@@ -155,14 +162,14 @@ case "${1}" in
 	;;
 
 -i|--install)
-	#install packages and depends
+	# install packages and depends
 	check_root
 	ymsg "* Calculating dependencies..."
 	workdir="$(mktemp -d)"
 	trap "rm -r $workdir; exit 1" INT
 	all_packages=
 	for i in ${args[@]};do
-		pbsfile=$(ypkg_showpbs "$i")
+		pbsfile=$(ypkg_show "$i" pbs)
 		[ -f "$pbsfile" ] && . "$pbsfile" || (echo; rmsg "* [Error]: ${i} not found."; exit 1)
 		BDEPEND_READY=
 		for i in $BDEPEND; do
@@ -173,13 +180,13 @@ case "${1}" in
 		for j in ${all_packages};do
 			case ${j} in
 			*'|'*)	 #ypkg -i ${j%|*} || ypkg -i ${j#*|} || exit ;;
-				 pbsfile=$(ypkg_showpbs "${j%|*}")
+				 pbsfile=$(ypkg_show "${j%|*}" pbs)
 				 if [ "x$pbsfile" = "x" ];then
-				 	pbsfile=$(ypkg_showpbs ${j#*|})
+				 	pbsfile=$(ypkg_show ${j#*|} pbs)
 				 fi
 				 ;;
 			  *)    
-				pbsfile=$(ypkg_showpbs "${j}")
+				pbsfile=$(ypkg_show "${j}" pbs)
 				;;
 			esac
 			[ -f "$pbsfile" ] && . "$pbsfile" || (echo; rmsg "* [Error]: ${j} not found."; exit 1)
@@ -222,22 +229,24 @@ case "${1}" in
 	msg_ "* Installing "
 	wmsg_ "${args[@]} "
 	msg "..."
+	FORCE_INSTALL="yes"
 	for i in ${args[@]}; do
 		if [ "x$TERM" != "xlinux" ]; then
-			echo -ne "\033]0;ybs working: ${i}\007"; ypkg_install $i "force"
+			echo -ne "\033]0;ybs working: ${i}\007"; ypkg_install $i 
 		else
-			ypkg_install $i "force"
+			ypkg_install $i
 		fi
 	done
 	;;
 
--C|--remove)
+-r|--remove)
 	check_root
 	#remove package
 	msg_ "* Removing "
 	wmsg_ "${args[@]} "
 	for i in ${args[@]}; do
-		ypkg_remove_package $i
+		#ypkg_remove_package $i
+		ypkg2 -C $i
 	done
 	;;
 
@@ -258,37 +267,42 @@ case "${1}" in
 	cd $YPPATH_LIB
 	err_check "* [Error]: enter dir $YPPATH_LIB failed."
 	if [ -d .git ]; then
-		#alread exist.
+		# alread exist.
 		git pull && date +%s >$logfile
 	else
 		cd ..
-		#remove an system error.
+		# remove an system error.
 		[ -d /etc ] || mkdir /etc
 		[ -f /etc/hosts ] || touch /etc/hosts
-		git config --system --add user.name  ylmfos_user
-		git config --system --add user.email ylmfos_user@115.com
 		git clone git://git.ylmf.com/pbslib.git && date +%s >$logfile
 	fi
 	;;
 
 -n|--notes)
-	#show users notes
+	# show users notes
 	for i in ${args[@]}; do
-		ypkg_shownotes $i
+		ypkg_show $i notes
+	done
+	;;
+
+-c|--comments)
+	# show comments 
+	for i in ${args[@]}; do
+		ypkg_show $i comments
 	done
 	;;
 
 -k|--depend)
 	#show dependency
 	for i in ${args[@]}; do
-		ypkg_showdep $i
+		ypkg_show $i depend
 	done
 	;;
 
 -w|--showpbs)
 	#show pbs file
 	for i in ${args[@]}; do
-		ypkg_showpbs $i
+		ypkg_show $i pbs
 	done
 	;;
 
@@ -307,4 +321,4 @@ case "${1}" in
 	;;
 esac
 
-#end of file
+# End of file
