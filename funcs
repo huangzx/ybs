@@ -41,7 +41,7 @@ wmsg_() { wmsg "$@" | tr -d '\n'; }
 
 #
 # Path defines
-YPVERSION="1.0"
+YPVERSION="2.0"
 YPPATH="/var/ybs"
 YPPATH_LIB="$YPPATH/pbslib"
 YPPATH_SOURCE="$YPPATH/sources"
@@ -62,6 +62,9 @@ PACK_SUFFIX="ypk"
 CPIO="/bin/cpio"
 #CPIO="/usr/bin/bsdcpio"
 XZ="/usr/bin/xz"
+
+#
+CHECK_TOOLS="md5sum sha1sum sha256sum"
 
 #
 YLMFOS="YLMFOS"
@@ -93,7 +96,7 @@ blank_funcs () {
 	PRIORITY=""
 	PACKAGER=""
 	SRC_URI=""
-	MD5SUM=""
+	CHECKSUM=""
 	RDEPEND=""
 	BDEPEND=""
 	RECOMMENDED=""
@@ -119,20 +122,17 @@ blank_funcs () {
 	BRIEF=""
 	SPECIFICATION=""
 	if [ "x$1" = "xpbs" ];then
-		pbs_unpack() {
-			:
+		pbs_unpack() { :
 		}
-		pbs_config() {
-			:
+		pbs_patch() { :
 		}
-		pbs_build() {
-			:
+		pbs_config() { : 
 		}
-		pbs_check() {
-			:
+		pbs_build() { : 
 		}
-		pbs_install() {
-			:
+		pbs_check() { : 
+		}
+		pbs_install() { : 
 		}
 	fi
 	[ "x$1" = "xdesc" ] && :
@@ -260,8 +260,19 @@ atom_parse() {
 	N=""
 	V=""
 	R=""
+	PBSDIR=""
 	local atom
 	local string="$1"
+
+
+	if [ "x${string##*.}" = "xpbs" ]; then
+		local pbsfile="$(readlink -f $string)"
+		if [ -f "$pbsfile" ]; then
+			PBSDIR="${pbsfile%/*.pbs}"
+			# filesdir contains patchs and user-defined files 
+			filesdir="$PBSDIR"/files/
+		fi
+	fi
 
 	if echo "$string" |grep -q "/"; then
 		# /var/ybs/pbslib/net-ftp/lftp/lftp_4.3.3.pbs
@@ -270,10 +281,6 @@ atom_parse() {
 			T=${string%/*}
 			T=${T%/*}
 			T=${T##*/}
-	
-			# filesdir is with *.pbs, contains patchs and user-defined files 
-			filesdir="${string%/*}"/files/
-		
 			string="$atom"
 		fi
 	
@@ -287,20 +294,16 @@ atom_parse() {
 	fi
 
 	case x${string##*.} in
-	xpbs)           
-		atom="${string%.pbs}" ;;
-	x$PACK_SUFFIX)     
-		if [ "x$YARCH" != "x" ]; then
-			atom="${string%-$YARCH.$PACK_SUFFIX}"
-		else
-			atom="${string%.$PACK_SUFFIX}"
-		fi		     ;;
-	xlist)	
-		atom="${string%.list}" ;;
-	xdesc)	
-		atom="${string%.desc}" ;;
-	*)      
-		atom="$string"
+		xpbs)           
+ 	  atom="${string%.pbs}" ;;
+		x$PACK_SUFFIX)     
+	  [ "x$YARCH" != "x" ] && atom="${string%-$YARCH.$PACK_SUFFIX}" || atom="${string%.$PACK_SUFFIX}" ;;
+		xlist)	
+	  atom="${string%.list}" ;;
+		xdesc)	
+	  atom="${string%.desc}" ;;
+		*)      
+ 	  atom="$string"
 	esac
 
 	# Only digit
@@ -312,6 +315,13 @@ atom_parse() {
 
 	atom=${atom%-$ARCH}
 	atom=${atom%-any}
+
+	# cairo(>=1.6) x11-libs/cairo((>=1.6)
+	if echo $atom |grep \( |grep -q \); then
+		N=${atom%%(*)}
+		VR="${atom##$N}"
+		return 0
+	fi
 
 	N=${atom%%_[0-9]*}
 	N=${N%%_}
@@ -677,8 +687,8 @@ ypkg_search() {
 	
 	tempfile=$(mktemp -p $workdir)
 	
-	for pack in $results; do
-		atom_parse $pack
+	for i in $results; do
+		atom_parse $i
 		if [ "x$T" = "x$lastitype" -a "x$N" = "x$lastiname" ]; then
 			continue
 		fi
@@ -689,7 +699,7 @@ ypkg_search() {
 		
 		lastitype="$T"
 		lastiname="$N"
-		ypkg_searchOK "$T" "$N" "$pack"
+		ypkg_searchOK "$T" "$N" "$i"
 	done
 
 	[ -d $workdir ] && rm -r $workdir
@@ -720,11 +730,15 @@ do_download () {
 	return 1
 }
 
-# Check and download package, $1 is URL, $2 is local file name, $3 is md5sum value
+# Check and download package
+# $1 is URL
+# $2 is local file name
+# $3 is checksum value, md5sum/sha1sum/sha256sum, default is md5sum
+#
 check_and_download_raw() {
 	local uri=$1
 	local fname=$2
-	local md5sum_value=$3
+	local checksum=$3
 	local download
 	local target="${YPPATH_SOURCE}/${fname}"
 
@@ -742,25 +756,32 @@ check_and_download_raw() {
 		[ "$?" == "0" ] && return 0 ;;
 
     http|https|ftp|*)	
-		local md5sum_server="$md5sum_value"
-		local md5sum_local=($(md5sum "$target" 2>/dev/null))
-		local md5sum_local="${md5sum_local[0]}"
+		local checksum_server="$checksum"
 
-		# target is exists and md5sum_server is empty or md5sum check correct
-		if [ "x$md5sum_local" != "x" ]; then
-			if [ "x$md5sum_server" = "x" ]; then
-				msg ">>> $target exists." 
+		# target is exists and checksum_server is empty or checksum correct
+		if [ -f "$target" ]; then
+			if [ "x$checksum_server" = "x" ]; then
+				msg ">>> $target exists without checksum." 
 				return 0
 			fi
-			if [ "x$md5sum_local" = "x$md5sum_server" ]; then
-				msg ">>> $target exists and md5sum check correctly." 
-				return 0
-			fi
+			
+			for checktool in $CHECK_TOOLS; do
+				checksum_local=($($checktool "$target" 2>/dev/null))
+				checksum_local="${checksum_local[0]}"
+				if [ "x$checksum_local" = "x$checksum_server" ]; then
+					msg ">>> $target exists and $checktool checked correctly." 
+					return 0
+				fi
+			done
+
+			local checkok="not"
+
 		fi
 
-		# target is not exists or md5sum check fail 
-		if [ "x$md5sum_local" = "x" ] || [ "x$md5sum_local" != "x$md5sum_server" ]; then
+		# target is not exists or checksum fail 
+		if [ -f "$target" ] || [ "x$checkok" != "xyes" ]; then
 			rm -f "$target".tmp 2>/dev/null
+
 			if do_download $uri $fname; then
 				download="done"
 			else
@@ -768,16 +789,28 @@ check_and_download_raw() {
 				uri="$YPPATH_DIST_URI/${fname}"
 				do_download $uri $fname && download="done" || download="error"
 			fi
+
 			if [ "x$download" = "xdone" ]; then
-				# check again
-				md5sum_local=($(md5sum "$target".tmp 2>/dev/null))
-				md5sum_local="${md5sum_local[0]}"
-				if [ "x$md5sum_local" = "x$md5sum_server" ] || [ "x$md5sum_server" = "x" ]; then
-					gmsg ">>> Rename: $target md5sum: $md5sum_local"
-					mv "$target".tmp "$target" && return 0
-				else
-					rmsg ">>> "$target".tmp download successfully but md5sum check failed."
-					return 1
+				# Check again
+				for checktool in $CHECK_TOOLS; do
+					checksum_local=($($checktool "$target".tmp 2>/dev/null))
+					checksum_local="${checksum_local[0]}"
+					if [ "x$checksum_local" = "x$checksum_server" ] || [ "x$checksum_server" = "x" ]; then
+						gmsg ">>> Rename: $target"
+						gmsg ">>> $checktool: $checksum_local"
+						checkok="yes"
+						mv "$target".tmp "$target" 
+						return 0
+					else
+						checkok="not"
+						continue	
+
+					fi
+				done
+
+				if [ "x$checkok" != "x$yes" ] ;then
+					rmsg ">>> "$target".tmp download successfully but $checktool checked failed."				
+				        return 1
 				fi
 			fi
 		fi
@@ -788,79 +821,126 @@ check_and_download_raw() {
 
 #
 # $1 - strings
-# return specifid pbs files in $NEWEST, with full path
-#
+# return $NEWEST: newest or specifid version pbs files with full path
+# 
 ypkg_getpbsfile() {
 	NEWEST=""	
-	local dir
-	local pack
-	local count=0
-	local find_dir
-	local files 
-	local file 
 	local files_ready
-	      
+	local files_ready_raw
+	local string="$1"
+	local min
+	local max
+	
 	atom_parse "$1"
-	find_dir=$YPPATH_LIB	
+	local find_dir="${PBSDIR}"
+	[ "x$find_dir" = "x" ] && find_dir=$YPPATH_LIB	
 
 	if [ "x$N" == "x" ]; then
 		echo "No package specified."
 		return 1
 	fi
 
-	if [ "x$T" != "x" ]; then
-		dir=$(find $find_dir -maxdepth 2 -type d -iname "$N" | grep "/$T/")
-	else
-		dir=$(find $find_dir -maxdepth 2 -type d -iname "$N")
+	local count=0
+	if [ "x$find_dir" = "x$YPPATH_LIB" ]; then
+		local dir=$(find $find_dir/$T -maxdepth 2 -type d -iname "$N")
+		for pack in $dir; do let "count++"; done
+		
+		if [ "$count"0 -gt 10 ]; then
+			rmsg "Too more results: "
+		        echo $dir
+		        return 1
+		fi
 	fi
 
-	for pack in $dir; do
-		let "count++"
+	VR="$(echo $VR |tr -d '()')"
+	local pbsfiles=($(find $find_dir/"$T" -maxdepth 3 -type f -iname "${N}_*.pbs"))
+	
+	if [ "x$pbsfiles" = "x" ]; then
+		# Fixme!
+		# find provide
+		pbsfiles=($(find $find_dir/"$T" -maxdepth 3 -type f -iname "*.pbs" |xargs grep PROVIDE  |grep -w "$N" |awk -F: '{print $1}'))
+	fi	
+
+	[ "x$pbsfiles" = "x" ] && return 1
+
+	case x$VR in
+		x\>[[:digit:]]*)	
+        		min=${VR#>} 
+			for file in ${pbsfiles[@]}; do
+	        		atom_cmp $min $file
+				[ $? -eq 2 ] && files_ready+="$file "
+			done	;;
+
+		x\>\=[[:digit:]]*) 
+        		min=${VR#>=} 
+			for file in ${pbsfiles[@]}; do
+	        		atom_cmp $min $file
+				[ $? -ne 1 ] && files_ready+="$file "
+			done	;;
+			
+		x\<[[:digit:]]*)	 
+			max=${VR#<}
+			for file in ${pbsfiles[@]}; do
+				atom_cmp $max $file
+				[ $? -eq 1 ] && files_ready+="$file "
+			done ;;
+
+		x\<\=[[:digit:]]*)
+			max=${VR#<=}
+			for file in ${pbsfiles[@]}; do
+				atom_cmp $max $file
+				[ $? -ne 2 ] && files_ready+="$file "
+			done ;;
+
+		x\!\=[[:digit:]]*) 
+			min=${VR#!=}
+			for file in ${pbsfiles[@]}; do
+				atom_cmp $min $file
+				[ $? -ne 0 ] && files_ready+="$file "
+			done ;;
+
+		x\=[[:digit:]]*)	
+		        min=${VR#=}
+			for file in ${pbsfiles[@]}; do
+				atom_cmp $min $file
+				[ $? -eq 0 ] && files_ready+="$file "
+			done	;;
+
+			*)
+			min=${VR}	
+			for file in ${pbsfiles[@]}; do
+				atom_cmp $min $file
+				if [ $? -eq 0 ]; then
+					NEWEST="$file"
+					return 0
+				else	
+					files_ready+="$file "
+				fi
+			done
+	esac
+
+
+	[ "x$files_ready" = "x" ] && return 1 || files_ready=($files_ready)
+
+	for file in ${files_ready[@]}; do
+		blank_funcs pbs
+		. $file
+		case $REPO in
+			[Tt]esting)  
+		  [ "x$ACCEPT_REPO" = "xtesting" ] && files_ready_raw+="$file " || continue  ;;
+		         *)
+		  files_ready_raw+="$file "
+		esac
 	done
 
-	if [ "$count"0 -gt 10 ]; then
-		rmsg "Too more results: "
-		echo $dir
-		return 1
-	fi
+	files_ready_raw=($files_ready_raw)
+	NEWEST=${files_ready_raw[0]}	
 
-	if [ "$count" == "1" ]; then
-		#
-		# Get newest file in $dir:
-		# e.g. /var/ybs/pbslib/app-editors/leafpad
-		# Return path of the newest on in $NEWEST
-		#	
-		
-		# Specify $V$R
-		if [ "x$V$R" != "x" ]; then
-			NEWEST=$(ls "$dir"/${N}_$V$R.pbs 2>/dev/null)
-			[ "x$NEWEST" != "x" ] && return 0
-		fi
-
-		files=$(ls "$dir"/*.pbs 2>/dev/null)
-			
-		for file in $files;do
-			blank_funcs pbs
-			. $file
-			case $REPO in
-				[Tt]esting)  
-			[ "x$ACCEPT_REPO" = "xtesting" ] && files_ready+="$file " || continue  ;;
-			           *)  
-			files_ready+="$file "
-			esac
-	        done
-
-		files_ready=($files_ready)
-		NEWEST=${files_ready[0]}	
-
-		for file in ${files_ready[@]}; do
-			atom_cmp $file $NEWEST
-			if [ "$?" == "1" ]; then
-				NEWEST=$file
-			fi
-		done
-	fi
-
+	for file in ${files_ready_raw[@]}; do
+		atom_cmp $file $NEWEST
+		[ "$?" == "1" ] && NEWEST=$file
+	done
+	
 	[ "x$NEWEST" = "x" ] && return 1 || return 0
 }
 
@@ -902,13 +982,16 @@ ypkg_begin_download() {
 	# Download all files
 	if [ "x${SRC_URI}" != "x" ]; then
 		local count=0
+		local checksum=""
+
 		#
-		# MD5SUM: $SRC_URI in pbs file has md5sum value one by one.
+		# CHECKSUM: $SRC_URI in pbs file has md5sum/sha1sum/sha256sum value one by one.
 		#
-		MD5SUM=($MD5SUM)
+		checksum=($CHECKSUM)
+		
 		for url in ${SRC_URI}; do
-			# url localfile md5sum
-			check_and_download_raw $url $(basename $url) ${MD5SUM[$count]}
+			# url localfile checksum
+			check_and_download_raw $url $(basename $url) ${checksum[$count]}
 			err_check "* [Error]: Download $url failed."
 			let count=count+1
 		done
@@ -2572,6 +2655,28 @@ install_pack () {
 
 #
 # Install package
+#
+
+#
+#fetch           break after download source tarball
+#upack           break after unpack source tarball
+#patch           break after patch source
+#config          break after configure	
+#build           break after make a.k.s compile
+#check		 break after make check/test
+#install         break after make install    
+#package         break after make ypk package    
+
+maybe_break() {
+	local string="$1"
+	local command="$(echo $@ |sed 's/'"$string"'//')"
+	if echo "$BREAK" | egrep -q "(,|^)$string(,|$)"; then
+		$command
+		exit 1
+	fi
+}
+
+#
 # $1 - as follows:
 # pkgname - lftp
 # pkgtype/pkgname -net-ftp/lftp
@@ -2582,7 +2687,10 @@ ypkg_install() {
 	local string="$1"
 	local break="$2"
 
-	ypkg_getpbsfile "$string" || return 1
+	if ! ypkg_getpbsfile "$string"; then
+		rmsg "* $string nou found."
+		return 1
+	fi
 
 	atom_parse $NEWEST
 	declare -a tmp=($(ypkg_checkinst))
@@ -2605,6 +2713,8 @@ ypkg_install() {
 		
 	ypkg_begin_download $NEWEST || return 1
 
+	maybe_break fetch 
+
 	#
 	# Download ok, install it.
 	#		
@@ -2620,14 +2730,16 @@ ypkg_install() {
 	pbs_unpack
 	err_check "* [Error]: $T/${N}_$V$R call pbs_unpack failed"
 
-	if [ "x$BREAK" = "xunpack" ]; then
-		pwd
-		return 0
-	fi
+	maybe_break unpack pwd
 
 	destdir="$workdir/${N}_$V$R"
-	buildlog="$YPPATH_SCRIPT/${N}_$V$R-$YARCH.buildlog"
+	local pbsfile="$NEWEST"
+	local pbsdir="${NEWEST%/*.pbs}"
+	filesdir="${pbsdir}"/files
+	buildlog="$pbsdir/${N}_$V$R-$YARCH.buildlog"
 
+	local 	 patchpipe="$PWD/patch.pipe"
+	local     patchlog="$PWD/patch-log"
 	local 	 configpipe="$PWD/config.pipe"
 	local     configlog="$PWD/configure-log"
 	local      makepipe="$PWD/make.pipe"
@@ -2639,16 +2751,21 @@ ypkg_install() {
 
 	cd "$N-$V$R" 2>/dev/null
 
+	ymsg ">> $T/${N}_$V$R patch"
+	[ -p $patchpipe ] || mkfifo $patchpipe
+	tee $patchlog < $patchpipe & 
+	pbs_patch > $patchpipe
+	err_check "* [Error]: $T/${N}_$V$R call pbs_patch failed"
+
+	maybe_break patch pwd
+
 	ymsg ">> $T/${N}_$V$R configure"
 	[ -p $configpipe ] || mkfifo $configpipe
 	tee $configlog < $configpipe & 
 	pbs_config > $configpipe
 	err_check "* [Error]: $T/${N}_$V$R call pbs_config failed"
 
-	if [ "x$BREAK" = "xconfig" ]; then
-		pwd
-		return 0
-	fi
+	maybe_break config pwd
 
 	ymsg ">> $T/${N}_$V$R compile"
 	[ -p $makepipe ] || mkfifo $makepipe
@@ -2656,10 +2773,7 @@ ypkg_install() {
 	pbs_build > $makepipe
 	err_check "* [Error]: $T/${N}_$V$R call pbs_build failed"
 
-	if [ "x$BREAK" = "xbuild" ]; then
-		pwd
-		return 0
-	fi
+	maybe_break build pwd
 
 	ymsg ">> $T/${N}_$V$R make check"
 	[ -p $checkpipe ] || mkfifo $checkpipe
@@ -2667,10 +2781,7 @@ ypkg_install() {
 	pbs_check > $checkpipe
 	err_check "* [Error]: $T/${N}_$V$R call pbs_check failed"
 
-	if [ "x$BREAK" = "xcheck" ]; then
-		pwd
-		return 0
-	fi
+	maybe_break check pwd
 
 	ymsg ">> $T/${N}_$V$R make install"
 	[ -p $mkinstallpipe ] || mkfifo $mkinstallpipe
@@ -2678,10 +2789,7 @@ ypkg_install() {
 	pbs_install > $mkinstallpipe
 	err_check "* [Error]: $T/${N}_$V$R call pbs_install failed"
 	
-	if [ "x$BREAK" = "xinstall" ]; then
-		pwd
-		return 0
-	fi
+	maybe_break install pwd
 
 	>$buildlog
 	[ -e $configlog ] && cat $configlog >> $buildlog
@@ -2722,15 +2830,12 @@ ypkg_install() {
 		done
 	fi
 
-	if [ "x$BREAK" = "xpackage" ]; then
-		pwd
-		return 0
-	fi
-
 	# Install to /
-	#
-	ymsg ">> $T/${ORIG_N}_$V$R $PROVIDE install to system"
 	packs=$(echo $packs |tr ' ' '\n' |sort -u |xargs)
+	
+	maybe_break package "echo $packs"
+
+	ymsg ">> $T/${ORIG_N}_$V$R $PROVIDE install to system"
 	for pack in $packs; do
 		case "x$AUTO_INSTALL" in
 			xyes) mmsg ">>> Install: $pack"
@@ -2745,7 +2850,9 @@ ypkg_install() {
 }
 
 #
-# $1 pkgname, $2 are notes/comments/depend/pbs
+# $1 pkgname
+# $2 notes/comments/depend/pbs
+#
 ypkg_show() {
 	local ret
 	local itype
