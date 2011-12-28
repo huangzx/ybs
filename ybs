@@ -78,11 +78,11 @@ Commands:
        -s|--search                             Search pkg
        -d|--download                           Download source tartall of pkg
        -r|--remove                             Remove pkg
-       -i|--install                            Compile and install pkg and dependencies
-      -is|--install-single                     Forced install single pkg without checking dependency
+       -i|--install                            Compile and install pkg and dependence
+      -is|--install-single                     Forced install single pkg without checking dependence
        -n|--notes                              Show user notes of pkg
        -c|--comments                           Show user comments of pkg
-       -k|--depend                             Show dependency of pkg
+       -k|--depend                             Show dependence of pkg
        -w|--showpbs                            Show avaliable pbsfile of pkg
       -wr|--whatrequires                       Show which pkgs depends on this pkg
        --sync [path]                           Sync pbslib via git to $YPPATH/pbslib
@@ -97,7 +97,7 @@ Options for install:
   	--config         		       Break after configure	
 	--build                                Break after make a.k.s compile
 	--check				       Break after make check/test
-	--install                              Break after make install    
+	--mkinstall                            Break after make install    
 	--package                              Break after make ypk package    
 
 Base is at $YPPATH
@@ -130,7 +130,7 @@ for i in ${argvs[@]}; do
 		--config)	  BREAK="config"      ;;
 		--build)          BREAK="build"       ;;
 		--check)          BREAK="check"       ;;
-		--install)        BREAK="install"     ;;
+		--mkinstall)      BREAK="mkinstall" ;;
 		--package)        BREAK="package"     
 	esac
 done
@@ -181,17 +181,17 @@ case "${1}" in
 
   		for i in $(echo $deps |tr ' ' '\n' |tac |xargs); do
 			if [ "x$TERM" != "xlinux" ]; then
-				echo -ne "\033]0;ybs working: ${i}\007"; ypkg_install ${i}
+				echo -ne "\033]0;ybs working: ${i}\007"; ypkg_install ${i} || exit 1
 			else
-		  		ypkg_install ${i} 
+		  		ypkg_install ${i} || exit 1
 		 	fi
 	      	done
 		
 		for i in ${args[@]}; do
 			if [ "x$TERM" != "xlinux" ]; then
-				echo -ne "\033]0;ybs working: ${i}\007"; ypkg_install ${i} 
+				echo -ne "\033]0;ybs working: ${i}\007"; ypkg_install ${i} || exit 1
 			else
-				ypkg_install ${i}
+				ypkg_install ${i} || exit 1
 			fi
 		done
 	done
@@ -206,9 +206,9 @@ case "${1}" in
 	FORCE_INSTALL="yes"
 	for i in ${args[@]}; do
 		if [ "x$TERM" != "xlinux" ]; then
-			echo -ne "\033]0;ybs working: ${i}\007"; ypkg_install $i 
+			echo -ne "\033]0;ybs working: ${i}\007"; ypkg_install $i || exit 1
 		else
-			ypkg_install $i
+			ypkg_install $i || exit 1
 		fi
 	done
 	;;
@@ -267,7 +267,7 @@ case "${1}" in
 	;;
 
 -k|--depend)
-	#show dependency
+	#show dependence
 	for i in ${args[@]}; do
 		ypkg_show $i depend
 	done

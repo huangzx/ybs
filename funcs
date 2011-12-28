@@ -252,7 +252,6 @@ err_check() {
 	fi
 }
 
-
 #
 #
 atom_parse() {
@@ -263,7 +262,6 @@ atom_parse() {
 	PBSDIR=""
 	local atom
 	local string="$1"
-
 
 	if [ "x${string##*.}" = "xpbs" ]; then
 		local pbsfile="$(readlink -f $string)"
@@ -665,7 +663,7 @@ ypkg_search() {
 	local lastiname=""
 	local lastitype=""
 	
-	workdir="$(mktemp -d)"
+	local workdir="$(mktemp -d)"
 	trap "rm -r $workdir; return 1" INT
 
 	atom_parse $1
@@ -950,7 +948,7 @@ ypkg_begin_download() {
 
 	# find newest version.
 	atom_parse $1
-	ymsg ">> $T/${N}_$V$R begin download..."
+	ymsg ">> $T/${N}_$V$R begin download."
 
 	#clear all routines by include template file
 	blank_funcs pbs
@@ -1256,6 +1254,7 @@ find_icon() {
 }
 
 #
+# $1 - source_dir
 mkpackage() {
 	local sha
 	local pbsfile
@@ -1270,23 +1269,14 @@ mkpackage() {
 	find |sort -r |fileinfo > $workdir/${N}_$V$R.list
 
 	install=$INSTALL
-	if file_is_exist $YPPATH_SCRIPT/${N}_$V$R.pbs; then
-		pbsfile="$(ls $YPPATH_SCRIPT/${N}_$V$R.pbs)"
-		atom_parse $pbsfile
-		TT=$T
-		. $pbsfile
-		install=$INSTALL
-		#cp $pbsfile $dbdir
-	fi
-	if [ "x$install" != "x" ] && file_is_exist $YPPATH_SCRIPT/files/$install; then
-		mkdir -p $dbdir
-		cp $YPPATH_SCRIPT/files/$install  $dbdir
+	
+	if [ "x$install" != "x" ] && file_is_exist "$filesdir"/$install; then
+		docp "$filesdir"/$install  $dbdir
 	fi
 	
 	build_date="$(date +%s)"
 	declare -a install_size=($(du $source_dir -sb))
 	install_size=${install_size[0]}
-	#file_is_exist $workdir/${N}_$V$R.list &&  cp $workdir/${N}_$V$R.list $dbdir
 	
 	#creat pkginfo
 	#
@@ -1314,36 +1304,20 @@ mkpackage() {
 	redepend=$(echo $RECOMMENDED |xargs |tr " " ",")
 	conflict=$(echo $CONFLICT |xargs |tr " " ",")
 	description=$(echo $DESCRIPTION |sed 's/&/and/g' |tr -d '<>')
-	if [ "x$name" = "x$nn-dev" ]; then
+	
+	if [ "x$name" = "x$NN-dev" ]; then
 		depend=
 		bdepend=
 		redepend=
 		conflict=
 		description="$description (development files)" 
 	fi
-	#
+
 	cd $source_dir
-	#cat >$dbdir/${N}_$V$R.desc <<OOO
-#NAME="$name"
-#DESCRIPTION="$description"
-#HOMEPAGE="$HOMEPAGE"
-#REPO="$repo"
-#ARCH="$arch"
-#LICENSE="$license"
-#PACKAGER="$packager"
-#PRIORITY="$priority"
-#SRC_URI="$SRC_URI"
-#RDEPEND="$depend"
-#BDEPEND="$bdepend"
-#RECOMMENDED="$redepend"
-#CONFLICT="$conflict"
-#BUILD_TIME="$build_date"
-#INSTALL_SIZE="$install_size"
-#INSTALL="$INSTALL"
-#OOO
 	find . |$CPIO --quiet -o -H newc |$XZ -7 >../$pkgdata
-	declare -a size=($(du ../$pkgdata -sb))
+	size=($(du ../$pkgdata -sb))
 	size=${size[0]}
+	
 	cd ..
 	desktop=
 	icon_name=
@@ -1351,8 +1325,9 @@ mkpackage() {
 	gname=
 	gdescription=
 	
-	#desktop and icon
+	# desktop and icon
 	desktop=$(find_desktop $source_dir)
+
 	if [ "x$desktop" != "x" ] && file_is_exist "$desktop"; then
 		cp $desktop  $pkgdir/$N.desktop
 		cp $desktop  /usr/share/app-info/desktop/$N.desktop
@@ -1367,7 +1342,9 @@ mkpackage() {
 		gname="genericname"
 		gdescription="description"
 	fi
+
 	data_count="1"
+	
 	cat >$pkgdir/$control <<OOO
 <?xml version="1.0" encoding="UTF-8"?>
 <PackageInfo>
@@ -1406,25 +1383,27 @@ mkpackage() {
 OOO
 	cd $pkgdir
 	cp $workdir/${N}_$V$R.list $filelist
-	if [ "x$install" != "x" ] && file_is_exist $YPPATH_SCRIPT/files/$install; then
+	
+	if [ "x$install" != "x" ] && file_is_exist $filesdir/$install; then
 		cp $YPPATH_SCRIPT/files/$install .
 	fi
+	
 	tar cjf ../$pkginfo *
 
-	#creat ypkg package
-	#
+	# Creat ypkg package
 	cd ..
 	
 	if [ "x$2" != "x" ]; then
 		target="$2"
-		tar cjf $target $pkgdata  $pkginfo && echo $target
+		tar cjf $target $pkgdata $pkginfo && echo $target
 	else
 		mkdir -p $YPPATH_PACKAGE/$subdir
-		tar cjf $YPPATH_PACKAGE/$uri $pkgdata  $pkginfo && echo $YPPATH_PACKAGE/$uri
-		#update YPPATH_LOCAL_UNI
+		tar cjf $YPPATH_PACKAGE/$uri $pkgdata $pkginfo && echo $YPPATH_PACKAGE/$uri
+		# update YPPATH_LOCAL_UNI
 		mkdir -p ${YPPATH_LOCAL_UNI%/*}
 		touch $YPPATH_LOCAL_UNI
 		timeout=10
+
 		while true; do
 			[ $timeout -eq 0 ] && rm -f "$UNI_LOCKFILE"
 			if ! file_is_exist "$UNI_LOCKFILE"; then
@@ -1442,13 +1421,12 @@ OOO
 				rm -f $UNI_LOCKFILE
 				break
 			else
-				rmsg "* $YPPATH_LOCAL_UNI is locked, wait..."
+				rmsg "* $YPPATH_LOCAL_UNI is locked, wait."
 				sleep 1
 				((timeout--))
 			fi
 		done		
 	fi
-	INSTALL=""
 }
 
 # Check /dirs permission
@@ -1469,10 +1447,14 @@ check_perm_dirs () {
 }
 
 #
+# $1- destdir
+# 
 ypkg_mkpackage() {
-	nn=$N
+	[ ! -d $destdir ] && return 0
+
 	# Source packages
-	local spacks="$destdir "
+	local spacks="$1 "
+	NN="$N"
 
 	#check /dirs permission
 	check_perm_dirs "$destdir"
@@ -1484,6 +1466,7 @@ ypkg_mkpackage() {
 		#strip unnessesary i18n in man path.
 		ypkg_strip_mani18n $destdir
 	fi
+
 	# Strip bin
 	if ! str_isIn "$OPTIONS" "nostrip"; then
 		ypkg_strip_bin $destdir
@@ -1510,7 +1493,7 @@ ypkg_mkpackage() {
 
 	# Mkpackges one by one
 	for pack in $spacks; do
-		#skip empty dirs
+		# skip empty dirs
 		local files=$(find $pack -type f)
 		[ "x$files" = "x" ] && continue
 		mkpackage "$pack"
@@ -1752,7 +1735,7 @@ ykms() {
 		[ -f ./ykms.conf ] && . ./ykms.conf
 
 		#if [ "x$patches" != "x" ]; then
-		#	msg "* ${name}_$version kernel modules patching ..." 
+		#	msg "* ${name}_$version kernel modules patching." 
 		#	for patch in $patches; do
 		#		dopatch "$patch"
 		#	done
@@ -1760,7 +1743,7 @@ ykms() {
 		#fi
 
 		if [ "x$prepare" != "x" ]; then
-			msg "* ${name}_$version kernel modules preparing ..." 
+			msg "* ${name}_$version kernel modules preparing." 
         	        if ! eval $prepare >$preparelog 2>&1; then 
 				rmsg "* [Error] prepare kernel modules failed!"
 			        rmsg "* prepare log: $preparelog"
@@ -1768,14 +1751,14 @@ ykms() {
 			fi
 		fi   
 
-		msg "* ${name}_$version kernel modules compiling ..."
+		msg "* ${name}_$version kernel modules compiling."
 		if ! make $MAKEOPTS $make_args >$makelog 2>&1; then
 			rmsg "* [Error] build kernel modules failed!"
 			rmsg "* build log: $makelog"
 			return 1
 		fi	
 
-		msg "* ${name}_$version kernel modules installing ..."
+		msg "* ${name}_$version kernel modules installing."
 		if [ "x$mkinstall_args" = "x" ]; then
 			command="make $MAKEOPTS install"
 		else
@@ -1806,7 +1789,7 @@ ykms() {
 		make $MAKEOPTS clean >/dev/null 2>&1
 
 		if [ "x$post_inst" != "x" ]; then
-			msg "* ${name}_$version kernel modules post install ..." 
+			msg "* ${name}_$version kernel modules post install." 
         	        if ! eval $post_inst >$post_instlog 2>&1; then 
 				rmsg "* [Error] post install kernel modules failed!"
 			        rmsg "* post_inst log: $post_instlog"
@@ -2464,7 +2447,7 @@ gnome2_mime_database_update() {
 # 4 2 and 3 
 ypkg_check_package () {
 	local pack="$(readlink -f $1)"
-	workdir="$(mktemp -d)"
+	local workdir="$(mktemp -d)"
 	trap "rm -r $workdir; return 1" INT
 	if ! file_is_exist $pack; then
 		echo "* $pack not found" 1>&2
@@ -2504,6 +2487,7 @@ ypkg_check_package () {
 		rm -rf $workdir
 		return $return_value
 	fi
+
 	rm -rf $workdir
 }
 
@@ -2624,7 +2608,7 @@ install_pack () {
 			rm -f $WORLD_LOCKFILE
 			break
 		else
-		        rmsg "* $YPPATH_WORLD is locked, wait..."
+		        rmsg "* $YPPATH_WORLD is locked, wait."
 		        sleep 1
 			((timeout--))
 		fi
@@ -2664,7 +2648,7 @@ install_pack () {
 #config          break after configure	
 #build           break after make a.k.s compile
 #check		 break after make check/test
-#install         break after make install    
+#mkinstall         break after make install    
 #package         break after make ypk package    
 
 maybe_break() {
@@ -2700,13 +2684,12 @@ ypkg_install() {
 	[ "x$FORCE_INSTALL" != "xyes" ] && gmsg_ "[$stat]" || gmsg_ "["$stat"F]"
 
 	case $stat in
-        	E)	
-			msg " $T/${N}_$V$R "	
-			[ "x$FORCE_INSTALL" != "xyes" ] && return 0    		;;
-		N)      msg " $T/${N}_$V$R "
-			pre_version=  ;;
-		U)      msg " $T/${N}_$pre_version ----> $T/${N}_$V$R " ;;
-		D)      msg " $T/${N}_$pre_version ----> $T/${N}_$V$R " ;;
+        	E) msg " $T/${N}_$V$R "	
+		   [ "x$FORCE_INSTALL" != "xyes" ] && return 0    		;;
+		N) msg " $T/${N}_$V$R "
+		   pre_version=  ;;
+		U) msg " $T/${N}_$pre_version ----> $T/${N}_$V$R " ;;
+		D) msg " $T/${N}_$pre_version ----> $T/${N}_$V$R " ;;
 	esac
 		
 	[ "x$PRETEND" = "xyes" ] && return 0
@@ -2789,63 +2772,97 @@ ypkg_install() {
 	pbs_install > $mkinstallpipe
 	err_check "* [Error]: $T/${N}_$V$R call pbs_install failed"
 	
-	maybe_break install pwd
+	local packs=""
+	local destdirs=($destdir)
+	local descfiles=($descfiles)
+	TT="$T"
+	
+	gene_desc() {
+		local file=$1
+        	cat >$file <<EOF
+N="$N"
+V="$V"
+R="$R"
+DESCRIPTION="$DESCRIPTION"
+COMMENTS="$COMMENTS"
+HOMEPAGE="$HOMEPAGE"
+REPO="$REPO"
+YARCH="$YARCH"
+LICENSE="$LICENSE"
+PRIORITY="$PRIORITY"
+PACKAGER="$PACKAGER"
+RDEPEND="$RDEPEND"
+BDEPEND="$BDEPEND"
+RECOMMENDED="$RECOMMENDED"
+CONFLICT="$CONFLICT"
+OPIONAL="$CONFLICT"
+INSTALL="$INSTALL"
+OPTIONS="$OPTIONS"
+EOF
+}
+	gene_desc base.desc 
+	descfiles[0]=base.desc
+
+	if [ "x$PROVIDE" != "x" ]; then	
+		ymsg ">> $T/${N}_$V$R splite $PROVIDE."
+		j=1
+
+		for i in $PROVIDE; do
+			. ${descfiles[0]}
+			destdir="$workdir/${i}_$V$R"
+			atom_parse $destdir
+			${i}_install
+			err_check "* [Error]: $TT/${N}_$V$R call ${N}_install failed"
+			destdirs[$j]=$destdir
+			
+			gene_desc $N.desc
+			descfiles[$j]=$N.desc
+			
+			blank_funcs
+			let j=$j+1
+		done
+
+	fi
 
 	>$buildlog
 	[ -e $configlog ] && cat $configlog >> $buildlog
-	[ -e $makelog ] &&   cat $makelog >> $buildlog
-	[ -e $checklog ] &&  cat $checklog >> $buildlog
-	[ -e $mkinstalllog ] &&  cat $mkinstalllog >> $buildlog
-	[ -e $buildlog ] && gzip -9 -f $buildlog
-			
-	ORIG_N=${N}
-	destdir_OLD=$destdir
-	packs=""
-	#
-	# Make ypk package
-	if [ -d "$destdir" ]; then
-		ymsg ">> $T/${N}_$V$R make package"
-		packs="$(ypkg_mkpackage) "
-		err_check "* [Error]: $T/${N}_$V$R make binary package failed"
-	fi
+	[ -e $makelog ]   && cat $makelog >> $buildlog
+	[ -e $checklog ]  && cat $checklog >> $buildlog
+	[ -e $buildlog ]  && gzip -9 -f $buildlog
+	[ -e $mkinstalllog ] && cat $mkinstalllog >> $buildlog
 
-	#
-	INSTALL=""
-	if [ "x$PROVIDE" != "x" ]; then	
-		ymsg ">> $T/${N}_$V$R splite $PROVIDE..."
-		for i in $PROVIDE; do
-			N=${i}
-			destdir="$workdir/${N}_$V$R"
-			${i}_install
-			err_check "* [Error]: $T/${ORIG_N}_$V$R ${N} call ${i}_install failed"
+	maybe_break mkinstall pwd
 
-			# make package
-			if [ -d "$destdir" ]; then
-				ymsg ">> $T/${ORIG_N}_$V$R ${N} make package"
-					packs+="$(ypkg_mkpackage) "
-					err_check "* [Error]: $T/${ORIG_N}_$V$R ${N} make binary package failed"
-				fi
-				YARCH=$(uname -m)
-				blank_funcs
-		done
-	fi
+	# make pkg package
+	j=0
+	for destdir in ${destdirs[@]}; do
+		atom_parse $destdir
+		ymsg ">> $TT/${N}_$V$R make package"
+		. ${descfiles[$j]}
+		packs+="$(ypkg_mkpackage $destdir) "
+		err_check "* [Error]: $TT/${N}_$V$R make binary package failed"
+		blank_funcs
+		let j=$j+1
+	done
 
-	# Install to /
 	packs=$(echo $packs |tr ' ' '\n' |sort -u |xargs)
-	
+
 	maybe_break package "echo $packs"
 
-	ymsg ">> $T/${ORIG_N}_$V$R $PROVIDE install to system"
+	# install to system
+	ymsg ">> $TT/${N}_$V$R $PROVIDE install to system"
+
 	for pack in $packs; do
 		case "x$AUTO_INSTALL" in
 			xyes) mmsg ">>> Install: $pack"
 			      #install_pack $pack ;;
-		      	      ypkg2 -I -f $pack ;;
-		   	   *) gmsg ">>> $pack"
+			      ypkg2 -I -f $pack ;;
+			   *) gmsg ">>> $pack"
 		esac
 	done
+
 	[ -d $workdir ] && rm -r $workdir
-	echo 
+
 	return 0
 }
 
@@ -2860,7 +2877,7 @@ ypkg_show() {
 	local iver
 	local irver
 	ypkg_getpbsfile "$1"
-	
+
 	if [ $? == 0 ]; then
 		atom_parse $NEWEST
 		itype=$T
@@ -3105,7 +3122,7 @@ ypkg_do_remove_package() {
 			rm -f $WORLD_LOCKFILE
 			break
 		else
-	        	rmsg "* $YPPATH_WORLD is locked, wait..."
+	        	rmsg "* $YPPATH_WORLD is locked, wait."
 	        	sleep 1
 			((timeout--))
 		fi
@@ -3266,7 +3283,7 @@ ypkg_conflict_remove() {
 			rm -f $WORLD_LOCKFILE
 			break
 		else	
-			rmsg "$YPPATH_WORLD is locked, wait..."
+			rmsg "$YPPATH_WORLD is locked, wait."
 			sleep 1
 			((timeout--))
 		fi
@@ -3317,7 +3334,7 @@ ypkg_upgrade_remove() {
 			rm -f $WORLD_LOCKFILE
 			break
 		else	
-			rmsg "$YPPATH_WORLD is locked, wait..."
+			rmsg "$YPPATH_WORLD is locked, wait."
 			sleep 1
 			((timeout--))
 		fi
