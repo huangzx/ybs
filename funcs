@@ -630,74 +630,63 @@ ypkg_searchInstalled() {
 	esac
 }
 
-
-# Find one packge.
-# $1 is type, $2 is package name, $3 is index
 #
-ypkg_searchOK() {
-	local pkgtype=$1
-	local pkgname=$2
-	local allver
-	local install_result
+#
+allver_msg() {
+	local pbsfile
+	local msg
+	local extra="$BUILD_TIME $INSTALL_SIZE $PACK_SIZE"
 
-	ypkg_searchInstalled $pkgtype $pkgname
-
-	ypkg_getallpbsver $YPPATH_LIB/$pkgtype/$pkgname
-	echo -e "\t$(gmsg "Available:") $allver"
-	echo -e "\t$(gmsg "Homepage:") $HOMEPAGE"
-	echo -e "\t$(gmsg "Description:") $DESCRIPTION"
-
-	#
-	blank_funcs pbs
-	blank_funcs desc
-	echo 
+	for pbsfile in $ALL_PBSFILE; do 
+		atom_parse $pbsfile
+		. $pbsfile
+		case $REPO in
+		        [Tt]esting) repo="t"  ;;
+		         [Ss]table) repo="s" ;;
+   	               [Uu]nusable) repo="u" ;;
+                                 *) repo="s"
+		esac
+		[ "x$msg" = "x" ] && msg="$(mmsg $V$R[$repo]) $extra" || msg+=" | $(mmsg $V$R[$repo]) $extra"
+	done
+	echo $msg
 }
 
 #
 #
 ypkg_search() {
-	local results
-	local pack
-	local count=0
 	local iname
-	local lastiname=""
-	local lastitype=""
-	
+	local string="$1"
 	local workdir="$(mktemp -d)"
+	local tempfile=$(mktemp -p $workdir)
+	local pbsfile
+
 	trap "rm -r $workdir; return 1" INT
 
-	atom_parse $1
-	
-	iname="*$N*.pbs"
-
-	if [ "x$T" != "x" ]; then
-		iname="*${N}_*.pbs"
-		results=$(find $YPPATH_LIB -iname "$iname" | grep "/$T/")
-	else
-		results=$(find $YPPATH_LIB -iname "$iname")
+	if ! ypkg_getpbsfile "$string" all; then
+		rmsg "* $string not found."
+		return 1
 	fi
 	
-	if [ "x$results" = "x" ];then 
-		rmsg "* [Error]: $1 not found."
-		echo 
-		return
-	fi
-	
-	tempfile=$(mktemp -p $workdir)
-	
-	for i in $results; do
-		atom_parse $i
-		if [ "x$T" = "x$lastitype" -a "x$N" = "x$lastiname" ]; then
-			continue
-		fi
+	for pbsfile in $ALL_PBSFILE; do
+		atom_parse "$pbsfile"
+		ypkg_getpbsfile $T/$N name
 		
 		if grep -q "$T/$N/${N}_$V$R" $tempfile; then
 			continue
 		fi
 		
-		lastitype="$T"
-		lastiname="$N"
-		ypkg_searchOK "$T" "$N" "$i"
+		echo "$T/$N/${N}_$V$R" >>$tempfile
+		
+		ypkg_searchInstalled $T $N
+
+		echo -e "\t$(gmsg "Available:") $(allver_msg)"
+		. $NEWEST
+		echo -e "\t$(gmsg "Homepage:") $HOMEPAGE"
+		echo -e "\t$(gmsg "Description:") $DESCRIPTION"
+		echo 
+
+		blank_funcs pbs
+		blank_funcs desc
 	done
 
 	[ -d $workdir ] && rm -r $workdir
@@ -750,7 +739,7 @@ check_and_download_raw() {
 		git)	
 		local name=${fname%*.git}
 		cd ${YPPATH_SOURCE}
-		cd $name && git pull || git clone ${1} 
+		cd $name 2>/dev/null && git pull || git clone ${1} 
 		[ "$?" == "0" ] && return 0 ;;
 
     http|https|ftp|*)	
@@ -819,15 +808,19 @@ check_and_download_raw() {
 
 #
 # $1 - strings
-# return $NEWEST: newest or specifid version pbs files with full path
+# $2 - all/name
+# ALL_PBSFILE : all version pbs files with full path 
+# $NEWEST: newest or specifid version pbs files with full path
 # 
 ypkg_getpbsfile() {
 	NEWEST=""	
 	local files_ready
 	local files_ready_raw
 	local string="$1"
+	local range="$2"
 	local min
 	local max
+	local iname
 	
 	atom_parse "$1"
 	local find_dir="${PBSDIR}"
@@ -851,7 +844,13 @@ ypkg_getpbsfile() {
 	fi
 
 	VR="$(echo $VR |tr -d '()')"
-	local pbsfiles=($(find $find_dir/"$T" -maxdepth 3 -type f -iname "${N}_*.pbs"))
+	
+	case $range in
+		all)   iname="*${N}*.pbs" ;;
+	       name|*) iname="${N}_*.pbs"
+	esac
+
+	local pbsfiles=($(find $find_dir/"$T" -maxdepth 3 -type f -iname "$iname"))
 	
 	if [ "x$pbsfiles" = "x" ]; then
 		# Fixme!
@@ -860,6 +859,12 @@ ypkg_getpbsfile() {
 	fi	
 
 	[ "x$pbsfiles" = "x" ] && return 1
+
+	case $range in
+		all)  ALL_PBSFILE="${pbsfiles[@]}"
+		      return 0 ;;
+		name) ALL_PBSFILE="${pbsfiles[@]}"
+	esac
 
 	case x$VR in
 		x\>[[:digit:]]*)	
@@ -1268,10 +1273,20 @@ mkpackage() {
 	
 	find |sort -r |fileinfo > $workdir/${N}_$V$R.list
 
-	install=$INSTALL
-	
-	if [ "x$install" != "x" ] && file_is_exist "$filesdir"/$install; then
-		docp "$filesdir"/$install  $dbdir
+	if [ "x$N" = "x$NN-dev" ]; then
+		RDEPEND=
+		BDEPEND=
+		RECOMMENDED=
+		PRIORITY=
+		INSTALL=
+		CONFLICT=
+		DESCRIPTION="$DESCRIPTION (development files)" 
+	else
+		install=$INSTALL
+		
+		if [ "x$install" != "x" ] && file_is_exist "$filesdir"/$install; then
+			docp "$filesdir"/$install $dbdir
+		fi
 	fi
 	
 	build_date="$(date +%s)"
@@ -1304,14 +1319,6 @@ mkpackage() {
 	redepend=$(echo $RECOMMENDED |xargs |tr " " ",")
 	conflict=$(echo $CONFLICT |xargs |tr " " ",")
 	description=$(echo $DESCRIPTION |sed 's/&/and/g' |tr -d '<>')
-	
-	if [ "x$name" = "x$NN-dev" ]; then
-		depend=
-		bdepend=
-		redepend=
-		conflict=
-		description="$description (development files)" 
-	fi
 
 	cd $source_dir
 	find . |$CPIO --quiet -o -H newc |$XZ -7 >../$pkgdata
@@ -2767,11 +2774,6 @@ ypkg_install() {
 	maybe_break check pwd
 
 	ymsg ">> $T/${N}_$V$R make install"
-	[ -p $mkinstallpipe ] || mkfifo $mkinstallpipe
-	tee $mkinstalllog < $mkinstallpipe & 
-	pbs_install > $mkinstallpipe
-	err_check "* [Error]: $T/${N}_$V$R call pbs_install failed"
-	
 	local packs=""
 	local destdirs=($destdir)
 	local descfiles=($descfiles)
@@ -2801,7 +2803,12 @@ OPTIONS="$OPTIONS"
 EOF
 }
 	gene_desc base.desc 
-	descfiles[0]=base.desc
+	descfiles[0]=$(readlink -f base.desc)
+	
+	[ -p $mkinstallpipe ] || mkfifo $mkinstallpipe
+	tee $mkinstalllog < $mkinstallpipe & 
+	pbs_install > $mkinstallpipe
+	err_check "* [Error]: $T/${N}_$V$R call pbs_install failed"
 
 	if [ "x$PROVIDE" != "x" ]; then	
 		ymsg ">> $T/${N}_$V$R splite $PROVIDE."
@@ -2811,13 +2818,14 @@ EOF
 			. ${descfiles[0]}
 			destdir="$workdir/${i}_$V$R"
 			atom_parse $destdir
+		
+			ymsg ">> $TT/${N}_$V$R make install"
 			${i}_install
 			err_check "* [Error]: $TT/${N}_$V$R call ${N}_install failed"
-			destdirs[$j]=$destdir
-			
+
 			gene_desc $N.desc
-			descfiles[$j]=$N.desc
-			
+			descfiles[$j]=$(readlink -f $N.desc)
+			destdirs[$j]=$destdir
 			blank_funcs
 			let j=$j+1
 		done
@@ -2828,8 +2836,8 @@ EOF
 	[ -e $configlog ] && cat $configlog >> $buildlog
 	[ -e $makelog ]   && cat $makelog >> $buildlog
 	[ -e $checklog ]  && cat $checklog >> $buildlog
-	[ -e $buildlog ]  && gzip -9 -f $buildlog
 	[ -e $mkinstalllog ] && cat $mkinstalllog >> $buildlog
+	[ -e $buildlog ]  && gzip -9 -f $buildlog
 
 	maybe_break mkinstall pwd
 
@@ -2844,6 +2852,8 @@ EOF
 		blank_funcs
 		let j=$j+1
 	done
+
+	rm ${descfiles[@]}
 
 	packs=$(echo $packs |tr ' ' '\n' |sort -u |xargs)
 
