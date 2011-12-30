@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# ybs -- Ylmf_OS Build System
+# ybs -- Ylmf OS Build System
 # 
 # Maintainer: Ylmf OS Developers <ylmfos@115.com>
 #
@@ -104,22 +104,24 @@ Base is at $YPPATH
 EOF
 }
 
-# Support mutipackages
-# 
+#
 i=0
 j=0
-for arg in $@; do
+for ((h=1;h<=$#;h++));do
+	arg=$(echo $(eval "echo \$${h}"))
+	# remove blank in string	
+	arg=$(echo $arg |tr -d '[:blank:]')
 	case $arg in
 		-*) argvs[${j}]="$arg"
-		    j=$(($j+1))	;;
+		    let j++	;;
 		*)  args[${i}]="$arg"
-		    i=$(($i+1))
+		    let i++
 	esac
 done
+
 #echo "packages: ${args[@]}"
 #echo "parameter: ${argvs[@]}"
 
-#
 for i in ${argvs[@]}; do
 	case ${i} in
 		-p|-pv|--pretend) PRETEND="yes"       ;;
@@ -130,7 +132,7 @@ for i in ${argvs[@]}; do
 		--config)	  BREAK="config"      ;;
 		--build)          BREAK="build"       ;;
 		--check)          BREAK="check"       ;;
-		--mkinstall)      BREAK="mkinstall" ;;
+		--mkinstall)      BREAK="mkinstall"   ;;
 		--package)        BREAK="package"     
 	esac
 done

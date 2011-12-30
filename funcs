@@ -235,11 +235,13 @@ str_isIn() {
 	fi
 	local string=($1)
 	local substring="$2"
+
 	for i in ${string[@]}; do
 		if [ "x$i" = "x$substring" ]; then
 			return 0
 		fi
 	done
+
 	return 1
 }
 
@@ -552,7 +554,9 @@ ypkg_get_packages() {
 }
 
 #
-# ypkg_searchInstalled $T $N $V$R(this is the newest version)
+# $1 $T 
+# $2 $N
+# $3 $V$R (this is the newest version) 
 #
 ypkg_searchInstalled() {
 	local pkgtype=$1
@@ -617,11 +621,9 @@ allver_msg() {
 #
 #
 ypkg_search() {
-	local iname
 	local string="$1"
 	local record=(AA)
 	local pbsfile
-	local count=0
 
 	if ! ypkg_getpbsfile "$string" all; then
 		rmsg "* $string not found."
@@ -632,9 +634,9 @@ ypkg_search() {
 		atom_parse "$pbsfile"
 		ypkg_getpbsfile $T/$N name
 
-		str_isIn "${record[@]}" "$T/${N}_$V$R" && continue
-		record[$count]="$T/${N}_$V$R"
-
+		str_isIn "${record[@]}" "$T/$N" && continue
+		record[$count]="$T/$N"
+	
 		ypkg_searchInstalled $T $N $V$R
 
 		echo -e "\t$(gmsg "Available:") $(allver_msg)"
@@ -764,6 +766,7 @@ check_and_download_raw() {
 #
 # $1 - strings
 # $2 - all/name
+# resules:
 # ALL_PBSFILE : all version pbs files with full path 
 # $NEWEST: newest or specifid version pbs files with full path
 # 
@@ -899,18 +902,22 @@ ypkg_getpbsfile() {
 		[ "$?" == "1" ] && NEWEST=$file
 	done
 	
-	[ "x$NEWEST" = "x" ] && return 1 || return 0
+	if [ "x$NEWEST" != "x" ]; then
+		atom_parse $NEWEST
+		return 0
+	fi
+
+	return 1
 }
 
 #
+# $1 - pbsfile with full path, as is NEWEST
 ypkg_begin_download() {
 	local url
+	local pbsfile="$1"
 
-	# find newest version.
-	atom_parse $1
 	ymsg ">> $T/${N}_$V$R begin download."
 
-	#clear all routines by include template file
 	blank_funcs pbs
 
 	config="$YPINST_PREFIX "
@@ -925,26 +932,22 @@ ypkg_begin_download() {
 
 	YPPATH_SCRIPT="$YPPATH_LIB/$T/$N"
 
-	#include package build scripts
-	if [ -f "$1" ];then
-		. $1
-		err_check "* [Error]: $1 is invalid! "
+	if [ -f "$pbsfile" ];then
+		. $pbsfile
+		err_check "* [Error]: $pbsfile is invalid! "
 	else
-		err_check "* [Error]: $1 not found"
+		err_check "* [Error]: $1pbsfile not found"
 	fi
 
-	#create source directory.
 	mkdir -p $YPPATH_SOURCE
 	err_check "* [Error]: Create dir $YPPATH_SOURCE failed."
 
-	# Download all files
+	# download all files
 	if [ "x${SRC_URI}" != "x" ]; then
 		local count=0
 		local checksum=""
 
-		#
 		# CHECKSUM: $SRC_URI in pbs file has md5sum/sha1sum/sha256sum value one by one.
-		#
 		checksum=($CHECKSUM)
 		
 		for url in ${SRC_URI}; do
@@ -963,12 +966,14 @@ ypkg_begin_download() {
 ypkg_download() {
 	local string="$1"
 	ypkg_getpbsfile "$string"
+
 	if [ "$?" == "0" ]; then
 		# found, download it
 		ypkg_begin_download $NEWEST
 		return 0
 	fi
-	rmsg "* $string not found."
+
+	rmsg "* [Error]: $string not found."
 	return 1
 }
 
@@ -1491,47 +1496,6 @@ ypkg_rm_packgeinfo() {
 	ypkg_rm_dir_safe $YPPATH_DB/$N
 }
 
-#
-# Check if already insalled. $T/"$N"$V 
-#
-# N -- new install
-# U -- upgrade
-# D -- downgrade
-# E -- same version
-ypkg_checkinst() {
-	local pkgtype=$T
-	local pkgname=$N
-	local pkgver=$V$R
-	
-	ypkg_searchInstalled $pkgtype $pkgname $pkgver >/dev/null
-	
-	if [ "x$INSTALL_STATUS" = "xuninstall" ]; then
-		echo "$V$R N"
-		return 0
-	fi	
-	
-	new=$pkgver
-	old=$INSTALL_VERSION
-
-	# Compare 2 versions
-	# Return 0 if same. 
-	# Return 1 if $1 is grater than $2 
-	# Return 2 if $1 is lesser then $2
-
-	atom_cmp $old $new 
-	case $? in
-		1) echo $old "D" 
-		   return 0   ;;
-	 	2)
-		   echo $old "U" 
-		   return 0   ;;
-	 	0) 
-	   	   echo "$old E"
-	   	   return 0  ;;
-	esac
-	
-	return 0
-}
 
 #
 # find_pkg_info
@@ -1707,7 +1671,7 @@ ykms() {
 		if [ "x$prepare" != "x" ]; then
 			msg "* ${name}_$version kernel modules preparing." 
         	        if ! eval $prepare >$preparelog 2>&1; then 
-				rmsg "* [Error] prepare kernel modules failed!"
+				rmsg "* [Error]: prepare kernel modules failed!"
 			        rmsg "* prepare log: $preparelog"
 		                return 1
 			fi
@@ -1715,7 +1679,7 @@ ykms() {
 
 		msg "* ${name}_$version kernel modules compiling."
 		if ! make $MAKEOPTS $make_args >$makelog 2>&1; then
-			rmsg "* [Error] build kernel modules failed!"
+			rmsg "* [Error]: build kernel modules failed!"
 			rmsg "* build log: $makelog"
 			return 1
 		fi	
@@ -1727,7 +1691,7 @@ ykms() {
 			command="make $MAKEOPTS $mkinstall_args"
 		fi
 		if ! eval "$command" >$mkinstalllog 2>&1; then
-			rmsg "* [Error] install kernel modules failed!"
+			rmsg "* [Error]: install kernel modules failed!"
 			rmsg "* install log: $mkinstalllog"
 			return 1
 		fi
@@ -1753,7 +1717,7 @@ ykms() {
 		if [ "x$post_inst" != "x" ]; then
 			msg "* ${name}_$version kernel modules post install." 
         	        if ! eval $post_inst >$post_instlog 2>&1; then 
-				rmsg "* [Error] post install kernel modules failed!"
+				rmsg "* [Error]: post install kernel modules failed!"
 			        rmsg "* post_inst log: $post_instlog"
 		                return 1
 			fi
@@ -1900,7 +1864,7 @@ dopatch(){
 		file_is_exist "$file" || file="$filesdir/$1"
 		file_is_exist "$file" || file="$filesdir/patches/$1"
 		if ! file_is_exist "$file"; then
-			rmsg "* Error: \"$1\" not found."
+			rmsg "* [Error]: \"$1\" not found."
 			exit  1
 		fi
 		dir1="$(grep ^--- "$file" |head -n1 |awk '{print $2}' |awk -F/ '{print $1}' |tr -d '\r')"
@@ -2488,7 +2452,7 @@ install_pack () {
 	c_version="$V$R"
 	pre_install_listfile=$(ypkg_getlistfile all |tr ' ' '\n' |grep -v "${N}_$V$R".list)
 	atom_parse $pre_install_listfile
-	#pre_version
+	# INSTALL_VERSION
 	if [ "x$V$R" != "x" ]; then
 		p_version="$V$R"	
 		atom_cmp ${N}_$p_version ${N}_$c_version
@@ -2629,33 +2593,48 @@ maybe_break() {
 # pbsfile - lftp_4.3.3.pbs 
 #
 ypkg_install() {
-	local ret
 	local string="$1"
-	local break="$2"
+	local stat
 
 	if ! ypkg_getpbsfile "$string"; then
-		rmsg "* $string not found."
+		rmsg "[Error]: $string not found."
 		return 1
 	fi
 
+	ypkg_searchInstalled $T $N $V$R >/dev/null
+	
+	local new=$V$R
+	
+	if [ "x$INSTALL_STATUS" = "xuninstall" ]; then
+		stat="N"
+	else
+		atom_cmp $INSTALL_VERSION $new 
+		case $? in
+			1) stat="D"  ;;
+	 		2) stat="U"  ;;
+	 		0) stat="E"
+		esac
+	fi
+
 	atom_parse $NEWEST
-	declare -a tmp=($(ypkg_checkinst))
-	pre_version=${tmp[0]}
-	stat=${tmp[1]}
 
 	[ "x$FORCE_INSTALL" != "xyes" ] && gmsg_ "[$stat]" || gmsg_ "["$stat"F]"
 
+	# N -- new install
+	# U -- upgrade
+	# D -- downgrade
+	# E -- same version
 	case $stat in
-        	E) msg " $T/${N}_$V$R "	
-		   [ "x$FORCE_INSTALL" != "xyes" ] && return 0    		;;
-		N) msg " $T/${N}_$V$R "
-		   pre_version=  ;;
-		U) msg " $T/${N}_$pre_version ----> $T/${N}_$V$R " ;;
-		D) msg " $T/${N}_$pre_version ----> $T/${N}_$V$R " ;;
+        	E) 
+		   msg " $T/${N}_$V$R "	
+		   [ "x$FORCE_INSTALL" != "xyes" ] && return 0         ;;
+		N) msg " $T/${N}_$V$R "				       ;;
+		U) msg " $T/${N}_$INSTALL_VERSION ----> $T/${N}_$V$R " ;;
+		D) msg " $T/${N}_$INSTALL_VERSION ----> $T/${N}_$V$R " ;;
 	esac
 		
 	[ "x$PRETEND" = "xyes" ] && return 0
-		
+	
 	ypkg_begin_download $NEWEST || return 1
 
 	maybe_break fetch 
@@ -2664,7 +2643,6 @@ ypkg_install() {
 	# Download ok, install it.
 	#		
 	
-	local ret=0
 	workdir="$YPPATH_FIELD/$N"
 	mkdir -p $workdir
 	trap "rm -r $workdir $UNI_LOCKFILE 2>/dev/null; exit 1" INT
