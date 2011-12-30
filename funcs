@@ -314,10 +314,11 @@ atom_parse() {
 	atom=${atom%-$ARCH}
 	atom=${atom%-any}
 
-	# cairo(>=1.6) x11-libs/cairo((>=1.6)
+	# cairo(>=1.6) x11-libs/cairo(>=1.6)
 	if echo $atom |grep \( |grep -q \); then
 		N=${atom%%(*)}
 		VR="${atom##$N}"
+		VR=$(echo $VR |tr -d '[:blank:]')
 		return 0
 	fi
 
@@ -550,59 +551,21 @@ ypkg_get_packages() {
 	ypkg_packs=`ls $YPPATH_LIB/$1 2>/dev/null`
 }
 
-
-
-# Get all pbs versions, ret to $allver
-# $1 is path 
-ypkg_getallpbsver() {
-	local files file repo
-	local tmpfile=$(mktemp)
-	local tmpfile1=$(mktemp)
-	allver=""
-	files="$(ls $1/*.pbs 2>/dev/null) "
-	for file in $files; do
-		blank_funcs pbs
-		blank_funcs desc
-		. $file
-		atom_parse $file
-		case $REPO in 
-			[Tt]esting)  repo="t" ;;
-			[Ss]table)   repo="s" ;;
-			[Uu]nusable) repo="u" ;;
-			        *)   repo="s" 
-		esac
-		if [ "x$BUILD_TIME" != "x" ]; then
-			BUILD_TIME=$(date -d "1970-01-01 UTC $BUILD_TIME seconds" +%F,%T 2>/dev/null)
-		fi
-		if [ -z "$allver" ]; then
-			allver="$(mmsg $V$R[$repo]) $BUILD_TIME $INSTALL_SIZE $PACK_SIZE"
-		else
-			if grep -q "$T/${N}_$V$R" $tmpfile1; then
-				continue
-			else
-				allver+=" | $(mmsg $V$R[$repo]) $BUILD_TIME $INSTALL_SIZE $PACK_SIZE"
-			fi
-		fi
-		echo "$T/${N}_$V$R" >>$tmpfile1
-	done
-	rm -r $tmpfile $tmpfile1  2>/dev/null
-}
-
 #
-# ypkg_searchInstalled $T $N
+# ypkg_searchInstalled $T $N $V$R(this is the newest version)
 #
 ypkg_searchInstalled() {
 	local pkgtype=$1
 	local pkgname=$2
+	local pkgver=$3
+
 	INSTALL_STATUS=$(yget2 --show $pkgname |grep Status |head -n1 |awk '{print $2}')
 	
 	case "x$INSTALL_STATUS" in
 	 	x[IUD])
 	   	  	INSTALL_TIME=$(yget2 --show $pkgname |grep Install_date |head -n1 |awk '{print $2" "$3}')
 			INSTALL_VERSION=$(yget2 --show $pkgname |grep Version |head -n1 |awk '{print $2}')
-			ypkg_getpbsfile $pkgtype/$pkgname
-			atom_parse $NEWEST
-			new=$V$R
+			new=$pkgver
 			old=$INSTALL_VERSION
 			# Compare 2 versions
 			# Return 0 if same.
@@ -656,11 +619,9 @@ allver_msg() {
 ypkg_search() {
 	local iname
 	local string="$1"
-	local workdir="$(mktemp -d)"
-	local tempfile=$(mktemp -p $workdir)
+	local record=(AA)
 	local pbsfile
-
-	trap "rm -r $workdir; return 1" INT
+	local count=0
 
 	if ! ypkg_getpbsfile "$string" all; then
 		rmsg "* $string not found."
@@ -670,14 +631,11 @@ ypkg_search() {
 	for pbsfile in $ALL_PBSFILE; do
 		atom_parse "$pbsfile"
 		ypkg_getpbsfile $T/$N name
-		
-		if grep -q "$T/$N/${N}_$V$R" $tempfile; then
-			continue
-		fi
-		
-		echo "$T/$N/${N}_$V$R" >>$tempfile
-		
-		ypkg_searchInstalled $T $N
+
+		str_isIn "${record[@]}" "$T/${N}_$V$R" && continue
+		record[$count]="$T/${N}_$V$R"
+
+		ypkg_searchInstalled $T $N $V$R
 
 		echo -e "\t$(gmsg "Available:") $(allver_msg)"
 		. $NEWEST
@@ -685,11 +643,8 @@ ypkg_search() {
 		echo -e "\t$(gmsg "Description:") $DESCRIPTION"
 		echo 
 
-		blank_funcs pbs
-		blank_funcs desc
+		blank_funcs
 	done
-
-	[ -d $workdir ] && rm -r $workdir
 }
 
 #
@@ -1546,16 +1501,16 @@ ypkg_rm_packgeinfo() {
 ypkg_checkinst() {
 	local pkgtype=$T
 	local pkgname=$N
-	local pkgversion=$V$R
+	local pkgver=$V$R
 	
-	ypkg_searchInstalled $pkgtype $pkgname >/dev/null
+	ypkg_searchInstalled $pkgtype $pkgname $pkgver >/dev/null
 	
 	if [ "x$INSTALL_STATUS" = "xuninstall" ]; then
 		echo "$V$R N"
 		return 0
 	fi	
 	
-	new=$pkgversion
+	new=$pkgver
 	old=$INSTALL_VERSION
 
 	# Compare 2 versions
@@ -2679,7 +2634,7 @@ ypkg_install() {
 	local break="$2"
 
 	if ! ypkg_getpbsfile "$string"; then
-		rmsg "* $string nou found."
+		rmsg "* $string not found."
 		return 1
 	fi
 
