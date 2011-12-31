@@ -344,29 +344,28 @@ atom_parse() {
 # the former = the latter, return 0
 #
 atom_cmp() {
-	local r1 r2
+	local string1="$1"
+	local string2="$2"
 	local v1 v2 
-	local n1 n2
 
-	atom_parse $1
-	n1="$N"
-	v1=$V$R
+	string1=${string1##*_}
+	v1=${string1%.pbs}
+	v1=$(echo $v1 |tr '[A-Z]' '[a-z]')
 
-	atom_parse $2
-	n2="$N"
-	v2=$V$R
+	string2=${string2##*_}
+	v2=${string2%.pbs}
+	v2=$(echo $v2 |tr '[A-Z]' '[a-z]')
 
 	# Compare version
 	# alpha < beta < rc 
 	
-	if [ "x$v1" = "x$v2" ];then
+	if [ "x$v1" = "x$v2" ] || test $v1 -eq $v2 2>/dev/null;then
 		return 0
 	fi
 
 	local a=($(echo $v1 |awk -F- '{print $1" "$2" "$3" "$4" "$6" "$7}'))
 	local b=($(echo $v2 |awk -F- '{print $1" "$2" "$3" "$4" "$6" "$7}'))
-	maxnum=${#a[@]}
-	[ "1${#a[@]}" -lt "1${#b[@]}" ] && maxnum=${#b[@]}
+	[ "1${#a[@]}" -lt "1${#b[@]}" ] && maxnum=${#b[@]} || maxnum=${#a[@]}
 	
 	for ((i=0; i<maxnum; i++)); do
 		a=${a[i]} 
@@ -374,6 +373,7 @@ atom_cmp() {
 		# Only alpha
 		aoa=$(echo $a |tr -d '[:digit:]' |tr -d '[:punct:]')
 		boa=$(echo $b |tr -d '[:digit:]' |tr -d '[:punct:]')
+		
 		case $aoa$boa in
 			
 			# 1.2.3 3.2.1
@@ -394,13 +394,13 @@ atom_cmp() {
 			# "" rc1 
 			# "" beta1
 			# "" alpha1
-			rc|RC|beta|BETA|alpha|ALPHA)
+			rc|beta|alpha)
 				[ "x$aoa" = "x" ] && return 1
 				[ "x$boa" = "x" ] && return 2
 				continue ;;
 			
 			# "" ylmf1 
-			ylmf|YLMF)
+			ylmf)
 				[ "x$b" != "x" ]  && return 2
 				[ "x$a" != "x" ]  && return 1
 				[ "x$aoa" = "x" ] && return 2
@@ -408,41 +408,33 @@ atom_cmp() {
 				continue 	;;
 
 			# rc1  rc2 
-				rcrc|RCRC)
+				rcrc)
 				a=${a##rc}
-				a=${a##RC}
 				b=${b##rc}
-				b=${b##RC}
 				[ "1$a" -gt "1$b" ] && return 1
 				[ "1$a" -lt "1$b" ] && return 2
 				continue 	;;
 				
 			# beta1 beta2 
-				betabeta|BETABETA)
+				betabeta)
 				a=${a##beta}
-				a=${a##BETA}
 				b=${b##beta}
-				b=${b##BETA}
 				[ "1$a" -gt "1$b" ] && return 1
 				[ "1$a" -lt "1$b" ] && return 2
 				continue 	;;
 			
 			# alpha1  alpha2 
-				alphaalpha|ALPHAALPHA)
+				alphaalpha)
 				a=${a##alpha}
-				a=${a##ALPHA}
 				b=${b##alpha}
-				b=${b##ALPHA}
 				[ "1$a" -gt "1$b" ] && return 1
 				[ "1$a" -lt "1$b" ] && return 2
 				continue 	;;
 			
 			# ylmf1 ylmf2
-				ylmfylmf|YLMFYLMF)
+				ylmfylmf)
 				a=${a##ylmf}
-				a=${a##YLMF}
 				b=${b##ylmf}
-				b=${b##YLMF}
 				[ "1$a" -gt "1$b" ] && return 1
 				[ "1$a" -lt "1$b" ] && return 2
 				continue 	;;
@@ -2616,8 +2608,6 @@ ypkg_install() {
 		esac
 	fi
 
-	atom_parse $NEWEST
-
 	[ "x$FORCE_INSTALL" != "xyes" ] && gmsg_ "[$stat]" || gmsg_ "["$stat"F]"
 
 	# N -- new install
@@ -2625,12 +2615,10 @@ ypkg_install() {
 	# D -- downgrade
 	# E -- same version
 	case $stat in
-        	E) 
-		   msg " $T/${N}_$V$R "	
+        	E) msg " $T/${N}_$V$R "	
 		   [ "x$FORCE_INSTALL" != "xyes" ] && return 0         ;;
 		N) msg " $T/${N}_$V$R "				       ;;
-		U) msg " $T/${N}_$INSTALL_VERSION ----> $T/${N}_$V$R " ;;
-		D) msg " $T/${N}_$INSTALL_VERSION ----> $T/${N}_$V$R " ;;
+   	      U|D) msg " $T/${N}_$INSTALL_VERSION ----> $T/${N}_$V$R " 
 	esac
 		
 	[ "x$PRETEND" = "xyes" ] && return 0
