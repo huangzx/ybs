@@ -342,12 +342,25 @@ atom_parse() {
 # the former > the latter, return 1
 # the former < the latter, return 2
 # the former = the latter, return 0
-#
-atom_cmp() {
-	local string1="$1"
-	local string2="$2"
-	local v1 v2 
+# alpha < beta < rc < ylmf
 
+string_len() {
+	local string=$1
+	local sep=$2
+	local i
+  	if [ "x$sep" = "x" ]; then
+		i=($(echo $string |awk '{print $1" "$2" "$3" "$4" "$6" "$7}'))
+	else
+	        i=($(echo $string |awk -F$sep '{print $1" "$2" "$3" "$4" "$6" "$7}'))
+	fi  
+        echo ${#i[@]}
+}
+
+atom_cmp() {
+        local string1="$1"
+	local string2="$2"
+	local v1 v2
+	
 	string1=${string1##*_}
 	v1=${string1%.pbs}
 	v1=$(echo $v1 |tr '[A-Z]' '[a-z]')
@@ -356,160 +369,69 @@ atom_cmp() {
 	v2=${string2%.pbs}
 	v2=$(echo $v2 |tr '[A-Z]' '[a-z]')
 
-	# Compare version
-	# alpha < beta < rc 
-	
 	if [ "x$v1" = "x$v2" ] || test $v1 -eq $v2 2>/dev/null;then
 		return 0
 	fi
 
-	local a=($(echo $v1 |awk -F- '{print $1" "$2" "$3" "$4" "$6" "$7}'))
-	local b=($(echo $v2 |awk -F- '{print $1" "$2" "$3" "$4" "$6" "$7}'))
-	[ "1${#a[@]}" -lt "1${#b[@]}" ] && maxnum=${#b[@]} || maxnum=${#a[@]}
-	
-	for ((i=0; i<maxnum; i++)); do
-		a=${a[i]} 
-		b=${b[i]}
-		# Only alpha
-		aoa=$(echo $a |tr -d '[:digit:]' |tr -d '[:punct:]')
-		boa=$(echo $b |tr -d '[:digit:]' |tr -d '[:punct:]')
-		
-		case $aoa$boa in
-			
-			# 1.2.3 3.2.1
-			"")	
-			[ "x$a" = "x$b" ] && continue
-				v1=$a.
-				v2=$b.
-			while true; do
-				a=${v1%%.*}
-				b=${v2%%.*}
-				[ "$a"0 -gt "$b"0 ] && return 1
-				[ "$a"0 -lt "$b"0 ] && return 2
-				v1="${v1#*.}"
-				v2="${v2#*.}"
-			done
-			continue ;;
-			
-			# "" rc1 
-			# "" beta1
-			# "" alpha1
-			rc|beta|alpha)
-				[ "x$aoa" = "x" ] && return 1
-				[ "x$boa" = "x" ] && return 2
-				continue ;;
-			
-			# "" ylmf1 
-			ylmf)
-				[ "x$b" != "x" ]  && return 2
-				[ "x$a" != "x" ]  && return 1
-				[ "x$aoa" = "x" ] && return 2
-				[ "x$boa" = "x" ] && return 1
-				continue 	;;
+	# seperator is -
+	local v1=($(echo $v1 |awk -F- '{print $1" "$2" "$3" "$4" "$6" "$7}'))
+	local v2=($(echo $v2 |awk -F- '{print $1" "$2" "$3" "$4" "$6" "$7}'))
+	[ "1${#v1[@]}" -lt "1${#v2[@]}" ] && maxnum=${#v2[@]} || maxnum=${#v1[@]}
 
-			# rc1  rc2 
-				rcrc)
-				a=${a##rc}
-				b=${b##rc}
-				[ "1$a" -gt "1$b" ] && return 1
-				[ "1$a" -lt "1$b" ] && return 2
-				continue 	;;
+	for ((i=0; i<maxnum; i++)); do
+		a=${v1[i]}.
+		b=${v2[i]}.
+		# seperator is dot .
+		a_len=$(string_len $a .)
+		b_len=$(string_len $b .)
+		[ "$a_len" -lt "$b_len" ] && max=$b_len || max=$a_len
+
+		for ((j=0; j<max; j++)); do
+			c=${a%%.*}
+			d=${b%%.*}
+
+			coa=$(echo $c |tr -d '[:digit:]' |tr -d '[:punct:]')
+			doa=$(echo $d |tr -d '[:digit:]' |tr -d '[:punct:]')
+			cod=$(echo $c |tr -d '[:alpha:]' |tr -d '[:punct:]')
+			dod=$(echo $d |tr -d '[:alpha:]' |tr -d '[:punct:]')
+
+			coa=${coa:-n}
+			doa=${doa:-n}
+			cod=${cod:-0}
+			dod=${dod:-0}
+
+			if [ "x$coa" = "x$doa" ]; then
 				
-			# beta1 beta2 
-				betabeta)
-				a=${a##beta}
-				b=${b##beta}
-				[ "1$a" -gt "1$b" ] && return 1
-				[ "1$a" -lt "1$b" ] && return 2
-				continue 	;;
-			
-			# alpha1  alpha2 
-				alphaalpha)
-				a=${a##alpha}
-				b=${b##alpha}
-				[ "1$a" -gt "1$b" ] && return 1
-				[ "1$a" -lt "1$b" ] && return 2
-				continue 	;;
-			
-			# ylmf1 ylmf2
-				ylmfylmf)
-				a=${a##ylmf}
-				b=${b##ylmf}
-				[ "1$a" -gt "1$b" ] && return 1
-				[ "1$a" -lt "1$b" ] && return 2
-				continue 	;;
-			
-			# rc1 beta1
-			# beta1 rc1
-				rcbeta|betarc)
-				a=${a##rc*}
-				[ "x$a" = "x" ] && return 1
-				a=${a##beta*}
-				[ "x$a" = "x" ] && return 2
-				continue	;;
-			
-			# rc1 alpha1
-			# alpha1 rc1
-				rcalpha|alpharc)
-				a=${a##rc*}
-				[ "x$a" = "x" ] && return 1
-				a=${a##alpha*}
-				[ "x$a" = "x" ] && return 2
-				continue	;;
-			
-			# beta1 alpha1
-			# alpha1 beta1
-				betaalpha|alphabeta)
-				a=${a##beta*}
-				[ "x$a" = "x" ] && return 1
-				a=${a##alpha*}
-				[ "x$a" = "x" ] && return 2
-				continue  	;;
-			
-			# rc1 ylmf1
-			# ylmf1 rc1
-				rcylmf|ylmfrc)
-				a=${a##rc*}
-				[ "x$a" = "x" ] && return 2
-				a=${a##ylmf*}
-				[ "x$a" = "x" ] && return 1
-				continue	;;
-			
-			# beta1 ylmf1
-			# ylmf1 beta1
-				betaylmf|ylmfbeta)
-				a=${a##beta*}
-				[ "x$a" = "x" ] && return 2
-				a=${a##ylmf*}
-				[ "x$a" = "x" ] && return 1
-				continue	;;
-			
-			# alpha ylmf1
-			# ylmf1 alpha1
-				alphaylmf|ylmfalpha)
-				a=${a##alpha*}
-				[ "x$a" = "x" ] && return 2
-				a=${a##ylmf*}
-				[ "x$a" = "x" ] && return 1
-				continue	;;
-			#
-				*)
-				[ "x$a" = "x$b" ] && continue
-				v1=$a.
-				v2=$b.
-				while true; do
-					a=${v1%%.*}
-					b=${v2%%.*}
-					a=$(echo $a |tr -d '[:alpha:]')
-					b=$(echo $b |tr -d '[:alpha:]')
-					[ "$a"0 -gt "$b"0 ] && return 1
-					[ "$a"0 -lt "$b"0 ] && return 2
-					v1="${v1#*.}"
-					v2="${v2#*.}"
-				done
-					continue ;;
-				esac
+				if [ ${#cod} -gt ${#dod} ]; then
+					let lack=${#cod}-${#dod}
+					let dod=$dod*10*$lack
+				fi
+
+				if [ ${#cod} -lt ${#dod} ]; then
+					let lack=${#dod}-${#cod}
+					let cod=$cod*10*$lack
+				fi
+
+				[ $cod -gt $dod ] && return 1
+				[ $cod -lt $dod ] && return 2
+			else
+				case $coa$doa in
+					rcn|betan|alphan) return 2 ;;
+				        nrc|nbeta|nalpha) return 1 ;;
+				                   ylmfn) return 1 ;;
+				                   nylmf) return 2 ;;
+				          rcbeta|rcalpha) return 1 ;;
+				                  betarc) return 2 ;;
+				               betaalpha) return 1 ;;
+				       alpharc|alphabeta) return 2 ;;
+			       rcylmf|betaylmf|alphaylmf) return 2 ;;
+			       esac
+			 fi
+			 a=${a#*.}
+			 b=${b#*.}
+		done
 	done
+
 	return 0
 }
 
@@ -1967,29 +1889,29 @@ doconfig() {
 	local command2=""
 		
 	# waf
-	[ -x waf ] && command="./waf configure $(echo $config |xargs)"
+	[ -x waf ] && command="./waf configure $(echo $config |xargs) $@"
 	if [ x"$command" != x ];then
 		mmsg ">>> $command"
-		$command && return 0
+		eval $command && return 0
 	fi
 	
 	# generic
-	[ -x configure ] && command="./configure $(echo $config |xargs)"
-	[ -x Configure ] && command="./Configure $(echo $config |xargs)"
+	[ -x configure ] && command="./configure $(echo $config |xargs) $@"
+	[ -x Configure ] && command="./Configure $(echo $config |xargs) $@"
 	if [ x"$command" != x ];then
 		mmsg ">>> $command"
-		$command && return 0
+		eval $command && return 0
 	fi
 
 	# autogen
 	if [ -x autogen.sh ];then
 		command="./autogen.sh" 
-		command1=" ./configure $(echo $config |xargs)"
+		command1=" ./configure $(echo $config |xargs) $@"
 	fi
 	if [ x"$command" != x ];then
 		mmsg ">>> $command; $command1"
-		$command
-		$command1 && return 0
+		eval $command
+		eval $command1 && return 0
 	fi
 	
 	# perl module
@@ -2010,26 +1932,25 @@ doconfig() {
 	if file_is_exist CMakeLists.txt; then
 		command="mkdir -p build"
 		command1="cd build"
-		command2="cmake ../ -DCMAKE_INSTALL_PREFIX=/usr" # -DCMAKE_SHARED_LIBRARY_PREFIX=lib"
-		mmsg ">>> $command; $command1; $command2 $@"
-		$command
-		$command1
-		$command2 && return 0
+		command2="cmake -D CMAKE_INSTALL_PREFIX=/usr $@ .." 
+		mmsg ">>> $command; $command1; $command2"
+		eval $command
+		eval $command1
+		eval $command2 && return 0
 	fi
 
 	# qmake
 	if ls *.pro >/dev/null 2>/dev/null; then
 		command="qmake $@"
 		mmsg ">>> $command"
-		$command && return 0
+		eval $command && return 0
 	fi
 
 	# scons
 	if file_is_exist SConstruct; then
-		#command="scons --prefix=/usr"
-		command="scons $(echo $config |xargs)"
+		command="scons $(echo $config |xargs) $@"
 		mmsg ">>> $command"
-		$command 
+		eval $command 
 	fi	
 }
 
@@ -2039,7 +1960,7 @@ domake() {
 	if [ -x waf ];then
 		command="./waf build $MAKEOPTS $@"
 		mmsg ">>> $command"
-		$command && return 0
+		eval $command && return 0
 	fi
 	if file_is_exist setup.py;then
 		if [ "x$1"  = "xmake" ]; then
@@ -2048,7 +1969,7 @@ domake() {
 			command="python setup.py build $@"
 		fi
 		mmsg ">>> $command"
-		$command && return 0
+		eval $command && return 0
 	fi
 	if file_is_exist Makefile || file_is_exist GNUmakefile; then
 		command="make $MAKEOPTS $@" 
@@ -2064,7 +1985,7 @@ domake() {
 	fi
 
 	mmsg ">>> $command"
-	$command
+	eval $command
 }
 
 # Make install
@@ -2073,7 +1994,7 @@ domkinstall() {
 	if [ -x waf ];then
 		command="./waf install --destdir="$destdir" $@"
 		mmsg ">>> $command"
-		$command && return 0
+		eval $command && return 0
 	fi
 	if file_is_exist setup.py;then
 		if [ "x$1"  = "xmake" ]; then
@@ -2082,7 +2003,7 @@ domkinstall() {
 			command="python setup.py install --prefix=/usr --root="$destdir" $@"
 		fi
 		mmsg ">>> $command"
-		$command && return 0
+		eval $command && return 0
 	fi
 		
 	if file_is_exist SConstruct;then
@@ -2092,14 +2013,15 @@ domkinstall() {
 			command="scons "$@" install"
 		fi
 		mmsg ">>> $command"
-		$command && return 0
+		eval $command && return 0
 	fi	
 
 	if file_is_exist Makefile || file_is_exist GNUmakefile; then
 		command="make DESTDIR="$destdir" "$@" install"
-	fi	
+	fi
+
 	mmsg ">>> $command"
-	$command 
+	eval $command 
 	ldconfig
 }
 
