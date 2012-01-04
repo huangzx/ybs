@@ -401,17 +401,6 @@ atom_cmp() {
 			dod=${dod:-0}
 
 			if [ "x$coa" = "x$doa" ]; then
-				
-				if [ ${#cod} -gt ${#dod} ]; then
-					let lack=${#cod}-${#dod}
-					let dod=$dod*10*$lack
-				fi
-
-				if [ ${#cod} -lt ${#dod} ]; then
-					let lack=${#dod}-${#cod}
-					let cod=$cod*10*$lack
-				fi
-
 				[ $cod -gt $dod ] && return 1
 				[ $cod -lt $dod ] && return 2
 			else
