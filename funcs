@@ -587,6 +587,7 @@ check_and_download_raw() {
 	local fname=$2
 	local checksum=$3
 	local download
+	local checkok
 	local target="${YPPATH_SOURCE}/${fname}"
 
 	#
@@ -620,9 +621,6 @@ check_and_download_raw() {
 					return 0
 				fi
 			done
-
-			local checkok="not"
-
 		fi
 
 		# target is not exists or checksum fail 
@@ -649,9 +647,7 @@ check_and_download_raw() {
 						mv "$target".tmp "$target" 
 						return 0
 					else
-						checkok="not"
 						continue	
-
 					fi
 				done
 
