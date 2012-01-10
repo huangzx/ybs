@@ -171,31 +171,32 @@ case "${1}" in
 	ymsg "* Calculating dependencies..."
 
 	for i in ${args[@]};do
-		pbsfile=$(ypkg_show "$i" pbs)
-		[ -f "$pbsfile" ] && . "$pbsfile" || (echo; rmsg "* [Error]: ${i} not found."; exit 1)
+		app=${i}
+		pbsfile=$(ypkg_show "$app" pbs)
+		[ -f "$pbsfile" ] && . "$pbsfile" || (echo; rmsg "* [Error]: ${app} not found."; exit 1)
 		
-		for i in $BDEPEND; do
-			[ "x${i##*-}" = "xdev" ] && i=${i%-dev}
-				deps+="${i} "
+		deps=
+		for dep in $BDEPEND; do
+			dep=${dep/-dev/} 
+			deps+="${dep} "
 		done
 
 		deps="$RDEPEND $deps"
 
-  		for i in $(echo $deps |tr ' ' '\n' |tac |xargs); do
+  		#for dep in $(echo $deps |tr ' ' '\n' |tac |xargs); do
+  		for dep in $deps; do
 			if [ "x$TERM" != "xlinux" ]; then
-				echo -ne "\033]0;ybs working: ${i}\007"; ypkg_install ${i} || exit 1
+				echo -ne "\033]0;ybs working: ${dep}\007"; ypkg_install ${dep} || exit 1
 			else
-		  		ypkg_install ${i} || exit 1
+		  		ypkg_install ${dep} || exit 1
 		 	fi
 	      	done
 		
-		for i in ${args[@]}; do
-			if [ "x$TERM" != "xlinux" ]; then
-				echo -ne "\033]0;ybs working: ${i}\007"; ypkg_install ${i} || exit 1
-			else
-				ypkg_install ${i} || exit 1
-			fi
-		done
+		if [ "x$TERM" != "xlinux" ]; then
+			echo -ne "\033]0;ybs working: ${app}\007"; ypkg_install ${app} || exit 1
+		else
+			ypkg_install ${app} || exit 1
+		fi
 	done
 	;;
 
