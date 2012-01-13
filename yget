@@ -244,7 +244,7 @@ get_final_ver () {
 		if [ "x$ACCEPT_REPO" = "xstable" ]; then
 			[ "x$repo" != "xstable" ] && continue
 		fi
-		atom_vercmp $max_ver $version
+		atom_cmp $max_ver $version
 		case $? in
 		2)  max_ver=$version
 		esac  
@@ -621,7 +621,7 @@ do_upgrade () {
 		singleinfo=$(yget_mktemp f)
 		ypkg_find_info $universe_local_file all >$allinfo
 		new=$(get_final_ver $N $allinfo)
-		atom_vercmp $old $new
+		atom_cmp $old $new
 		case $? in
 			2) flag="upgrade" ;;
 			#0)  

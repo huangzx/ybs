@@ -1852,8 +1852,8 @@ dounpack() {
 			;;
 		 *.ar)  ;;
 	   	    *)
-		    	mmsg ">>> cp -a ${YPPATH_SOURCE}/$name $PWD/"$N-$V$R""
 		        name=${fname%*.git}
+		    	mmsg ">>> cp -a ${YPPATH_SOURCE}/$name $PWD/"$N-$V$R""
 		        cp -a ${YPPATH_SOURCE}/$name .
 	esac
 	if [ x"$name" != x"$N-$V$R" ] && [ x"$name" != x ];then
