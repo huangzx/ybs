@@ -1789,82 +1789,83 @@ dounpack() {
 		file_is_exist "$SRC_URI" && SRC_URI="$SRC_URI"
 		file_is_exist "$YPPATH_SOURCE/$SRC_URI" && SRC_URI="$YPPATH_SOURCE/$SRC_URI"
 	fi
+
 	[ "x$SRC_URI" = "x" ] && return 0
 	SRC_URI=($SRC_URI)
-	local first_pack=${SRC_URI[0]}
-	local fname=$(basename $first_pack)
+	local fname=$(basename $SRC_URI)
+	local tarball="$YPPATH_SOURCE/$fname"
+	local srcdir="$N-$V$R"
+	rm -r "$srcdir" 2>/dev/null
+	
 	case $fname in
 		*.tar.*|*.gz|*.tar|*.tgz|*.tbz2|*.tbz|*.bz2)
-			mmsg ">>> tar xf "$YPPATH_SOURCE"/$fname"
-			name=$(tar -tf "$YPPATH_SOURCE"/"$fname" |head -n1 |awk -F/ '{print $1}')
-			if [ "x$name" = "x." ]; then
-				name=$(tar -tf "$YPPATH_SOURCE"/"$fname" |head -n1 |awk -F/ '{print $2}')
+			mmsg ">>> tar xf $tarball"
+			name=($(tar -tf "$tarball" |awk -F/ '{print $1}' |sort -u))
+	
+			if [ ${#name[@]} -eq 1 ]; then
+				tar xf "$tarball"
+				[ "x$name" != "x$srcdir" ] && mv "$name" "$srcdir"
 			fi
-			if [ "x$name" != "x" ]; then
-				tar xf "$YPPATH_SOURCE"/"$fname" 
-			else
-				[ -d "$N-$V$R" ] && rm -r "$N-$V$R"
-				mkdir -p "$N-$V$R"
-				tar xf "$YPPATH_SOURCE"/"$fname" -C "$N-$V$R"
-			fi
+
+			if [ "x$name" = "x." ] || [ ${#name[@]} -gt 1 ]; then
+				mkdir "$srcdir"
+				tar xf "$tarball" -C "$srcdir"
+			fi 
 			;;
-		*.rar) 
-			mmsg ">>> unrar xf "$YPPATH_SOURCE"/$fname"
-			unrar x "$YPPATH_SOURCE"/"$fname" ;;
+
 		*.zip)
-			mmsg ">>> unzip xf "$YPPATH_SOURCE"/"$fname""
-			num="$(unzip -l "$YPPATH_SOURCE"/"$fname" |awk '{print $4}' |awk -F/ '{print $1}' \
-				|sort -u |sed -e '/^----$/d' -e '/^$/d' -e '/^Name$/d' |wc -l)"
-			if [ $num -ne 1 ];then
-				unzip "$YPPATH_SOURCE"/"$fname" -d "$N-$V$R"
-				name="$N-$V$R"
-			else
-				name=$(unzip -l "$YPPATH_SOURCE"/"$fname" |sed -n '4p'  |awk '{print $4}')
-				if [ x${name##*/} = x ];then
-					unzip "$YPPATH_SOURCE"/"$fname"
-					name="${name%%/*}"
-				else
-				        unzip "$YPPATH_SOURCE"/"$fname" -d "$N-$V$R"
-				        name="$N-$V$R"
-				fi      
-			fi	;;
-		 *.deb) 
-		 	mmsg ">>> ar x "$YPPATH_SOURCE"/"$fname""
-                    	name=$(ar t "$YPPATH_SOURCE"/"$fname" |grep data)
-			mkdir -p "$N-$V$R" && cd "$N-$V$R"
-			ar x "$YPPATH_SOURCE"/"$fname"
-			mkdir -p data && cd data
-			tar xf ../"$name"  
-			cd ../../  && return 0	 ;;
-		 *.rpm) 
-		 	mmsg ">>> unpack "$YPPATH_SOURCE"/"$fname"" 
-			name=${fname%.rpm}
-			mkdir -p "$N-$V$R" && cd "$N-$V$R"
-		 	rpm2tarbz2 "$YPPATH_SOURCE"/"$fname"
-			mkdir -p data && cd data
-			tar xf ../$name.tar.bz2
-			cd ../../  && return 0	 ;;
-		*.7z)   
-			mmsg ">>> 7z x "$YPPATH_SOURCE"/$fname"
-			name=$(7z l "$YPPATH_SOURCE"/$fname |grep -A2 "Size   Compressed  Name" |tail -n1 |awk '{print $6}')
-			name=${name%%/*}
-			7z x "$YPPATH_SOURCE"/"$fname" 
+			mmsg ">>> unzip xf $tarball"
+			name=($(unzip -l "$tarball" |awk '{print $4}' |awk -F/ '{print $1}' |sort -u |sed -e '/^----$/d' -e '/^$/d' -e '/^Name$/d'))
+
+			if [ ${#name[@]} -eq 1 ]; then
+				unzip "$tarball"
+				[ "x$name" != "x$srcdir" ] && mv "$name" "$srcdir"
+			fi
+
+			if [ ${#name[@]} -ne 1 ];then
+				unzip "$tarball" -d "$srcdir"
+			fi
 			;;
-		 *.ar)  ;;
-	   	    *)
+
+		 *.deb) 
+		 	mmsg ">>> ar x $tarball"
+                    	name=$(ar t "$tarball" |grep data)
+			mkdir -p "$srcdir" && cd "$srcdir"
+			ar x "$tarball"
+			mkdir -p data 
+			tar xf "$name" -C data && cd ../	 
+			;;
+
+		 *.rpm) 
+		 	mmsg ">>> unpack $tarball" 
+			name=${fname%.rpm}
+			mkdir -p "$srcdir" && cd "$srcdir"
+		 	rpm2tarbz2 "$tarball"
+			mkdir -p data
+			tar xf $name.tar.bz2 -C data && cd ../
+			;;
+
+		*.7z)   
+			mmsg ">>> 7z x $tarball"
+			name=$(7z l "$tarball" |grep -A2 "Size   Compressed  Name" |tail -n1 |awk '{print $6}')	
+			name=${name%%/*}
+			7z x "$tarball" 
+			[ "x$name" != "x$srcdir" ] && mv "$name" "$srcdir"
+			;;
+	       
+	       *.git)
 		        name=${fname%*.git}
-		    	mmsg ">>> cp -a ${YPPATH_SOURCE}/$name $PWD/"$N-$V$R""
-		        cp -a ${YPPATH_SOURCE}/$name .
+		    	mmsg ">>> cp -a ${YPPATH_SOURCE}/"$name" $PWD/"$srcdir""
+		        cp -a ${YPPATH_SOURCE}/"$name" "$srcdir"
+			;;
+	       
+	       *.rar) 
+			mmsg ">>> unrar xf $tarball"
+			unrar x "$tarball"
+			;;
+	  
+	       *.ar)   return 1
 	esac
-	if [ x"$name" != x"$N-$V$R" ] && [ x"$name" != x ];then
-		if ls $name/* >/dev/null  2>&1;then
-			[ -d "$N-$V$R" ] && rm -r "$N-$V$R"
-			mv "$name" "$N-$V$R"
-		else
-			mkdir -p "$N-$V$R"
-			mv "$name" "$N-$V$R"
-		fi
-	fi
 }
 
 # Configure
