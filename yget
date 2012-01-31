@@ -69,7 +69,6 @@ yget_mktemp(){
 #
 do_update() {
 	local universe="${YPPATH_UNI##*/}.tar.bz2"  #universe.tar.bz2
-	local appinfo_dir="/usr/share/app-info"
 	local sha="$universe.sha1sum"
 	local download="yes"
 	local shatool="${sha##*.}"
@@ -121,18 +120,7 @@ do_update() {
 	fi
 
 	echo
-	msg_ "* Updating app-info pool:  "
-	if [ -d $appinfo_dir/.git ]; then
-		cd $appinfo_dir
-		git pull >/dev/null && msg "already up-to-date." 
-	else
-		cd $(dirname $appinfo_dir)
-		[ -d /etc ] || mkdir /etc
-		[ -f /etc/hosts ] || touch /etc/hosts
-		#git config --system --add user.name  ylmfos_user
-		#git config --system --add user.email ylmfos_user@115.com
-		git clone git://git.ylmf.com/app-info.git
-	fi
+	
 	return 0
 }
 

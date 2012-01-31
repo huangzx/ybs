@@ -144,7 +144,6 @@ file_is_exist () {
 	[ -f "$1" ] && return 0 || return 1
 }
 
-
 #
 # Check root
 #
@@ -211,7 +210,6 @@ get_value () {
 	value=${value//,/ }
 	echo $value
 }
-
 
 #
 get_abspath () {
@@ -1067,17 +1065,26 @@ split_i18n() {
 #
 find_desktop() {
 	local source_dir=$1
-	file_is_exist "$source_dir/usr/share/applications/$N-gtk.desktop" && desktop="$source_dir/usr/share/applications/$N-gtk.desktop"
-	file_is_exist "$source_dir/usr/share/applications/$N-[[:digit:]].desktop" && desktop="$(ls $source_dir/usr/share/applications/$N-[[:digit:]].desktop)"
-	file_is_exist "$source_dir/usr/share/applications/$N.desktop" && desktop="$source_dir/usr/share/applications/$N.desktop"
+	local desktop=""
+	file_is_exist "$source_dir/usr/share/applications/$N-gtk.desktop" && \
+		desktop="$source_dir/usr/share/applications/$N-gtk.desktop"
+	file_is_exist "$source_dir/usr/share/applications/$N-[[:digit:]].desktop" && \
+		desktop="$(ls $source_dir/usr/share/applications/$N-[[:digit:]].desktop)"
+	file_is_exist "$source_dir/usr/share/applications/$N.desktop" && \
+		desktop="$source_dir/usr/share/applications/$N.desktop"
+
 	if [ "x$DESKTOPFILE" != "x" ]; then
-		file_is_exist "$source_dir/$DESKTOPFILE" && desktop="$source_dir/$DESKTOPFILE"
-		file_is_exist "$source_dir/usr/share/applications/$DESKTOPFILE" && desktop="$source_dir/usr/share/applications/$DESKTOPFILE"
+		file_is_exist "$source_dir/$DESKTOPFILE" && \
+			desktop="$source_dir/$DESKTOPFILE"
+		file_is_exist "$source_dir/usr/share/applications/$DESKTOPFILE" && \
+			desktop="$source_dir/usr/share/applications/$DESKTOPFILE"
 	fi
-	if [ "x$desktop" != "x" ] && file_is_exist "$desktop"; then
+
+	if [ "x$desktop" != "x" ]; then
 		echo "$desktop"
 		return 0
 	fi
+
 	return 1
 }
 
@@ -1085,7 +1092,8 @@ find_desktop() {
 find_icon() {
 	local desktop=$1 
 	local source_dir=$2
-	icon_name="$(grep ^Icon= $desktop |sed -e 's/Icon=//g')"
+	local icon_name="$(grep ^Icon= $desktop |sed -e 's/Icon=//g')"
+
 	if file_is_exist "$source_dir/$icon_name"; then
 		icon="$source_dir/$icon_name"
 	else
@@ -1095,25 +1103,38 @@ find_icon() {
 		icon_name=${icon_name%.png}
 		icon_name=${icon_name%.xpm}
 		icon_name=${icon_name%.jpg}
-		for i in 24x24 22x22 32x32 48x48; do
+
+		for i in 48x48 32x32 24x24 22x22; do
 			icon="$source_dir/usr/share/icons/hicolor/"$i"/apps/$icon_name.png"
 			file_is_exist "$icon" && break || continue
 		done
+
 	fi
-	file_is_exist "$source_dir/usr/share/icons/$icon_name.png" && icon="$source_dir/usr/share/icons/$icon_name.png"
-	file_is_exist "$source_dir/usr/share/icons/$icon_name.xpm" && icon="$source_dir/usr/share/icons/$icon_name.xpm"
-	file_is_exist "$source_dir/usr/share/pixmaps/$icon_name.svg" && icon="$source_dir/usr/share/pixmaps/$icon_name.svg"
-	file_is_exist "$source_dir/usr/share/pixmaps/$icon_name.xpm" && icon="$source_dir/usr/share/pixmaps/$icon_name.xpm"
-	file_is_exist "$source_dir/usr/share/pixmaps/$icon_name.png" && icon="$source_dir/usr/share/pixmaps/$icon_name.png"
-	file_is_exist "$source_dir/usr/share/pixmaps/$icon_name" && icon="$source_dir/usr/share/pixmaps/$icon_name"
+
+	file_is_exist "$source_dir/usr/share/icons/$icon_name.png" && \
+		icon="$source_dir/usr/share/icons/$icon_name.png"
+	file_is_exist "$source_dir/usr/share/icons/$icon_name.xpm" && \
+		icon="$source_dir/usr/share/icons/$icon_name.xpm"
+	file_is_exist "$source_dir/usr/share/pixmaps/$icon_name.svg" && \
+		icon="$source_dir/usr/share/pixmaps/$icon_name.svg"
+	file_is_exist "$source_dir/usr/share/pixmaps/$icon_name.xpm" && \
+		icon="$source_dir/usr/share/pixmaps/$icon_name.xpm"
+	file_is_exist "$source_dir/usr/share/pixmaps/$icon_name.png" && \
+		icon="$source_dir/usr/share/pixmaps/$icon_name.png"
+	file_is_exist "$source_dir/usr/share/pixmaps/$icon_name" && \
+		icon="$source_dir/usr/share/pixmaps/$icon_name"
+
 	if [ "x$ICONFILE" != "x" ]; then
 		file_is_exist "$source_dir/$ICONFILE" && icon="$source_dir/$ICONFILE"
-		file_is_exist "$source_dir/usr/share/pixmaps/$ICONFILE" && icon="$source_dir/usr/share/pixmaps/$ICONFILE"
+		file_is_exist "$source_dir/usr/share/pixmaps/$ICONFILE" && \
+			icon="$source_dir/usr/share/pixmaps/$ICONFILE"
 	fi
+
 	if [ "x$icon" != "x" ] && file_is_exist "$icon"; then
 		echo "$icon"
 		return 0
 	fi
+
 	return 1
 }
 
@@ -1185,23 +1206,22 @@ mkpackage() {
 	size=${size[0]}
 	
 	cd ..
-	desktop=
-	icon_name=
-	icon=
-	gname=
-	gdescription=
+	local gname
+	local gdescription
 	
 	# desktop and icon
-	desktop=$(find_desktop $source_dir)
+	local desktop=$(find_desktop $source_dir)
 
-	if [ "x$desktop" != "x" ] && file_is_exist "$desktop"; then
-		cp $desktop  $pkgdir/$N.desktop
-		cp $desktop  /usr/share/app-info/desktop/$N.desktop
-		icon=$(find_icon $desktop $source_dir)
-		if [ "x$icon" != "x" ] && file_is_exist "$icon"; then		
-			cp $icon  $pkgdir/
-			cp $icon  /usr/share/app-info/icon/
+	if [ "x$desktop" != "x" ]; then
+		cp $desktop  $pkgdir/"$N".desktop
+		local icon=$(find_icon $desktop $source_dir)
+		
+		if [ "x$icon" != "x" ]; then
+			local tmp="$N"."${icon##*.}"
+			cp $icon  $pkgdir/$tmp
+			cp $icon  $YPPATH_PACKAGE/icons/$tmp
 		fi
+
 		gname="genericname type=\"desktop\""
 		gdescription="description type=\"desktop\""
 	else
