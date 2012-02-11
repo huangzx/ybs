@@ -2042,7 +2042,7 @@ dosrc() {
 dosupported() {
 	mmsg ">>> Copy supported file: $1"
 	mkdir -p "$destdir"/usr/src/"${N}_$V$R"
-	install -m755 "$filesdir/$1" "$destdir"/usr/src/"${N}_$V$R"
+	install -m755 "$filesdir/$1" "$destdir"/usr/src/"${N}_$V$R"/"${N}"_supported
 }
 
 # Cp ykms.conf to specified dir
