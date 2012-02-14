@@ -1821,16 +1821,16 @@ dounpack() {
 		*.tar.*|*.gz|*.tar|*.tgz|*.tbz2|*.tbz|*.bz2)
 			mmsg ">>> tar xf $tarball"
 			name=($(tar -tf "$tarball" |awk -F/ '{print $1}' |sort -u))
-	
-			if [ ${#name[@]} -eq 1 ]; then
-				tar xf "$tarball"
-				[ "x$name" != "x$srcdir" ] && mv "$name" "$srcdir"
-			fi
 
 			if [ "x$name" = "x." ] || [ ${#name[@]} -gt 1 ]; then
 				mkdir "$srcdir"
-				tar xf "$tarball" -C "$srcdir"
+				tar xf "$tarball" -C "$srcdir" && return 0
 			fi 
+
+			if [ ${#name[@]} -eq 1 ]; then
+				tar xf "$tarball"
+				[ "x$name" != "x$srcdir" ] && mv "$name" "$srcdir" || return 0
+			fi
 			;;
 
 		*.zip)
@@ -1840,9 +1840,7 @@ dounpack() {
 			if [ ${#name[@]} -eq 1 ]; then
 				unzip "$tarball"
 				[ "x$name" != "x$srcdir" ] && mv "$name" "$srcdir"
-			fi
-
-			if [ ${#name[@]} -ne 1 ];then
+			else
 				unzip "$tarball" -d "$srcdir"
 			fi
 			;;
