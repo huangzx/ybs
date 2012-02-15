@@ -1839,7 +1839,7 @@ dounpack() {
 
 			if [ ${#name[@]} -eq 1 ]; then
 				unzip "$tarball"
-				[ "x$name" != "x$srcdir" ] && mv "$name" "$srcdir"
+				[ "x$name" != "x$srcdir" ] && mv "$name" "$srcdir" || return 0
 			else
 				unzip "$tarball" -d "$srcdir"
 			fi
@@ -1868,7 +1868,7 @@ dounpack() {
 			name=$(7z l "$tarball" |grep -A2 "Size   Compressed  Name" |tail -n1 |awk '{print $6}')	
 			name=${name%%/*}
 			7z x "$tarball" 
-			[ "x$name" != "x$srcdir" ] && mv "$name" "$srcdir"
+			[ "x$name" != "x$srcdir" ] && mv "$name" "$srcdir" || return 0
 			;;
 	       
 	       *.git)
