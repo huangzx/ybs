@@ -705,6 +705,7 @@ ypkg_getpbsfile() {
 	       name|*) iname="${N}_*.pbs"
 	esac
 
+
 	local pbsfiles=($(find $find_dir/"$T" -maxdepth 3 -type f -iname "$iname"))
 	
 	if [ "x$pbsfiles" = "x" ]; then
@@ -720,7 +721,7 @@ ypkg_getpbsfile() {
 		      return 0 ;;
 		name) ALL_PBSFILE="${pbsfiles[@]}"
 	esac
-
+	
 	case x$VR in
 		x\>[[:digit:]]*)	
         		min=${VR#>} 
@@ -770,13 +771,13 @@ ypkg_getpbsfile() {
 				atom_cmp $min $file
 				if [ $? -eq 0 ]; then
 					NEWEST="$file"
+					atom_parse $NEWEST
 					return 0
 				else	
 					files_ready+="$file "
 				fi
 			done
 	esac
-
 
 	[ "x$files_ready" = "x" ] && return 1 || files_ready=($files_ready)
 
