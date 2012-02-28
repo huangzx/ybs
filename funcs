@@ -2650,8 +2650,8 @@ INSTALL="$INSTALL"
 OPTIONS="$OPTIONS"
 EOF
 }
-	gene_desc base.desc 
-	descfiles[0]=$(readlink -f base.desc)
+	gene_desc "$workdir"/base.desc 
+	descfiles[0]=$(readlink -f "$workdir"/base.desc)
 	
 	[ -p $mkinstallpipe ] || mkfifo $mkinstallpipe
 	tee $mkinstalllog < $mkinstallpipe & 
