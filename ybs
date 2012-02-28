@@ -230,7 +230,7 @@ case "${1}" in
 --sync) 
 	#sync pbs libs with git.
 	check_root
-	logfile="/var/log/ypkg.log"
+	logfile="/var/log/ybs.log"
 	ymsg "* Sync pbslibs via git ..."
 	if [ x"$(cat $logfile 2>/dev/null)" != x ];then
 		echo
@@ -244,14 +244,18 @@ case "${1}" in
 	cd $YPPATH_LIB
 	err_check "* [Error]: enter dir $YPPATH_LIB failed."
 	if [ -d .git ]; then
-		# alread exist.
-		git pull && date +%s >$logfile
+		# Already exist.
+		git pull 
+		git checkout develop
+		date +%s >$logfile
 	else
 		cd ..
 		# remove an system error.
 		[ -d /etc ] || mkdir /etc
 		[ -f /etc/hosts ] || touch /etc/hosts
-		git clone git://git.ylmf.com/pbslib.git && date +%s >$logfile
+		git clone git://git.ylmf.com/pbslib.git 
+		git checkout develop
+		date +%s >$logfile
 	fi
 	;;
 
