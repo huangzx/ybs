@@ -1215,6 +1215,7 @@ mkpackage() {
 
 	if [ "x$desktop" != "x" ]; then
 		cp $desktop  $pkgdir/"$N".desktop
+		cp $desktop  $YPPATH_PACKAGE/desktops/"$N".desktop
 		local icon=$(find_icon $desktop $source_dir)
 		
 		if [ "x$icon" != "x" ]; then
@@ -1222,7 +1223,18 @@ mkpackage() {
 			cp $icon  $pkgdir/$tmp
 			cp $icon  $YPPATH_PACKAGE/icons/$tmp
 		fi
-
+	
+		# Find exec
+			
+		if grep -q ^Exec= "$desktop"; then
+			exec="$(grep ^Exec= "$desktop" |sed 's/^Exec=//g')"
+		fi
+	
+		if grep -q ^TryExec= "$desktop"; then
+			tryexec="$(grep ^TryExec= "$desktop" |sed 's/^TryExec=//g')"
+		fi
+		
+		exec="${exec-$tryexec}"
 		gname="genericname type=\"desktop\""
 		gdescription="description type=\"desktop\""
 	else
@@ -1249,6 +1261,15 @@ mkpackage() {
    <homepage>$homepage</homepage>
    <repo>$repo</repo>
    <install>$install</install>
+OOO
+
+if [ "x$exec" != "x" ]; then
+       cat >>$pkgdir/$control <<OOO
+   <exec>$exec</exec>
+OOO
+fi
+
+cat >>$pkgdir/$control <<OOO
    <build_date>$build_date</build_date>    
    <uri>$uri</uri>
    <$gdescription>
@@ -1268,6 +1289,7 @@ mkpackage() {
  </Package>
 </PackageInfo>
 OOO
+
 	cd $pkgdir
 	cp $workdir/${N}_$V$R.list $filelist
 	
@@ -1526,6 +1548,15 @@ doinit() {
        			install -m755 "$filesdir/$file" "$destdir"/etc/init.d
 		fi
 	fi
+}
+
+#
+# for reboot flag
+#
+flag_reboot() {
+	local flag="/run/ypkg/reboot"
+	mkdir -p /run/ypkg
+	touch "$flag"
 }
 
 #
@@ -2586,6 +2617,8 @@ ypkg_install() {
 	local      checklog="$PWD/check-log"
 	local mkinstallpipe="$PWD/mkinstall.pipe"
 	local  mkinstalllog="$PWD/mkinstall-log"
+
+	srcdir="$PWD"
 
 	cd "$N-$V$R" 2>/dev/null
 
