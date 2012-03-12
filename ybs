@@ -11,8 +11,6 @@
 [ -f /usr/lib/ybs/funcs ] && . /usr/lib/ybs/funcs
 #trap clean_up INT
 
-ybs_version=$YPVERSION
-
 # creat paths
 mkdir -p $YPPATH_LIB $YPPATH_SOURCE $YPPATH_PACKAGE $YPPATH_DB $YPPATH_FIELD
 chmod 777 $YPPATH_FIELD $YPPATH_SOURCE  2>/dev/null
@@ -67,7 +65,7 @@ fi
 #
 ypkg_show_usage() {
 	cat <<EOF
-$0 $ybs_version 
+$0  
 
 Usage: $0 command [options] pkg1 [pkg2 ...]
 
@@ -222,8 +220,7 @@ case "${1}" in
 	msg_ "* Removing "
 	wmsg_ "${args[@]} "
 	for i in ${args[@]}; do
-		#ypkg_remove_package $i
-		ypkg2 -C $i
+		ypkg -C $i
 	done
 	;;
 
