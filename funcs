@@ -1343,6 +1343,23 @@ dounit() {
 	fi
 }
 
+
+# Copy files to /etc/pam.d/
+dopamd() {
+	local file="$@"
+	local dir="/etc/pam.d/"
+
+	if [ x"$file" != x ]; then
+		for i in $@; do
+			if file_is_exist "$i"; then
+				docp "$i" "$destdir"/"$dir"
+			else
+				docp "$filesdir/$i" "$destdir"/"$dir"
+			fi
+		done
+	fi
+}
+
 # Cp script to "$destdir"/etc/init.d
 doinit() {
 	local file="$1"
