@@ -1,4 +1,3 @@
-BASH_PATH=${prefix}/bin
 CC=gcc
 CFLAGS=-O2
 DESTDIR=
@@ -23,7 +22,6 @@ install: fileinfo
 	install -m755 fileinfo/fileinfo ybs ${BINDIR}
 	cp funcs ${LIBDIR}
 	cp ybs.conf.sample ${DATADIR}
-	@sed -i "s@^\#\!/bin@\#\!${BASH_PATH}@" ${BINDIR}/ybs
 	@echo "Done"
 
 clean: FORCE
