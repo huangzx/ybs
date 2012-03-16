@@ -1,0 +1,53 @@
+#
+# Please consult /usr/share/ybs/ybs.conf.sample for a more
+# detailed example.
+#
+
+#
+# Put your specific architecture here.
+# if you are unsure of your arch, DO NOT MODIFY THIS.
+#
+ARCH=i686
+CC=gcc
+CXX=g++
+
+#
+# MAKEOPTS provides extra options that may be passed to 'make' when a
+# program is compiled. Presently the only use is for specifying
+# the number of parallel makes (-j) to perform. The suggested number
+# for parallel makes is CPUs+1.
+MAKEOPTS="-j2"
+
+#
+# stable OR testing
+#
+ACCEPT_REPO="stable"
+
+#
+# Put your specific languages here, which are not in this list would be removed.
+# LANGUAGE="en zh_CN zh_TW zh_HK ..."
+# 
+LANGUAGE=""
+
+#
+# Servers alternatived for source-codes tallball.
+#
+SOURCE_URI="http://pkg.ylmf.com/sources"
+
+#
+# Whether or not install YPK packages after compilation.
+#
+AUTO_INSTALL="no"
+
+#
+# YPK packages locate directory.
+#
+YPKDEST="/var/ypkg/packages"
+
+#
+# Download tools, curl and wget are available
+#
+DOWNLOAD_TOOL="wget"
+WGET_OPTIONS="--tries=3 --retry-connrefused --wait=2"
+CURL_OPTIONS="-L"
+

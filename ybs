@@ -2,21 +2,19 @@
 #
 # ybs -- Ylmf OS Build System
 # 
-# Maintainer: Ylmf OS Developers <ylmfos@115.com>
+# Maintainer: Ylmf OS Developers <ylmfos@ylmf.com>
 #
 
 #
 [ -f /etc/ybs.conf ] && . /etc/ybs.conf
-[ -f /tools/usr/lib/ybs/funcs ] && . /tools/usr/lib/ybs/funcs
 [ -f /usr/lib/ybs/funcs ] && . /usr/lib/ybs/funcs
-#trap clean_up INT
 
-# creat paths
-mkdir -p $YPPATH_LIB $YPPATH_SOURCE $YPPATH_PACKAGE $YPPATH_DB $YPPATH_FIELD
+# Creat PATH
+mkdir -p  $YPK_DEST $YPPATH_FIELD
 chmod 777 $YPPATH_FIELD $YPPATH_SOURCE  2>/dev/null
 
-# reload parameters if available
-if [ -z "$ARCH" ]; then
+# Reload parameters if available
+if [ "x$ARCH" = "x" ]; then
   case "$(uname -m)" in
     i?86) export ARCH=i686 ;;
     arm*) export ARCH=arm ;;
@@ -46,9 +44,14 @@ export CC="$CC $BUILD"
 export CXX="$CXX $BUILD"
 export CFLAGS
 export CXXFLAGS
+[ "x$MAKEOPTS" = "x" ] && MAKEOPTS="-j2"
 export MAKEOPTS
-export YPINST_PREFIX
-export YP_I18N
+export SOURCE_URI
+export AUTO_INSTALL
+export YPKDEST
+export DOWNLOAD_TOOL
+export WGET_OPTIONS
+export CURL_OPTIONS
 export ACCEPT_REPO
 export BUILD
 
