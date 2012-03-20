@@ -48,8 +48,8 @@ YPPATH_SCRIPT="$YPPATH_LIB"
 YPPATH_FIELD="/tmp/ybs"
 
 YPKPATH="/var/ypkg"
-
 YPPATH_DB="$YPKPATH/db"
+[ "x$YPKDEST" = "x" ] && YPKDEST="$YPKPATH/packages"
 
 #
 PACK_SUFFIX="ypk"

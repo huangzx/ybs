@@ -10,7 +10,7 @@
 [ -f /usr/lib/ybs/funcs ] && . /usr/lib/ybs/funcs
 
 # Creat PATH
-mkdir -p  $YPK_DEST $YPPATH_FIELD
+mkdir -p  $YPKDEST $YPPATH_FIELD
 chmod 777 $YPPATH_FIELD $YPPATH_SOURCE  2>/dev/null
 
 # Reload parameters if available
