@@ -1147,11 +1147,11 @@ mkpackage() {
 		# Find exec
 			
 		if grep -q ^Exec= "$desktop"; then
-			exec="$(grep ^Exec= "$desktop" |sed 's/^Exec=//g')"
+			exec="$(grep ^Exec= "$desktop" |head -n1 |sed 's/^Exec=//g')"
 		fi
 	
 		if grep -q ^TryExec= "$desktop"; then
-			tryexec="$(grep ^TryExec= "$desktop" |sed 's/^TryExec=//g')"
+			tryexec="$(grep ^TryExec= "$desktop" |head -n1 |sed 's/^TryExec=//g')"
 		fi
 		
 		exec="${exec-$tryexec}"
