@@ -45,7 +45,7 @@ YPPATH="/var/ybs"
 YPPATH_LIB="$YPPATH/pbslib"
 YPPATH_SOURCE="$YPPATH/sources"
 YPPATH_SCRIPT="$YPPATH_LIB"
-YPPATH_FIELD="/tmp/ybs"
+YPPATH_FIELD="/var/tmp/ybs"
 
 YPKPATH="/var/ypkg"
 YPPATH_DB="$YPKPATH/db"
@@ -905,17 +905,9 @@ split_dev() {
 	local dir="$1"
 	local destdir="$workdir"
 	
-	#/usr/include/ /usr/share/*/include /usr/lib/*/include
-	ls -1d $dir/usr/share/*/include $dir/usr/lib/*/include \
-	       $dir/usr/include 2>/dev/null |while read line; do
-	        	local tmp=${line##$dir}
-			local tmp=${tmp%%/include}
-			domv $line $destdir/$N-dev_$V$R/$tmp
- 		done
-	
-	#*.la *.a *.h
-	devlib=$(find $dir/ -name "*.la" -o -name "*.a" 2>/dev/null)
-	devlib+=" $(find $dir/ -name "*.h" 2>/dev/null)"
+	# *.la *.a *.h
+	devlib=$(find $dir/ -type f -name "*.la" -o -name "*.a" 2>/dev/null)
+	devlib+=" $(find $dir/ -type f -name "*.h" 2>/dev/null)"
 	if [ x"$devlib" != "x" ]; then
 		for lib in $devlib; do
 			i=${lib#$dir}
@@ -924,7 +916,7 @@ split_dev() {
 		done
 	fi
 
-	#pkgconfig
+	# pkgconfig
 	pcdir=$(find $dir -type d -name "pkgconfig" 2>/dev/null)
 	if [ x"$pcdir" != "x" ]; then
 		for pc in $pcdir; do
@@ -934,7 +926,7 @@ split_dev() {
 		done
 	fi
 	
-	#/usr/share/aclocal/ogg.m4
+	# /usr/share/aclocal/ogg.m4
 	acl=$(ls -d $dir/usr/share/aclocal/* 2>/dev/null)
 	if [ x"$acl" != "x" ]; then
 		domv $dir/usr/share/aclocal $destdir/$N-dev_$V$R/usr/share
@@ -1257,8 +1249,11 @@ ypkg_mkpackage() {
 	local spacks="$1 "
 	NN="$N"
 
-	#check /dirs permission
+	# check /dirs permission
 	check_perm_dirs "$destdir"
+
+	# clean up pipe files
+	find "$destdir" -name "*.pipe" -type p -exec rm {} \;
 
 	if [ "x$LANGUAGE" != "x" ];then
 		#strip i18n 
