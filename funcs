@@ -242,7 +242,7 @@ atom_parse() {
 		x$PACK_SUFFIX)     
 	  [ "x$YARCH" != "x" ] && atom="${string%-$YARCH.$PACK_SUFFIX}" || atom="${string%.$PACK_SUFFIX}" ;;
 		xlist)	
-	  atom="${string%.list}" ;;
+	  atom="${string%.filelist}" ;;
 		xdesc)	
 	  atom="${string%.desc}" ;;
 		*)      
@@ -1065,7 +1065,7 @@ mkpackage() {
 	# Creat pkgdate
 	cd $source_dir
 	
-	find |sort -r |fileinfo > $workdir/${N}_$V$R.list
+	find |sort -r |fileinfo > $workdir/${N}_$V$R-$YARCH.filelist
 
 	if [ "x$N" = "x$NN-dev" ]; then
 		RDEPEND=
@@ -1202,8 +1202,10 @@ cat >>$pkgdir/$control <<OOO
 OOO
 
 	cd $pkgdir
-	cp $workdir/${N}_$V$R.list $filelist
-	
+	cp $workdir/${N}_$V$R-$YARCH.filelist $filelist
+	cp $workdir/${N}_$V$R-$YARCH.filelist $YPPATH_SCRIPT/
+	gzip -9 -f $YPPATH_SCRIPT/${N}_$V$R-$YARCH.filelist
+
 	if [ "x$install" != "x" ] && file_is_exist $filesdir/$install; then
 		cp $YPPATH_SCRIPT/files/$install .
 	fi
@@ -1365,15 +1367,6 @@ doinit() {
        			install -m755 "$filesdir/$file" "$destdir"/etc/init.d
 		fi
 	fi
-}
-
-#
-# for reboot flag
-#
-flag_reboot() {
-	local flag="/run/ypkg/reboot"
-	mkdir -p /run/ypkg
-	touch "$flag"
 }
 
 #

@@ -72,20 +72,20 @@ $0
 
 Usage: $0 command [options] pkg1 [pkg2 ...]
 
-ybs (ylmfos build system) is a simple command line for download/compile/install package from source code
+ybs (Ylmf OS Build System) is a simple command line for download/compile/install package from source code.
 
 Commands:
        -h|--help                               Show usage   
-       -s|--search                             Search pkg
-       -d|--download                           Download source tartall of pkg
-       -r|--remove                             Remove pkg
-       -i|--install                            Compile and install pkg and dependence
-      -is|--install-single                     Forced install single pkg without checking dependence
-       -n|--notes                              Show user notes of pkg
-       -c|--comments                           Show user comments of pkg
-       -k|--depend                             Show dependence of pkg
-       -w|--showpbs                            Show avaliable pbsfile of pkg
-      -wr|--whatrequires                       Show which pkgs depends on this pkg
+       -s|--search                             Search app in ybs tree
+       -d|--download                           Download source tartall of app
+       -r|--remove                             Remove app (same as ypkg -C foo)
+       -i|--install                            Compile app and dependency
+      -is|--install-single                     Forced install single app without checking dependency
+       -n|--notes                              Show user notes of app
+       -c|--comments                           Show user comments of app
+       -k|--depend                             Show dependency of app
+       -w|--showpbs                            Show avaliable pbsfile of app
+      -wr|--whatrequires                       Show which apps depends on this app
        --sync [path]                           Sync pbslib via git to $YPPATH/pbslib
        --info                                  Show $0 parameters of /etc/ybs.conf
 
