@@ -1127,13 +1127,13 @@ mkpackage() {
 
 	if [ "x$desktop" != "x" ]; then
 		cp $desktop  $pkgdir/"$N".desktop
-		cp $desktop  $YPKDEST/desktops/"$N".desktop
+		cp $desktop  ${YPKDEST%/*}/desktops/"$N".desktop
 		local icon=$(find_icon $desktop $source_dir)
 		
 		if [ "x$icon" != "x" ]; then
 			local tmp="$N"."${icon##*.}"
 			cp $icon  $pkgdir/$tmp
-			cp $icon  $YPKDEST/icons/$tmp
+			cp $icon  ${YPKDEST%/*}/icons/$tmp
 		fi
 	
 		# Find exec
