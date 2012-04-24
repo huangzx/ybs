@@ -905,9 +905,14 @@ split_dev() {
 	local dir="$1"
 	local destdir="$workdir"
 	
-	# *.la *.a *.h
+	#/usr/include  /usr/share/include
+	[ -d $dir/usr/include ] && domv $dir/usr/include $destdir/$N-dev_$V$R/usr/
+	[ -d $dir/usr/share/include ] && domv $dir/usr/share/include $destdir/$N-dev_$V$R/usr/share/
+
+	# *.la *.a *.h *.hpp
 	devlib=$(find $dir/ -type f -name "*.la" -o -name "*.a" 2>/dev/null)
-	devlib+=" $(find $dir/ -type f -name "*.h" 2>/dev/null)"
+	devlib+=" $(find $dir/ -type f -name "*.h" -o -name "*.hpp" 2>/dev/null |grep "/include/")"
+	
 	if [ x"$devlib" != "x" ]; then
 		for lib in $devlib; do
 			i=${lib#$dir}
@@ -918,6 +923,7 @@ split_dev() {
 
 	# pkgconfig
 	pcdir=$(find $dir -type d -name "pkgconfig" 2>/dev/null)
+	
 	if [ x"$pcdir" != "x" ]; then
 		for pc in $pcdir; do
 			i=${pc#$dir}
@@ -928,9 +934,11 @@ split_dev() {
 	
 	# /usr/share/aclocal/ogg.m4
 	acl=$(ls -d $dir/usr/share/aclocal/* 2>/dev/null)
+	
 	if [ x"$acl" != "x" ]; then
 		domv $dir/usr/share/aclocal $destdir/$N-dev_$V$R/usr/share
 	fi
+	
 	[ -d $destdir/$N-dev_$V$R ] && echo $destdir/$N-dev_$V$R && return 0
 	
 	return 1
@@ -1203,8 +1211,6 @@ OOO
 
 	cd $pkgdir
 	cp $workdir/${N}_$V$R-$YARCH.filelist $filelist
-	cp $workdir/${N}_$V$R-$YARCH.filelist $YPPATH_SCRIPT/
-	gzip -9 -f $YPPATH_SCRIPT/${N}_$V$R-$YARCH.filelist
 
 	if [ "x$install" != "x" ] && file_is_exist $filesdir/$install; then
 		cp $YPPATH_SCRIPT/files/$install .
@@ -1220,6 +1226,8 @@ OOO
 		tar cjf $target $pkgdata $pkginfo && echo $target
 	else
 		mkdir -p $YPKDEST/$subdir
+		cp $workdir/${N}_$V$R-$YARCH.filelist $YPKDEST/$subdir
+		gzip -9 -f $YPKDEST/$subdir/${N}_$V$R-$YARCH.filelist
 		tar cjf $YPKDEST/$uri $pkgdata $pkginfo && echo $YPKDEST/$uri
 	fi
 }
