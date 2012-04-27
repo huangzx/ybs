@@ -6,7 +6,7 @@
 . /usr/lib/ybs/funcs
 
 usage() {
-	msg "$0 Ylmf OS kernel module system."
+	msg "$0 -- Ylmf OS kernel module system."
 	msg "Usage: "
 	msg " $0 install name version"
 	msg " $0 remove name version"
@@ -40,6 +40,18 @@ version="$3"
 args="$4 $5 $6"
 dir="$YPKPATH/modules"
 source_dir="/usr/src/"${name}_$version""
+
+arch_running="$(uname -m)"
+kernel_running="$(uname -r)"
+i=($(cat $dir/kernel))
+kernel_update=${i[0]}
+arch_update=${i[1]}
+
+if [ x"$kernel_running" != "x$kernel_update" ]; then
+	msg "* kernel version updates, skip."
+	msg "* please build $source_dir manually."
+	exit 0
+fi
 
 if [ "x$action" != "xautoinstall" ]; then
 	if [ ! -d $source_dir ]; then
@@ -97,7 +109,7 @@ case "$action" in
 			exit 1
 		fi
 		
-		record="$dir"/"$name"/"$version"/"$(uname -m)"/"$kernel_running"
+		record="$dir"/"$name"/"$version"/"$arch_running"/"$kernel_running"
 		mkdir -p $record
 		>$record/modules
 		
@@ -129,7 +141,7 @@ case "$action" in
 		rm -rf $makepipe $makelog $mkinstallpipe $mkinstalllog $preparelog 2>/dev/null 	
 		;;
 	remove)
-		record="$dir"/"$name"/"$version"/"$(uname -m)"/"$kernel_running"
+		record="$dir"/"$name"/"$version"/"$arch_running"/"$kernel_running"
 		
 		cat $record/modules |while read file sha1; do
 			sha1_old=${sha1}
@@ -157,23 +169,13 @@ case "$action" in
 		;;
 
 	autoinstall)
-		arch_running="$(uname -m)"
-		kernel_running="$(uname -r)"
-		i=($(cat $dir/kernel))
-		kernel_update=${i[0]}
-		arch_update=${i[1]}
-		
-		if [ x"$kernel_running" != "x$kernel_update" ]; then
-			ls -d1 "$dir"/*/* 2>/dev/null |awk -F\/ '{print $5 " " $6}' |while read name version;do
-				ykms install $name $version
-				prepare=""
-				make_args=""
-				mkinstall_args=""
-				post_inst=""
-			done   
-		else
-			msg "* No operation because NO kernel version updates."
-		fi
+		ls -d1 "$dir"/*/* 2>/dev/null |awk -F\/ '{print $5 " " $6}' |while read name version;do
+			ykms install $name $version
+			prepare=""
+			make_args=""
+			mkinstall_args=""
+			post_inst=""
+		done   
 		;;
 
 		*) usage
