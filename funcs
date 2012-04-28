@@ -72,6 +72,14 @@ control="control.xml"
 filelist="filelist"
 
 #
+get_arch() {
+	. /etc/ybs.conf 2>/dev/null
+	[ "x$ARCH" = "x" ] && ARCH=$(cat /var/ypkg/modules/kernel 2>/dev/null |awk '{print $2}')
+	[ "x$ARCH" = "x" ] && ARCH=$(uname -m)
+	echo $ARCH
+}
+
+#
 blank_funcs () {
 	DESCRIPTION=""
 	COMMENTS=""

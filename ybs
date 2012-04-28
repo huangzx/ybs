@@ -14,13 +14,12 @@ mkdir -p  $YPKDEST $YPPATH_FIELD
 chmod 777 $YPPATH_FIELD $YPPATH_SOURCE  2>/dev/null
 
 # Reload parameters if available
-if [ "x$ARCH" = "x" ]; then
-  case "$(uname -m)" in
-    i?86) export ARCH=i686 ;;
-    arm*) export ARCH=arm ;;
-       *) export ARCH=$(uname -m) ;;
-  esac
-fi
+ARCH="$(get_arch)"
+case "$ARCH" in
+	i?86) export ARCH=i686 ;;
+	arm*) export ARCH=arm ;;
+	   *) export ARCH="$ARCH" ;;
+esac
 
 LIBDIRSUFFIX=""
 case "$ARCH" in
