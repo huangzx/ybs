@@ -95,7 +95,7 @@ Options for install:
 	--unpack   			       Break after unpack source tarball
 	--patch   			       Break after patch source
   	--config         		       Break after configure	
-	--build                                Break after make a.k.s compile
+	--make                	               Break after make a.k.s compile
 	--check				       Break after make check/test
 	--mkinstall                            Break after make install    
 	--package                              Break after make ypk package    
