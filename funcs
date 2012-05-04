@@ -1208,7 +1208,6 @@ fi
 
 cat >>$pkgdir/$control <<OOO
    <build_date>$build_date</build_date>    
-   <uri>$uri</uri>
    <$gdescription>
      <keyword lang="en">$description</keyword>
    </description> 
