@@ -1999,7 +1999,7 @@ gnome2_mime_database_update() {
 #upack           break after unpack source tarball
 #patch           break after patch source
 #config          break after configure	
-#build           break after make a.k.s compile
+#make           break after make a.k.s compile
 #check		 break after make check/test
 #mkinstall         break after make install    
 #package         break after make ypk package    

@@ -130,7 +130,7 @@ for i in ${argvs[@]}; do
 		--unpack)	  BREAK="unpack"      ;;	
 		--patch)	  BREAK="patch"       ;;	
 		--config)	  BREAK="config"      ;;
-		--build)          BREAK="build"       ;;
+		--make)           BREAK="make"        ;;
 		--check)          BREAK="check"       ;;
 		--mkinstall)      BREAK="mkinstall"   ;;
 		--package)        BREAK="package"     
