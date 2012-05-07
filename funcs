@@ -154,6 +154,17 @@ check_root () {
 }
 
 #
+# Check app
+#
+check_app() {
+	local app="$1"
+	if ! which "$app" 2>/dev/null; then	
+		rmsg "* $app not found."
+		exit 1
+	fi
+}
+
+#
 # Smmation
 # 
 summation() {

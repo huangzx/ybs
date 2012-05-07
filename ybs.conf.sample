@@ -47,7 +47,7 @@ YPKDEST="/var/ypkg/packages"
 #
 # Download tools, curl and wget are available
 #
-DOWNLOAD_TOOL="wget"
-WGET_OPTIONS="--tries=3 --retry-connrefused --wait=2"
+DOWNLOAD_TOOL="curl"
 CURL_OPTIONS="-L"
+WGET_OPTIONS="--tries=3 --retry-connrefused --wait=2"
 

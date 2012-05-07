@@ -228,6 +228,7 @@ case "${1}" in
 
 --sync) 
 	#sync pbs libs with git.
+	check_app git
 	check_root
 	logfile="/var/log/ybs.log"
 	ymsg "* Sync pbslibs via git ..."
