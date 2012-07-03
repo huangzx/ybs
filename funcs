@@ -1021,6 +1021,8 @@ find_desktop() {
 		desktop="$(ls $source_dir/usr/share/applications/$N-[[:digit:]].desktop)"
 	file_is_exist "$source_dir/usr/share/applications/$N.desktop" && \
 		desktop="$source_dir/usr/share/applications/$N.desktop"
+	file_is_exist "$source_dir/usr/share/applications/kde4/$N.desktop" && \
+		desktop="$source_dir/usr/share/applications/kde4/$N.desktop"
 
 	if [ "x$DESKTOPFILE" != "x" ]; then
 		file_is_exist "$source_dir/$DESKTOPFILE" && \
@@ -1137,7 +1139,7 @@ mkpackage() {
 	repo=$REPO
 	rir=$RIR
 	subdir="$(echo $N |cut -b1)"
-	uri="$subdir/${N}_$V$R-$YARCH.$PACK_SUFFIX"
+	uri="$subdir/$N/${N}_$V$R-$YARCH.$PACK_SUFFIX"
 	license="$(echo $LICENSE |tr -d '<>')"
 	packager="$(echo $PACKAGER |tr -d '<>')"
 	homepage="$(echo $HOMEPAGE |tr -d '<>')"
@@ -1253,12 +1255,17 @@ OOO
 		target="$2"
 		tar cjf $target $pkgdata $pkginfo && echo $target
 	else
-		mkdir -p $YPKDEST/$subdir
+		YPKDEST_RAW="$YPKDEST/$subdir/$N"
+		mkdir -p $YPKDEST_RAW
 		tar cjf $YPKDEST/$uri $pkgdata $pkginfo && echo $YPKDEST/$uri
-		cp $workdir/${N}_$V$R-$YARCH.buildlog $YPKDEST/$subdir  2>/dev/null
-		cp $workdir/${N}_$V$R-$YARCH.filelist $YPKDEST/$subdir
-		gzip -9 -f $YPKDEST/$subdir/${N}_$V$R-$YARCH.buildlog	2>/dev/null
-		gzip -9 -f $YPKDEST/$subdir/${N}_$V$R-$YARCH.filelist
+		cp $workdir/{${N}_$V$R-$YARCH.buildlog,${N}_$V$R-$YARCH.filelist} $YPKDEST_RAW 2>/dev/null
+
+		# -dev not copy changelog
+		if [ x"${N##*-}" != "xdev" ]; then
+			cp $pbsdir/changelog $YPKDEST_RAW 2>/dev/null
+		fi
+
+		gzip -9 -f $YPKDEST_RAW/{${N}_$V$R-$YARCH.buildlog,${N}_$V$R-$YARCH.filelist,changelog}  2>/dev/null
 	fi
 }
 
