@@ -47,6 +47,9 @@ YPPATH_SOURCE="$YPPATH/sources"
 YPPATH_SCRIPT="$YPPATH_LIB"
 YPPATH_FIELD="/var/tmp/ybs"
 
+PACKAGE_DB="/var/ypkg/db/package.db"
+SQLITE="$(which sqlite3)"
+
 YPKPATH="/var/ypkg"
 YPPATH_DB="$YPKPATH/db"
 [ "x$YPKDEST" = "x" ] && YPKDEST="$YPKPATH/packages"
@@ -312,7 +315,7 @@ atom_parse() {
 # the former > the latter, return 1
 # the former < the latter, return 2
 # the former = the latter, return 0
-# alpha < beta < rc < ylmf
+# alpha < beta < rc < ylmf < r
 
 string_len() {
 	local string=$1
@@ -378,12 +381,16 @@ atom_cmp() {
 					rcn|betan|alphan) return 2 ;;
 				        nrc|nbeta|nalpha) return 1 ;;
 				                   ylmfn) return 1 ;;
+				                   rn)    return 1 ;;
 				                   nylmf) return 2 ;;
+				                   nr)    return 2 ;;
+						 rylmf)   return 1 ;;
 				          rcbeta|rcalpha) return 1 ;;
 				                  betarc) return 2 ;;
 				               betaalpha) return 1 ;;
 				       alpharc|alphabeta) return 2 ;;
 			       rcylmf|betaylmf|alphaylmf) return 2 ;;
+			       rcr|betar|alphar|ylmfr)    return 2 ;;
 			       esac
 			 fi
 			 a=${a#*.}
@@ -408,12 +415,20 @@ ypkg_searchInstalled() {
 	local pkgname=$2
 	local pkgver=$3
 
-	INSTALL_STATUS=$(yget --show $pkgname |grep Status |head -n1 |awk '{print $2}')
-	
-	case "x$INSTALL_STATUS" in
-	 	x[IUD])
-	   	  	INSTALL_TIME=$(yget --show $pkgname |grep Install_date |head -n1 |awk '{print $2" "$3}')
-			INSTALL_VERSION=$(yget --show $pkgname |grep Version |head -n1 |awk '{print $2}')
+	local info=$($SQLITE $PACKAGE_DB "select name,version,repo,install_time from world where name='$pkgname'")
+
+	case "x$info" in
+		x) 
+			msg_ "[*] "
+			echo "$(wmsg $pkgtype/$pkgname)"
+	   		echo -e "\t$(gmsg "Installed:") None"
+	  		INSTALL_STATUS="uninstall" ;;
+
+	 	x*)
+			info=(${info//|/ })
+			INSTALL_VERSION=${info[1]}
+			INSTALL_TIME=${info[3]}
+			INSTALL_TIME=$(date -d "1970-01-01 UTC $INSTALL_TIME seconds" +%F,%T)
 			new=$pkgver
 			old=$INSTALL_VERSION
 			# Compare 2 versions
@@ -434,11 +449,6 @@ ypkg_searchInstalled() {
 			esac 
 			echo "$(wmsg $pkgtype/$pkgname)"
 			echo -e "\t$(gmsg Installed:) $(ymsg $INSTALL_VERSION) $INSTALL_TIME" ;;
-	  	    *) 
-			msg_ "[*] "
-			echo "$(wmsg $pkgtype/$pkgname)"
-	   		echo -e "\t$(gmsg "Installed:") None"
-	  		INSTALL_STATUS="uninstall"
 	esac
 }
 
