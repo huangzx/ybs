@@ -105,12 +105,14 @@ blank_funcs () {
 	BDEPEND=""
 	RECOMMENDED=""
 	CONFLICT=""
+	REPLACE=""
 	NOTES=""
 	OPIONAL=""
 	PROVIDE=""
 	INSTALL=""
 	OPTIONS=""
 	RIR=""
+	ALIAS=""
 	
 	INAME=""
 	CATEGORY=""
@@ -1100,6 +1102,16 @@ find_icon() {
 }
 
 #
+# convert: 
+# & -> &amp; 
+# < -> &lt;
+# > -> &gt;
+#
+xml_escape_convert() {
+	echo "$1" |sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
+}
+
+#
 # $1 - source_dir
 mkpackage() {
 	local sha
@@ -1121,6 +1133,7 @@ mkpackage() {
 		PRIORITY=
 		INSTALL=
 		CONFLICT=
+		REPLACE=
 		DESCRIPTION="$DESCRIPTION (development files)" 
 	else
 		install=$INSTALL
@@ -1148,18 +1161,20 @@ mkpackage() {
 	[ x"$REPO" = x ] && REPO="stable"
 	repo=$REPO
 	rir=$RIR
+	alias=$ALIAS
 	subdir="$(echo $N |cut -b1)"
 	uri="$subdir/$N/${N}_$V$R-$YARCH.$PACK_SUFFIX"
-	license="$(echo $LICENSE |tr -d '<>')"
-	packager="$(echo $PACKAGER |tr -d '<>')"
-	homepage="$(echo $HOMEPAGE |tr -d '<>')"
+	license="$(xml_escape_convert "$LICENSE")"
+	packager="$(xml_escape_convert "$PACKAGER")"
+	homepage="$(xml_escape_convert "$HOMEPAGE")"
 	install="$INSTALL"
 	arch="$YARCH"
-	depend=$(echo $RDEPEND |xargs |tr " " ",")
-	bdepend=$(echo $BDEPEND |xargs |tr " " ",")
-	redepend=$(echo $RECOMMENDED |xargs |tr " " ",")
-	conflict=$(echo $CONFLICT |xargs |tr " " ",")
-	description=$(echo $DESCRIPTION |sed 's/&/and/g' |tr -d '<>')
+	depend=$(xml_escape_convert "$RDEPEND" |xargs |tr " " ",")
+	bdepend=$(xml_escape_convert "$BDEPEND" |xargs |tr " " ",")
+	redepend=$(xml_escape_convert "$RECOMMENDED" |xargs |tr " " ",")
+	conflict=$(xml_escape_convert "$CONFLICT" |xargs |tr " " ",")
+	replace=$(xml_escape_convert "$REPLACE" |xargs |tr " " ",")
+	description=$(xml_escape_convert "$DESCRIPTION")
 
 	cd $source_dir
 	find . |$CPIO --quiet -o -H newc |$XZ -7 >../$pkgdata
@@ -1195,6 +1210,7 @@ mkpackage() {
 		fi
 		
 		exec="${exec-$tryexec}"
+		exec=$(xml_escape_convert "$exec")
 		gname="genericname type=\"desktop\""
 		gdescription="description type=\"desktop\""
 	else
@@ -1220,6 +1236,7 @@ mkpackage() {
    <homepage>$homepage</homepage>
    <repo>$repo</repo>
    <rir>$rir</rir>
+   <alias>$alias</alias>
    <install>$install</install>
 OOO
 
@@ -1244,6 +1261,7 @@ cat >>$pkgdir/$control <<OOO
      <bdepend>$bdepend</bdepend>
      <recommended>$redepend</recommended>      
      <conflict>$conflict</conflict>      
+     <replace>$replace</replace>      
    </data>                               
  </Package>
 </PackageInfo>
@@ -2174,6 +2192,7 @@ COMMENTS="$COMMENTS"
 HOMEPAGE="$HOMEPAGE"
 REPO="$REPO"
 RIR="$RIR"
+ALIAS="$ALIAS"
 YARCH="$YARCH"
 LICENSE="$LICENSE"
 PRIORITY="$PRIORITY"
@@ -2182,7 +2201,8 @@ RDEPEND="$RDEPEND"
 BDEPEND="$BDEPEND"
 RECOMMENDED="$RECOMMENDED"
 CONFLICT="$CONFLICT"
-OPIONAL="$CONFLICT"
+REPLACE="$REPLACE"
+OPIONAL="$OPIONAL"
 INSTALL="$INSTALL"
 OPTIONS="$OPTIONS"
 EOF
@@ -2295,7 +2315,9 @@ ypkg_show() {
 			gmsg "* Recommend"
 			echo $RECOMMENDED |xargs
 			gmsg "* Conflict"
-			echo $CONFLICT |xargs ;;
+			echo $CONFLICT |xargs 
+			gmsg "* Replace"
+			echo $REPLACE |xargs ;;
 		pbs)
 			echo "$NEWEST"
 		esac
@@ -2315,7 +2337,7 @@ ypkg_whatrequires() {
 	
 	find "$YPPATH_LIB" -maxdepth 3 -type f -name "*.pbs" |while read file; do
 		. "$file"
-		for depend in RDEPEND BDEPEND RECOMMENDED CONFLICT; do
+		for depend in RDEPEND BDEPEND RECOMMENDED CONFLICT REPLACE; do
 			if str_isIn "$(eval "echo \$${depend}")" "$string"; then
 				case $depend in
 				RDEPEND)
@@ -2329,6 +2351,9 @@ ypkg_whatrequires() {
 					msg "$file"  ;;
 			       CONFLICT)
 					rmsg_ "[C] "
+					rmsg "$file" ;;
+			       REPLACE)
+					rmsg_ "[S] "
 					rmsg "$file"
 				esac
 			fi
