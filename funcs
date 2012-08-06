@@ -1919,6 +1919,28 @@ gnome2_install_defaut_gconf() {
 }
 
 # Install schemas
+mate_install_schema() {
+	local schemas="$@"
+	if [ x"$schemas" != x ] && [ -x /usr/bin/mateconftool-2 ];then
+		for schema in $schemas; do
+			msg ">>> Installing: $schema"
+			MATECONF_CONFIG_SOURCE="$(mateconftool-2 --get-default-source)" mateconftool-2 --makefile-install-rule "$schema"  >/dev/null
+		done
+	fi
+}
+
+# Unstall schemas
+mate_uninstall_schema() {
+	local schemas="$@"
+	if [ x"$schemas" != x ] && [ -x /usr/bin/mateconftool-2 ];then
+		for schema in $schemas; do
+			msg ">>> Uninstalling: $schema"
+			MATECONF_CONFIG_SOURCE="$(mateconftool-2 --get-default-source)" mateconftool-2 --makefile-uninstall-rule "$schema"  >/dev/null
+		done
+	fi
+}
+
+# Install schemas
 gnome2_install_schema() {
 	#this is this-is-deprecated
 	#return 0
@@ -2269,7 +2291,7 @@ EOF
 	for pack in $packs; do
 		case "x$AUTO_INSTALL" in
 			xyes) mmsg ">>> Install: $pack"
-			      ypkg -I -f $pack ;;
+			      ypkg "$YPKG_OPT" -I $pack ;;
 			   *) gmsg ">>> $pack"
 		esac
 	done

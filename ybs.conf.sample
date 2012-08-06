@@ -51,3 +51,7 @@ DOWNLOAD_TOOL="curl"
 CURL_OPTIONS="-L"
 WGET_OPTIONS="--tries=3 --retry-connrefused --wait=2"
 
+#
+# Ypkg install OPTs
+#
+YPKG_OPT="-f"
