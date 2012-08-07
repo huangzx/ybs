@@ -76,6 +76,18 @@ KERNEL_RUNNING="$(uname -r)"
 ARCH_RUNNING="$(uname -m)"
 
 #
+STRIP_BINARIES="--strip-all"
+STRIP_SHARED="--strip-unneeded"
+STRIP_STATIC="--strip-debug"
+
+#
+UPXFLAGS="-9"
+
+#
+CCACHE_DIR="$YPPATH_FIELD/.ccache"
+CCACHE_SIZE="5G"
+
+#
 pkgdata="pkgdata"
 pkginfo="pkginfo"
 control="control.xml"
@@ -883,21 +895,43 @@ ypkg_strip_mani18n() {
 # Upx for compressing eXecutables files
 ypkg_upx_bin () {
 	local dir="$1"
-	find "$dir"/{,usr/}{bin,sbin} -type f -executable 2>/dev/null |while read file; do
-		if ! upx -9 $file >/dev/null 2>&1; then
-			[ -f $file.upx ] && rm -rf $file.upx
-		fi
+	local binary
+
+	find $dir -type f -perm -u+w 2>/dev/null | while read binary ; do
+		if [[ $(file -bi "$binary") = *'application/x-executable'* ]]; then
+			if ! upx $UPXFLAGS "$binary" >/dev/null 2>&1; then
+				 [ -f $binary.upx ] && rm -rf $binary.upx
+			fi
+                 fi
 	done
+}
+
+#
+# Removing libtool files...
+ypkg_rm_libtool () {
+	local dir="$1"
+	find $dir ! -type d -name "*.la" -exec rm -f -- '{}' \;
 }
 
 #
 # Strip binary in directory $1
 ypkg_strip_bin() {
+	[[ -z ${STRIP_SHARED+x} ]] && STRIP_SHARED="-S"
+	[[ -z ${STRIP_STATIC+x} ]] && STRIP_STATIC="-S"
+
 	local dir="$1"
-	#find "$dir"/{,usr/}{bin,sbin} -type f -exec strip --strip-all '{}' ';' 2>/dev/null
-	#find "$dir"/{,usr/}{lib,local/lib} -type f -exec strip --strip-debug '{}' ';' 2>/dev/null
-	find "$dir" |xargs file |grep "executable" |grep ELF |cut -f 1 -d : |xargs strip --strip-unneeded 2> /dev/null
-	find "$dir" |xargs file |grep "shared object" |grep ELF |cut -f 1 -d : |xargs strip --strip-unneeded 2> /dev/null
+	local binary
+	
+	find $dir -type f -perm -u+w 2>/dev/null | while read binary ; do
+		case "$(file -bi "$binary")" in
+			*application/x-sharedlib*)  # Libraries (.so)
+				strip $STRIP_SHARED "$binary" 2>/dev/null ;;
+			*application/x-archive*)    # Libraries (.a)
+				strip $STRIP_STATIC "$binary" 2>/dev/null ;;
+			*application/x-executable*) # Binaries
+				strip $STRIP_BINARIES "$binary" 2>/dev/null ;;
+		esac
+	done
 }
 
 #
@@ -916,11 +950,12 @@ ypkg_get_category() {
 	local type  category
 	type=$1
 	case ${type%%-*} in
- 	 #	 sys)	category="System"		;;
-	 #       x11)    category="Xorg"		;;
-#gnome|kde|lxde|xfce)    category="Desktop"		;;
+		#sys)	     category="System"		;;
+		#x11)        category="Xorg"		;;
+#gnome|kde|lxde|xfce|mate)   
+			#category="Desktop"		;;
 		#app)	category="Utilities"		;;
-sys|x11|gnome|kde|lxde|xfce|app)
+sys|x11|gnome|kde|lxde|xfce|mate|app)
 		        category="Utilities"            ;;
        www|net|mail)	category="Network"		;;
        		 im)    category="IM"		        ;;
@@ -1337,7 +1372,12 @@ ypkg_mkpackage() {
 		#strip unnessesary i18n in man path.
 		ypkg_strip_mani18n $destdir
 	fi
-
+	
+	# Rm libtool *.la files
+	if str_isIn "$OPTIONS" "nolibtool"; then
+		ypkg_rm_libtool $destdir
+	fi
+	
 	# Strip bin
 	if ! str_isIn "$OPTIONS" "nostrip"; then
 		ypkg_strip_bin $destdir
@@ -2174,6 +2214,21 @@ ypkg_install() {
 	maybe_break patch pwd
 
 	ymsg ">> $T/${N}_$V$R configure"
+	
+	# use distcc if it is requested
+	if str_isIn "$OPTIONS" "distcc"; then
+		[[ -d /usr/lib/distcc/bin ]] && export PATH="/usr/lib/distcc/bin:$PATH"
+		export DISTCC_HOSTS
+		gmsg "* distcc is enabled"
+	fi
+
+	# use ccache if it is requested
+	if str_isIn "$OPTIONS" "ccache"; then
+		[[ -d /usr/lib/ccache/bin ]] && export PATH="/usr/lib/ccache/bin:$PATH"
+		export CCACHE_DIR
+		ccache -M $CCACHE_SIZE >/dev/null && gmsg "* ccache is enabled"
+	fi
+
 	[ -p $configpipe ] || mkfifo $configpipe
 	tee $configlog < $configpipe & 
 	pbs_config > $configpipe
