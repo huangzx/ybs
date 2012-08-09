@@ -537,8 +537,7 @@ ypkg_searchInstalled() {
 ypkg_search() {
 	local string="$1"
 	local pbsfile
-	local record=(XXXXX)
-	local count=0
+	local record=""
 
 	if ! ypkg_getpbsfile "$string" all; then
 		rmsg "* $string not found."
@@ -547,15 +546,14 @@ ypkg_search() {
 	
 	for pbsfile in $ALL_PBSFILE; do
 		atom_parse "$pbsfile"
-	
-		str_isIn "${record[@]}" "$T/$N" && continue
-		record[$count]="$T/$N"
-		let count=$count+1
+		
+		str_isIn "$record" "$T/$N" && continue
+		record+="$T/$N "
 		
 		ypkg_getpbsfile $T/$N name
 		
 		ypkg_searchInstalled $T $N $V$R
-		
+
 		msg=""
 		for pbsfile in $ALL_PBSFILE; do
 			REPO=""
