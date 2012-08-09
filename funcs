@@ -282,20 +282,19 @@ get_abspath () {
 # If $2 in $1 return 0, else return 1
 #
 str_isIn() {
-	if [ "x$2" = "x" ];then
+        if [ "x$2" = "x" ];then
 		msg "* str_isIn: you must specify at least two strings."
-		msg "* i.e. 'str_isIn \"a b c\" b'"
+	        msg "* i.e. 'str_isIn \"a b c\" b'"
 		return 1
 	fi
-
-	local string=($@)
-	local end=${!#}
-
-	for i in $(seq $(($#-1))); do
-		let i=$i-1
-		[ "x${string[$i]}" = "x$end" ] && return 0
-	done
 	
+	local string=($1)
+	local substring="$2"
+
+	for i in ${string[@]}; do
+		[ "x$i" = "x$substring" ] && return 0
+	done
+
 	return 1
 }
 
