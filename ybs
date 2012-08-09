@@ -6,53 +6,10 @@
 #
 
 #
-[ -f /etc/ybs.conf ] && . /etc/ybs.conf
 [ -f /usr/lib/ybs/funcs ] && . /usr/lib/ybs/funcs
 
 # Creat PATH
-mkdir -p  $YPKDEST $YPPATH_FIELD
-chmod 777 $YPPATH_FIELD $YPPATH_SOURCE  2>/dev/null
-
-# Reload parameters if available
-ARCH="$(get_arch)"
-case "$ARCH" in
-	i?86) export ARCH=i686 ;;
-	arm*) export ARCH=arm ;;
-	   *) export ARCH="$ARCH" ;;
-esac
-
-LIBDIRSUFFIX=""
-case "$ARCH" in
- "i686")
-	CFLAGS="-O2 -march=i686 -mtune=i686 -pipe "
-	BUILDARCH="-m32"	;;
- "s390")
-	CFLAGS="-O2 "	;;
- "x86_64")
-	CFLAGS="-O2 -fPIC "
-	BUILDARCH="-m64"	;;
- *)
-	CFLAGS="-O2 "	
-esac
-CXXFLAGS="$CFLAGS "
-YARCH="$ARCH"
-
-export ARCH 
-export YARCH
-export CC="$CC $BUILDARCH"
-export CXX="$CXX $BUILDARCH"
-export CFLAGS
-export CXXFLAGS
-[ "x$MAKEOPTS" = "x" ] && MAKEOPTS="-j2"
-export MAKEOPTS
-export SOURCE_URI
-export AUTO_INSTALL
-export YPKDEST
-export DOWNLOAD_TOOL
-export WGET_OPTIONS
-export CURL_OPTIONS
-export ACCEPT_REPO
-export BUILDARCH
+mkdir -p  $YPKDEST $WORKING_FIELD
 
 # Support set YPKG_ROOT 
 #
@@ -64,7 +21,6 @@ else
 fi
 #
 
-#
 ypkg_show_usage() {
 	cat <<EOF
 $0  
@@ -141,7 +97,7 @@ done
 case "${1}" in
 -info|--info)
 	# show build info
-	grep -v ^# "/etc/ybs.conf"
+	grep -v ^# "/etc/ybs.conf" |sed '/^$/d'
 	;;
 
 -s|--search)

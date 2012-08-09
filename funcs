@@ -1,8 +1,8 @@
 
-if [ "xLANG" = "x" ]; then
-	export LANG="zh_CN.UTF-8"
-fi
+[ -f /etc/ybs.conf ] && . /etc/ybs.conf
 
+[ "xLANG" = "x" ] && LANG="zh_CN.UTF-8"
+export LANG
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/opt/bin"
 
 ## -------------------- colourful print --------------------
@@ -45,7 +45,7 @@ YPPATH="/var/ybs"
 YPPATH_LIB="$YPPATH/pbslib"
 YPPATH_SOURCE="$YPPATH/sources"
 YPPATH_SCRIPT="$YPPATH_LIB"
-YPPATH_FIELD="/var/tmp/ybs"
+[ "x$WORKING_FIELD" = "x" ] && WORKING_FIELD="/var/tmp/ybs"
 
 PACKAGE_DB="/var/ypkg/db/package.db"
 SQLITE="$(which sqlite3)"
@@ -76,30 +76,97 @@ KERNEL_RUNNING="$(uname -r)"
 ARCH_RUNNING="$(uname -m)"
 
 #
-STRIP_BINARIES="--strip-all"
-STRIP_SHARED="--strip-unneeded"
-STRIP_STATIC="--strip-debug"
+[ "x$STRIP_BINARIES" = "x" ] && STRIP_BINARIES="--strip-all"
+[ "x$STRIP_SHARED" = "x" ]  && STRIP_SHARED="--strip-unneeded"
+[ "x$STRIP_STATIC" = "x" ] && STRIP_STATIC="--strip-debug"
 
 #
-UPXFLAGS="-9"
+[ "x$UPXFLAGS" = "x" ] && UPXFLAGS="-9"
 
 #
-CCACHE_DIR="$YPPATH_FIELD/.ccache"
-CCACHE_SIZE="5G"
+[ "x$CCACHE_DIR" = "x" ] && CCACHE_DIR="$WORKING_FIELD/.ccache"
+[ "x$CCACHE_SIZE" = "x" ] && CCACHE_SIZE="5G"
+
+#
+[ "x$DISTCC_HOSTS" = "x" ] && DISTCC_HOSTS=""
+
+#
+[ "x$MAKEOPTS" = "x" ] && MAKEOPTS="-j3"
+
+#
+[ "x$ACCEPT_REPO" = "x" ] && ACCEPT_REPO="stable"
+
+#
+[ "x$DOWNLOAD_TOOL" = "x" ] && DOWNLOAD_TOOL="wget"
+[ "x$WGET_OPTIONS" = "x" ] && WGET_OPTIONS="--tries=3 --retry-connrefused --wait=2"
+[ "x$CURL_OPTIONS" = "x" ] && CURL_OPTIONS="-L"
+
+#
+[ "x$SOURCE_URI" = "x" ] && SOURCE_URI="http://pkg.startos.org/sources"
+
+#
+[ "x$AUTO_INSTALL" = "x" ] && AUTO_INSTALL="no"
+
+# 
+[ "x$ARCH" = "x" ] && ARCH=$ARCH_DIST
+[ "x$ARCH" = "x" ] && ARCH=$ARCH_RUNNING
+
+case "$ARCH" in
+	i?86) ARCH=i686 ;;
+	arm*) ARCH=arm ;;
+	   *) ARCH="$ARCH" ;;
+esac
+
+LIBDIRSUFFIX=""
+case "$ARCH" in
+	"i686")
+		[ "x$CFLAGS" = "x" ] && CFLAGS="-O2 -march=i686 -mtune=i686 -pipe "
+		[ "x$BUILDARCH" = "x" ] &&  BUILDARCH="-m32"        ;;
+	"s390")
+	   	[ "x$CFLAGS" = "x" ] && CFLAGS="-O2 "   ;;
+      "x86_64")
+      	        [ "x$CFLAGS" = "x" ] && CFLAGS="-O2 -fPIC "
+		[ "x$BUILDARCH" = "x" ] && BUILDARCH="-m64"        ;;
+	     *)
+	     	[ "x$CFLAGS" = "x" ] && CFLAGS="-O2 "   
+esac
+
+[ "x$CC" = "x" ] && CC=gcc
+[ "x$CXX" = "x" ] && CXX=g++
+
+[ "x$CXXFLAGS" = "x" ] && CXXFLAGS="$CFLAGS "
+YARCH="$ARCH"
+
+export ARCH 
+export YARCH
+export CC="$CC $BUILDARCH"
+export CXX="$CXX $BUILDARCH"
+export CFLAGS
+export CXXFLAGS
+export YPKDEST
+export BUILDARCH
+export MAKEOPTS
+export ACCEPT_REPO
+export SOURCE_URI
+export AUTO_INSTALL
+export YPKDEST
+export DOWNLOAD_TOOL
+export CURL_OPTIONS
+export WGET_OPTIONS
+export FEATURES
+export CCACHE_DIR
+export CCACHE_SIZE
+export DISTCC_HOSTS
+export STRIP_BINARIES
+export STRIP_SHARED
+export STRIP_STATIC
+export UPXFLAGS
 
 #
 pkgdata="pkgdata"
 pkginfo="pkginfo"
 control="control.xml"
 filelist="filelist"
-
-#
-get_arch() {
-	. /etc/ybs.conf 2>/dev/null
-	[ "x$ARCH" = "x" ] && ARCH=$ARCH_DIST
-	[ "x$ARCH" = "x" ] && ARCH=$ARCH_RUNNING
-	echo $ARCH
-}
 
 #
 blank_funcs () {
@@ -220,15 +287,15 @@ str_isIn() {
 		msg "* i.e. 'str_isIn \"a b c\" b'"
 		return 1
 	fi
-	local string=($1)
-	local substring="$2"
 
-	for i in ${string[@]}; do
-		if [ "x$i" = "x$substring" ]; then
-			return 0
-		fi
+	local string=($@)
+	local end=${!#}
+
+	for i in $(seq $(($#-1))); do
+		let i=$i-1
+		[ "x${string[$i]}" = "x$end" ] && return 0
 	done
-
+	
 	return 1
 }
 
@@ -468,31 +535,11 @@ ypkg_searchInstalled() {
 
 #
 #
-allver_msg() {
-	local pbsfile
-	local msg
-	local extra="$BUILD_TIME $INSTALL_SIZE $PACK_SIZE"
-
-	for pbsfile in $ALL_PBSFILE; do 
-		atom_parse $pbsfile
-		. $pbsfile
-		case $REPO in
-		        [Tt]esting) repo="t"  ;;
-		         [Ss]table) repo="s" ;;
-   	               [Uu]nusable) repo="u" ;;
-                                 *) repo="s"
-		esac
-		[ "x$msg" = "x" ] && msg="$(mmsg $V$R[$repo]) $extra" || msg+=" | $(mmsg $V$R[$repo]) $extra"
-	done
-	echo $msg
-}
-
-#
-#
 ypkg_search() {
 	local string="$1"
-	local record=(AA)
 	local pbsfile
+	local record=(XXXXX)
+	local count=0
 
 	if ! ypkg_getpbsfile "$string" all; then
 		rmsg "* $string not found."
@@ -501,14 +548,30 @@ ypkg_search() {
 	
 	for pbsfile in $ALL_PBSFILE; do
 		atom_parse "$pbsfile"
-		ypkg_getpbsfile $T/$N name
-
+	
 		str_isIn "${record[@]}" "$T/$N" && continue
 		record[$count]="$T/$N"
-	
+		let count=$count+1
+		
+		ypkg_getpbsfile $T/$N name
+		
 		ypkg_searchInstalled $T $N $V$R
+		
+		msg=""
+		for pbsfile in $ALL_PBSFILE; do
+			REPO=""
+			atom_parse $pbsfile
+			. $pbsfile
+			case $REPO in
+				[Tt]esting) repo="t"  ;;
+	                  	 [Ss]table) repo="s" ;;
+	               	       [Uu]nusable) repo="u" ;;
+	                                 *) repo="s"
+	                 esac
+	                 msg+="$(mmsg $V$R[$repo]) | "
+		done
 
-		echo -e "\t$(gmsg "Available:") $(allver_msg)"
+		echo -e "\t$(gmsg "Available:") $msg"
 		. $NEWEST
 		echo -e "\t$(gmsg "Homepage:") $HOMEPAGE"
 		echo -e "\t$(gmsg "Description:") $DESCRIPTION"
@@ -526,9 +589,6 @@ do_download () {
 	local fname="$2"
 	local target="$YPPATH_SOURCE/$fname.tmp"
 	
-	[ "x$WGET_OPTIONS" = "x" ] && WGET_OPTIONS="--tries=3 --retry-connrefused --wait=2"
-	[ "x$CURL_OPTIONS" = "x" ] && CURL_OPTIONS="-L"
-
 	local wget="wget $WGET_OPTIONS"
 	local curl="curl $CURL_OPTIONS"
 
@@ -635,7 +695,7 @@ check_and_download_raw() {
 
 #
 # $1 - strings
-# $2 - all/name
+# $2 - all, name
 # resules:
 # ALL_PBSFILE : all version pbs files with full path 
 # $NEWEST: newest or specifid version pbs files with full path
@@ -679,12 +739,12 @@ ypkg_getpbsfile() {
 	esac
 
 
-	local pbsfiles=($(find $find_dir/"$T" -maxdepth 3 -type f -iname "$iname"))
+	local pbsfiles=($(find $find_dir/"$T" -maxdepth 3 -type f -iname "$iname" |sort -u))
 	
 	if [ "x$pbsfiles" = "x" ]; then
 		# Fixme!
 		# find provide
-		pbsfiles=($(find $find_dir/"$T" -maxdepth 3 -type f -iname "*.pbs" |xargs grep PROVIDE  |grep -w "$N" |awk -F: '{print $1}'))
+		pbsfiles=($(find $find_dir/"$T" -maxdepth 3 -type f -iname "*.pbs" |sort -u |xargs grep PROVIDE  |grep -w "$N" |awk -F: '{print $1}'))
 	fi	
 
 	[ "x$pbsfiles" = "x" ] && return 1
@@ -1374,17 +1434,17 @@ ypkg_mkpackage() {
 	fi
 	
 	# Rm libtool *.la files
-	if str_isIn "$OPTIONS" "nolibtool"; then
+	if str_isIn "$FEATURES" "nolibtool" || str_isIn "$OPTIONS" "nolibtool"; then
 		ypkg_rm_libtool $destdir
 	fi
 	
 	# Strip bin
-	if ! str_isIn "$OPTIONS" "nostrip"; then
+	if ! str_isIn "$FEATURES" "nostrip" || ! str_isIn "$OPTIONS" "nostrip"; then
 		ypkg_strip_bin $destdir
 	fi
 
 	# Upx executables files
-	if str_isIn "$OPTIONS" "upx"; then
+	if str_isIn "$FEATURES" "upx" || str_isIn "$OPTIONS" "upx"; then
 		ypkg_upx_bin $destdir
 	fi
 
@@ -1392,7 +1452,7 @@ ypkg_mkpackage() {
 	#spacks+="$(split_i18n $destdir) "
 
 	# Split dev
-	if ! str_isIn "$OPTIONS" "nodev"; then
+	if ! str_isIn "$FEATURES" "nodev" || ! str_isIn "$OPTIONS" "nodev"; then
 		spacks+="$(split_dev $destdir) "
 	fi
 
@@ -2174,7 +2234,7 @@ ypkg_install() {
 	# Download ok, install it.
 	#		
 	
-	workdir="$YPPATH_FIELD/$N"
+	workdir="$WORKING_FIELD/$N"
 	mkdir -p $workdir
 	srcdir="$workdir"/"$N-$V$R"	
 	
@@ -2216,14 +2276,14 @@ ypkg_install() {
 	ymsg ">> $T/${N}_$V$R configure"
 	
 	# use distcc if it is requested
-	if str_isIn "$OPTIONS" "distcc"; then
+	if str_isIn "$FEATURES" "distcc" || str_isIn "$OPTIONS" "distcc"; then
 		[[ -d /usr/lib/distcc/bin ]] && export PATH="/usr/lib/distcc/bin:$PATH"
 		export DISTCC_HOSTS
 		gmsg "* distcc is enabled"
 	fi
 
 	# use ccache if it is requested
-	if str_isIn "$OPTIONS" "ccache"; then
+	if str_isIn "$FEATURES" "ccache" || str_isIn "$OPTIONS" "ccache" ; then
 		[[ -d /usr/lib/ccache/bin ]] && export PATH="/usr/lib/ccache/bin:$PATH"
 		export CCACHE_DIR
 		ccache -M $CCACHE_SIZE >/dev/null && gmsg "* ccache is enabled"
