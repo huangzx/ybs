@@ -123,7 +123,7 @@ get_arch() {
 	echo $YARCH
 }
 
-get_arch
+get_arch >/dev/null
 
 LIBDIRSUFFIX=""
 case "$ARCH" in
