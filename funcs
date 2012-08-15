@@ -69,13 +69,6 @@ CHECK_TOOLS="md5sum sha1sum sha256sum"
 YLMFOS="YLMFOS"
 
 #
-DIST_INFO=($(cat /var/ypkg/modules/kernel))
-KERNEL_DIST=${DIST_INFO[0]}
-ARCH_DIST=${DIST_INFO[1]}
-KERNEL_RUNNING="$(uname -r)"
-ARCH_RUNNING="$(uname -m)"
-
-#
 [ "x$STRIP_BINARIES" = "x" ] && STRIP_BINARIES="--strip-all"
 [ "x$STRIP_SHARED" = "x" ]  && STRIP_SHARED="--strip-unneeded"
 [ "x$STRIP_STATIC" = "x" ] && STRIP_STATIC="--strip-debug"
@@ -107,26 +100,39 @@ ARCH_RUNNING="$(uname -m)"
 #
 [ "x$AUTO_INSTALL" = "x" ] && AUTO_INSTALL="no"
 
-# 
-[ "x$ARCH" = "x" ] && ARCH=$ARCH_DIST
-[ "x$ARCH" = "x" ] && ARCH=$ARCH_RUNNING
+#
+get_arch() {
+	DIST_INFO=($(cat /var/ypkg/modules/kernel))
+	KERNEL_DIST=${DIST_INFO[0]}
+	ARCH_DIST=${DIST_INFO[1]}
+	KERNEL_RUNNING="$(uname -r)"
+	ARCH_RUNNING="$(uname -m)"
+	[ "x$ARCH" = "x" ] && ARCH=$ARCH_DIST
+	[ "x$ARCH" = "x" ] && ARCH=$ARCH_RUNNING
 
-case "$ARCH" in
-	i?86) ARCH=i686 ;;
-	arm*) ARCH=arm ;;
-	   *) ARCH="$ARCH" ;;
-esac
+	case "$ARCH" in
+		i?86) ARCH=i686 ;;
+		arm*) ARCH=arm ;;
+		   *) ARCH="$ARCH" ;;
+	esac
+
+	[ "x$YARCH" = "x" ] && YARCH="$ARCH"
+	[ "x$YARCH" = "xany" ] && YARCH="$ARCH"
+	export ARCH 
+	export YARCH
+	echo $YARCH
+}
+
+get_arch
 
 LIBDIRSUFFIX=""
 case "$ARCH" in
 	"i686")
-		[ "x$CFLAGS" = "x" ] && CFLAGS="-O2 -march=i686 -mtune=i686 -pipe "
-		[ "x$BUILDARCH" = "x" ] &&  BUILDARCH="-m32"        ;;
+		[ "x$CFLAGS" = "x" ] && CFLAGS="-O2 -march=i686 -mtune=i686 -pipe " ;;
 	"s390")
 	   	[ "x$CFLAGS" = "x" ] && CFLAGS="-O2 "   ;;
       "x86_64")
-      	        [ "x$CFLAGS" = "x" ] && CFLAGS="-O2 -fPIC "
-		[ "x$BUILDARCH" = "x" ] && BUILDARCH="-m64"        ;;
+      	        [ "x$CFLAGS" = "x" ] && CFLAGS="-O2 -fPIC " ;;
 	     *)
 	     	[ "x$CFLAGS" = "x" ] && CFLAGS="-O2 "   
 esac
@@ -135,16 +141,12 @@ esac
 [ "x$CXX" = "x" ] && CXX=g++
 
 [ "x$CXXFLAGS" = "x" ] && CXXFLAGS="$CFLAGS "
-YARCH="$ARCH"
 
-export ARCH 
-export YARCH
-export CC="$CC $BUILDARCH"
-export CXX="$CXX $BUILDARCH"
+export CC="$CC "
+export CXX="$CXX "
 export CFLAGS
 export CXXFLAGS
 export YPKDEST
-export BUILDARCH
 export MAKEOPTS
 export ACCEPT_REPO
 export SOURCE_URI
@@ -174,9 +176,10 @@ blank_funcs () {
 	COMMENTS=""
 	HOMEPAGE=""
 	REPO=""
-	YARCH="$ARCH"
+	YARCH="$(get_arch)"
 	LICENSE=""
 	PRIORITY=""
+	GROUP=""
 	PACKAGER=""
 	SRC_URI=""
 	CHECKSUM=""
@@ -917,7 +920,7 @@ ypkg_strip_i18n() {
 		str_isIn "$LANGUAGE" $name 
 		if [ "$?" == "1" ]; then
 			# not in LANGUAGE, remove.
-			# msg ">>> strip i18n $name.."
+			# msg ">>> strip i18n $name ..."
 			rm -rf $ipath/$name
 		fi
 	done
@@ -942,7 +945,7 @@ ypkg_strip_mani18n() {
 		str_isIn "$LANGUAGE" $name 
 		if [ "$?" == "1" ]; then
 			# not in LANGUAGE, remove.
-			# msg ">>> strip man-i18n $name.."
+			# msg ">>> strip man-i18n $name ..."
 			rm -rf $ipath/$name
 		fi
 	done
@@ -1250,6 +1253,7 @@ mkpackage() {
 	name=$N
 	version=$V$R
 	priority=$PRIORITY
+	group=$GROUP
 	[ x"$REPO" = x ] && REPO="stable"
 	repo=$REPO
 	rir=$RIR
@@ -1323,6 +1327,7 @@ mkpackage() {
    <arch>$arch</arch>                                        
    <version>$version</version>                            
    <priority>$priority</priority>                    
+   <group>$group</group>                    
    <license>$license</license>
    <packager>$packager</packager>
    <homepage>$homepage</homepage>
@@ -1430,28 +1435,40 @@ ypkg_mkpackage() {
 		ypkg_strip_mani18n $destdir
 	fi
 	
-	# Rm libtool *.la files
-	if str_isIn "$FEATURES" "nolibtool" || str_isIn "$OPTIONS" "nolibtool"; then
-		ypkg_rm_libtool $destdir
-	fi
+	# Remove .la files, default is not remove.
+	local libtool="no"
+	str_isIn "$FEATURES" "libtool" && libtool="yes"
+	str_isIn "$FEATURES" "nolibtool" && libtool="no"
+	str_isIn "$OPTIONS" "libtool" && libtool="yes" 
+	str_isIn "$OPTIONS" "nolibtool" && libtool="no" 
+	[ "$libtool" = "yes" ] && ypkg_rm_libtool $destdir
 	
-	# Strip bin
-	if ! str_isIn "$FEATURES" "nostrip" || ! str_isIn "$OPTIONS" "nostrip"; then
-		ypkg_strip_bin $destdir
-	fi
+	# Strip files, default is strip.
+	local strip="yes"
+	str_isIn "$FEATURES" "strip" && strip="yes"
+	str_isIn "$FEATURES" "nostrip" && strip="no"
+	str_isIn "$OPTIONS" "strip"  && strip="yes"
+	str_isIn "$OPTIONS" "nostrip"  && strip="no"
+	[ "$strip" = "yes" ] && ypkg_strip_bin $destdir
 
-	# Upx executables files
-	if str_isIn "$FEATURES" "upx" || str_isIn "$OPTIONS" "upx"; then
-		ypkg_upx_bin $destdir
-	fi
+	# Upx executables files, default is not using upx
+	local upx="no"
+	str_isIn "$FEATURES" "upx" && upx="yes"
+	str_isIn "$FEATURES" "noupx" && upx="no"
+	str_isIn "$OPTIONS" "upx" && upx="yes"
+	str_isIn "$OPTIONS" "noupx" && upx="no"
+	[ "$upx" = "yes" ] && ypkg_upx_bin $destdir
 
 	# Split i18n
 	#spacks+="$(split_i18n $destdir) "
 
-	# Split dev
-	if ! str_isIn "$FEATURES" "nodev" || ! str_isIn "$OPTIONS" "nodev"; then
-		spacks+="$(split_dev $destdir) "
-	fi
+	# Split dev files, default is split dev file
+	local dev="yes"
+	str_isIn "$FEATURES" "dev" && dev="yes"
+	str_isIn "$FEATURES" "nodev" && dev="no"
+	str_isIn "$OPTIONS" "dev" && dev="yes"
+	str_isIn "$OPTIONS" "nodev" && dev="no"
+	[ "$dev" = "yes" ] && spacks+="$(split_dev $destdir) "
 
 	# Split_doc
 	#spacks+="$(split_doc $destdir) "
@@ -1644,7 +1661,7 @@ dopatch(){
 		else
 			num="1"
 		fi
-		mmsg ">>> Patching ${file##*/}.."
+		mmsg ">>> Patching ${file##*/} ..."
 		patch -p$num -i "$file" 
 		shift
 	done
@@ -2088,7 +2105,7 @@ gnome2_uninstall_mine() {
 # Update rarian database
 gnome2_rarian_sk_update() {
 	if [ -x /usr/bin/rarian-sk-update ]; then
-		msg ">>> Updating rarian database.."
+		msg ">>> Updating rarian database ..."
 		/usr/bin/rarian-sk-update
 	fi
 }
@@ -2096,7 +2113,7 @@ gnome2_rarian_sk_update() {
 # Update desktop entries
 gnome2_desktop_database_update() {
 	if [ -x /usr/bin/update-desktop-database ]; then
-		msg ">>> Updating desktop database.."
+		msg ">>> Updating desktop database ..."
 		/usr/bin/update-desktop-database
 	fi
 }
@@ -2104,7 +2121,7 @@ gnome2_desktop_database_update() {
 # Restart gconfd-2 if running to reload new gconf settings
 gnome2_gconfd_reload() {
 	if ps acx | grep -q gconfd-2; then
-		msg ">>> Reloading gconfd settings.."
+		msg ">>> Reloading gconfd settings ..."
 		killall -HUP gconfd-2
 	fi
 }
@@ -2112,7 +2129,7 @@ gnome2_gconfd_reload() {
 # Update gtk-immodules
 gnome2_gtk_immodules_update() {
 	if [ -x /usr/bin/update-gtk-immodules ]; then
-		msg ">>> Updating gtk immodules.."
+		msg ">>> Updating gtk immodules ..."
 		update-gtk-immodules --verbose
         fi
 }
@@ -2120,7 +2137,7 @@ gnome2_gtk_immodules_update() {
 # Update gdk pixbuf loaders
 gnome2_gdk_pixbuf_loaders_update() {
 	if [ -d /etc/gtk-2.0 ] && [ -x /usr/bin/update-gdk-pixbuf-loaders ]; then
-		msg ">>> Updating gdk pixbuf loaders.."
+		msg ">>> Updating gdk pixbuf loaders ..."
 		update-gdk-pixbuf-loaders
 	fi
 }
@@ -2273,17 +2290,30 @@ ypkg_install() {
 	ymsg ">> $T/${N}_$V$R configure"
 	
 	# use distcc if it is requested
-	if str_isIn "$FEATURES" "distcc" || str_isIn "$OPTIONS" "distcc"; then
+	local distcc="no"
+	str_isIn "$FEATURES" "distcc" && distcc="yes"
+	str_isIn "$FEATURES" "nodistcc" && distcc="no"
+	str_isIn "$OPTIONS" "distcc" && distcc="yes"
+	str_isIn "$OPTIONS" "nodistcc" && distcc="no"
+
+	if [ "$distcc" = "yes" ]; then
 		[[ -d /usr/lib/distcc/bin ]] && export PATH="/usr/lib/distcc/bin:$PATH"
 		export DISTCC_HOSTS
-		gmsg "* distcc is enabled"
+		gmsg "* distcc is enabled, hosts: $DISTCC_HOSTS"
 	fi
 
 	# use ccache if it is requested
-	if str_isIn "$FEATURES" "ccache" || str_isIn "$OPTIONS" "ccache" ; then
+	local ccache="no"
+	str_isIn "$FEATURES" "ccache" && ccache="yes"
+	str_isIn "$FEATURES" "noccache" && ccache="no"
+	str_isIn "$OPTIONS" "ccache" && ccache="yes"
+	str_isIn "$OPTIONS" "noccache" && ccache="no"
+
+	if [ "$ccache" = "yes" ]; then
 		[[ -d /usr/lib/ccache/bin ]] && export PATH="/usr/lib/ccache/bin:$PATH"
 		export CCACHE_DIR
-		ccache -M $CCACHE_SIZE >/dev/null && gmsg "* ccache is enabled"
+		ccache -M $CCACHE_SIZE >/dev/null 
+		gmsg "* ccache is enabled, ccache_dir: $CCACHE_DIR, ccache_size: $CCACHE_SIZE"
 	fi
 
 	[ -p $configpipe ] || mkfifo $configpipe
@@ -2330,6 +2360,7 @@ ALIAS="$ALIAS"
 YARCH="$YARCH"
 LICENSE="$LICENSE"
 PRIORITY="$PRIORITY"
+GROUP="$GROUP"
 PACKAGER="$PACKAGER"
 RDEPEND="$RDEPEND"
 BDEPEND="$BDEPEND"

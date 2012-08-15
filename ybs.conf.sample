@@ -12,14 +12,13 @@ CC=gcc
 CXX=g++
 CFLAGS="-O2 -march=i686 -mtune=i686 -pipe "
 CXXFLAGS="$CFLAGS"
-BUILDARCH="-m32"
 
 #
 # MAKEOPTS provides extra options that may be passed to 'make' when a
 # program is compiled. Presently the only use is for specifying
 # the number of parallel makes (-j) to perform. The suggested number
 # for parallel makes is CPUs+1.
-MAKEOPTS="-j3"
+MAKEOPTS="-j4"
 
 #
 # stable OR testing
@@ -35,7 +34,7 @@ LANGUAGE=""
 #
 # Servers alternatived for source-codes tallball.
 #
-SOURCE_URI="http://pkg.ylmf.com/sources"
+SOURCE_URI="http://pkg.startos.org/sources"
 
 #
 # Whether or not install YPK packages after compilation.
@@ -62,17 +61,23 @@ WGET_OPTIONS="--tries=3 --retry-connrefused --wait=2"
 #YPKG_OPT="-f"
 
 #
-# Features: 
-# ccache - Caching pre-processor to C/C++ compilers, which often results in a 5 to 10 times speedup in common compilations. 
-# distcc - A program to distribute builds of C, C++, Objective C or Objective C++ code across several machines on a network. 
-# upx - Executable file compression and decompression utility 
-# nolibtool - Cleanup .la files
-# nostrip - Do not strip executable、sharedlib (.so)、staticlib (.a) and binary files 
-# nodev - Do not split development files, such as .h
+# Features are: 
+#   ccache/noccache  
+# Caching pre-processor to C/C++ compilers, which often results in a 5 to 10 times speedup in common compilations. 
+#   distcc/nodistcc  
+# A program to distribute builds of C, C++, Objective C or Objective C++ code across several machines on a network. 
+#   upx/noupx 
+# Executable file compression and decompression utility 
+#   libtool/nolibtool 
+# Remove *.la files
+#   strip/notrip
+# Strip executable、sharedlib (.so)、staticlib (.a) and binary files 
+#   dev/nodev 
+# Split development files, such as .h
 #
-#FEATURES="ccache"
+FEATURES=""
 CCACHE_DIR="$WORKING_FIELD/.ccache"
-CCACHE_SIZE="2G"
+CCACHE_SIZE="5G"
 
 DISTCC_HOSTS=""
 
