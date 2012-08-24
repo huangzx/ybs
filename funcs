@@ -127,14 +127,10 @@ get_arch >/dev/null
 
 LIBDIRSUFFIX=""
 case "$ARCH" in
-	"i686")
-		[ "x$CFLAGS" = "x" ] && CFLAGS="-O2 -march=i686 -mtune=i686 -pipe " ;;
-	"s390")
-	   	[ "x$CFLAGS" = "x" ] && CFLAGS="-O2 "   ;;
-      "x86_64")
-      	        [ "x$CFLAGS" = "x" ] && CFLAGS="-O2 -fPIC " ;;
-	     *)
-	     	[ "x$CFLAGS" = "x" ] && CFLAGS="-O2 "   
+	"i686")	[ "x$CFLAGS" = "x" ] && CFLAGS="-O2 -march=i686 -mtune=i686 -pipe " ;;
+	"s390")	[ "x$CFLAGS" = "x" ] && CFLAGS="-O2 "   ;;
+      "x86_64") [ "x$CFLAGS" = "x" ] && CFLAGS="-O2 -fPIC " ;;
+	     *)	[ "x$CFLAGS" = "x" ] && CFLAGS="-O2 "   
 esac
 
 [ "x$CC" = "x" ] && CC=gcc
@@ -353,11 +349,13 @@ atom_parse() {
 		xpbs)           
  	  atom="${string%.pbs}" ;;
 		x$PACK_SUFFIX)     
-	  [ "x$YARCH" != "x" ] && atom="${string%-$YARCH.$PACK_SUFFIX}" || atom="${string%.$PACK_SUFFIX}" ;;
+	  atom="${string%.$PACK_SUFFIX}" ;;
 		xlist)	
 	  atom="${string%.filelist}" ;;
 		xdesc)	
 	  atom="${string%.desc}" ;;
+	  	xxml)
+	  atom="${string%.xml}" ;;
 		*)      
  	  atom="$string"
 	esac
@@ -842,7 +840,7 @@ ypkg_getpbsfile() {
 }
 
 #
-# $1 - pbsfile with full path, as is NEWEST
+# $1 - pbsfile with abspath, such as NEWEST
 ypkg_begin_download() {
 	local url
 	local pbsfile="$1"
@@ -909,7 +907,7 @@ ypkg_download() {
 
 
 #
-# Strip unnessesary i18n in path $1
+# Strip unrequested i18n in path $1
 ypkg_strip_i18n() {
 	local ipath="$1/usr/share/locale"
 	local i18ns=$(ls $ipath 2>/dev/null)
@@ -927,7 +925,7 @@ ypkg_strip_i18n() {
 }
 
 #
-# strip unnessesary i18n in man path.
+# strip unrequested i18n in man path.
 ypkg_strip_mani18n() {
 	local ipath="$1/usr/share/man"
 	local i18ns=$(ls $ipath 2>/dev/null)
@@ -952,7 +950,7 @@ ypkg_strip_mani18n() {
 }
 
 #
-# Upx for compressing eXecutables files
+# Upx for compressing executables files
 ypkg_upx_bin () {
 	local dir="$1"
 	local binary
@@ -1010,26 +1008,26 @@ ypkg_get_category() {
 	local type  category
 	type=$1
 	case ${type%%-*} in
-		#sys)	     category="System"		;;
-		#x11)        category="Xorg"		;;
+		#sys)	     category="System"	      ;;
+		#x11)        category="Xorg"	      ;;
 #gnome|kde|lxde|xfce|mate)   
-			#category="Desktop"		;;
-		#app)	category="Utilities"		;;
+			#category="Desktop"	      ;;
+		#app)	category="Utilities"	      ;;
 sys|x11|gnome|kde|lxde|xfce|mate|app)
-		        category="Utilities"            ;;
-       www|net|mail)	category="Network"		;;
-       		 im)    category="IM"		        ;;
-    	      games)	category="Games" 		;;
-    	   graphics)	category="Graphics" 		;;
-    	      media)	category="Multimedia" 		;;
-     printer|office)	category="Office" 		;;
-    	        dev)	category="Development" 		;;
-    	   security)	category="Security" 		;;
-	    drivers)    category="Drivers"		;;
-      education|sci)	category="Science-education"    ;;
-		non)	category="Non-free"		;;
-    	       misc)	category="Misc"                 ;;
-    	          *)	category="Misc"                 ;;
+		        category="Utilities"          ;;
+       www|net|mail)	category="Network"	      ;;
+       		 im)    category="IM"		      ;;
+    	      games)	category="Games" 	      ;;
+    	   graphics)	category="Graphics" 	      ;;
+    	      media)	category="Multimedia" 	      ;;
+     printer|office)	category="Office" 	      ;;
+    	        dev)	category="Development" 	      ;;
+    	   security)	category="Security" 	      ;;
+	    drivers)    category="Drivers"	      ;;
+      education|sci)	category="Science-education"  ;;
+		non)	category="Non-free"	      ;;
+    	       misc)	category="Misc"               ;;
+    	          *)	category="Misc"               ;;
 	esac
 	echo $category
 }
@@ -1101,7 +1099,6 @@ split_doc() {
 	[ -d $destdir/$N-doc_$V$R ] && echo $destdir/$N-doc_$V$R && return 0
 	return 1
 }
-
 
 #
 split_i18n() {
@@ -1259,7 +1256,7 @@ mkpackage() {
 	rir=$RIR
 	alias=$ALIAS
 	subdir="$(echo $N |cut -b1)"
-	uri="$subdir/$N/${N}_$V$R-$YARCH.$PACK_SUFFIX"
+	uri="$subdir/$N/"$repo"/${N}_$V$R-$YARCH.$PACK_SUFFIX"
 	license="$(xml_escape_convert "$LICENSE")"
 	packager="$(xml_escape_convert "$PACKAGER")"
 	homepage="$(xml_escape_convert "$HOMEPAGE")"
@@ -1363,6 +1360,7 @@ cat >>$pkgdir/$control <<OOO
  </Package>
 </PackageInfo>
 OOO
+	
 
 	cd $pkgdir
 	cp $workdir/${N}_$V$R-$YARCH.filelist $filelist
@@ -1376,16 +1374,23 @@ OOO
 	# Creat ypkg package
 	cd ..
 	
+
 	if [ "x$2" != "x" ]; then
 		target="$2"
 		tar cjf $target $pkgdata $pkginfo && echo $target
 	else
-		YPKDEST_RAW="$YPKDEST/$subdir/$N"
+		YPKDEST_RAW="$YPKDEST/$(dirname $uri)"
 		mkdir -p $YPKDEST_RAW
 		tar cjf $YPKDEST/$uri $pkgdata $pkginfo && echo $YPKDEST/$uri
 		cp $workdir/{${N}_$V$R-$YARCH.buildlog,${N}_$V$R-$YARCH.filelist} $YPKDEST_RAW 2>/dev/null
+		# update xml, insert size and sha1 value
+		local control_target=$YPKDEST_RAW/${N}_$V$R-$YARCH.xml
+		cp $workdir/$pkgdir/$control $control_target
+		local size=$(du "$YPKDEST/$uri" -sb |awk '{print $1}')
+		local sha1=$(sha1sum "$YPKDEST/$uri" |awk '{print $1}')
+		sed -i -e '/\<build_date\>/a\   <size>'"$size"'<\/size>' -e '/\<build_date\>/a\   <sha>'"$sha1"'<\/sha>' $control_target
 
-		# -dev not copy changelog
+		# -dev do not copy changelog
 		if [ x"${N##*-}" != "xdev" ]; then
 			cp $pbsdir/changelog $YPKDEST_RAW 2>/dev/null
 		fi
@@ -1408,12 +1413,12 @@ check_perm_dirs () {
 		fi
 	done
 
-	chmod +r /usr/share/applications/*.desktop 2>/dev/null
+	rm $dir/{usr/share/mime/mime.cache,usr/share/applications/mimeinfo.cache} 2>/dev/null
+	chmod 644 $dir/usr/share/applications/*.desktop 2>/dev/null
 }
 
 #
 # $1- destdir
-# 
 ypkg_mkpackage() {
 	[ ! -d $destdir ] && return 0
 
@@ -2529,4 +2534,4 @@ ypkg_whatrequires() {
 	msg ""
 }
 
-#end of file
+# end of file

@@ -75,6 +75,7 @@ WGET_OPTIONS="--tries=3 --retry-connrefused --wait=2"
 #   dev/nodev 
 # Split development files, such as .h
 #
+# Defualts: nolibtool strip dev
 FEATURES=""
 CCACHE_DIR="$WORKING_FIELD/.ccache"
 CCACHE_SIZE="5G"
