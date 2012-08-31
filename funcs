@@ -308,6 +308,19 @@ err_check() {
 
 #
 #
+die() {
+	rmsg ":( $@"
+	exit 1
+}
+
+#
+#
+warn() {
+	ymsg "$@"
+}
+
+#
+#
 atom_parse() {
 	T=""
 	N=""
@@ -416,11 +429,13 @@ atom_cmp() {
 	local v1 v2
 	
 	string1=${string1##*_}
-	v1=${string1%.pbs}
+	v1=${string1%.*}
+	v1=${v1%-$YARCH.*}
 	v1=$(echo $v1 |tr '[A-Z]' '[a-z]')
 
 	string2=${string2##*_}
-	v2=${string2%.pbs}
+	v2=${string2%.*}
+	v2=${v2%-$YARCH.*}
 	v2=$(echo $v2 |tr '[A-Z]' '[a-z]')
 
 	if [ "x$v1" = "x$v2" ] || test $v1 -eq $v2 2>/dev/null;then
@@ -2282,7 +2297,8 @@ ypkg_install() {
 	local mkinstallpipe="$PWD/mkinstall.pipe"
 	local  mkinstalllog="$PWD/mkinstall-log"
 
-	cd "$N-$V$R" 2>/dev/null
+	mkdir -p "$srcdir"
+	cd "$srcdir"
 
 	ymsg ">> $T/${N}_$V$R patch"
 	[ -p $patchpipe ] || mkfifo $patchpipe
