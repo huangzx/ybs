@@ -6,7 +6,7 @@
 . /usr/lib/ybs/funcs
 
 usage() {
-	msg "$0 -- Ylmf OS kernel module system."
+	msg "$0 -- StartOS kernel module system."
 	msg "Usage: "
 	msg " $0 install name version"
 	msg " $0 remove name version"

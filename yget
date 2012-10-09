@@ -2,10 +2,7 @@
 #
 # yget -- ypkg package management tool
 # 
-# Maintainer:  Ylmf OS Developers <ylmfos@115.com>
-#
 
-#
 #
 # reload parameters if available
 [ -f /etc/yget.conf ] && . /etc/yget.conf

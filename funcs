@@ -66,9 +66,6 @@ XZ="/usr/bin/xz"
 CHECK_TOOLS="md5sum sha1sum sha256sum"
 
 #
-YLMFOS="YLMFOS"
-
-#
 [ "x$STRIP_BINARIES" = "x" ] && STRIP_BINARIES="--strip-all"
 [ "x$STRIP_SHARED" = "x" ]  && STRIP_SHARED="--strip-unneeded"
 [ "x$STRIP_STATIC" = "x" ] && STRIP_STATIC="--strip-debug"
@@ -363,7 +360,7 @@ atom_parse() {
  	  atom="${string%.pbs}" ;;
 		x$PACK_SUFFIX)     
 	  atom="${string%.$PACK_SUFFIX}" ;;
-		xlist)	
+		xfilelist)	
 	  atom="${string%.filelist}" ;;
 		xdesc)	
 	  atom="${string%.desc}" ;;
@@ -429,13 +426,13 @@ atom_cmp() {
 	local v1 v2
 	
 	string1=${string1##*_}
-	v1=${string1%.*}
-	v1=${v1%-$YARCH.*}
+	v1=${string1%.[A-Za-z][A-Za-z][A-Za-z]}
+	v1=${v1%-$YARCH}
 	v1=$(echo $v1 |tr '[A-Z]' '[a-z]')
 
 	string2=${string2##*_}
-	v2=${string2%.*}
-	v2=${v2%-$YARCH.*}
+	v2=${string2%.%.[A-Za-z][A-Za-z][A-Za-z]}
+	v2=${v2%-$YARCH}
 	v2=$(echo $v2 |tr '[A-Z]' '[a-z]')
 
 	if [ "x$v1" = "x$v2" ] || test $v1 -eq $v2 2>/dev/null;then
@@ -1999,12 +1996,14 @@ dolibtool_finish () {
 }
 
 #
+#
 perl_cleanup () {
 	msg ">>> Delete: .packlist *.pod files"
 	find "$destdir" -name '.packlist' -delete
 	find "$destdir" -name '*.pod' -delete
 }
 
+#
 #
 glib_compile_schemas() {
 	if [ -x /usr/bin/glib-compile-schemas ]; then
@@ -2018,6 +2017,7 @@ glib_compile_schemas() {
 }
 
 #
+#
 doinstall_catalog() {
 	local bin=$(which install-catalog)
 	if [ -x $bin ]; then
@@ -2025,6 +2025,8 @@ doinstall_catalog() {
 	fi
 }
 
+#
+#
 doremove_catalog() {
 	local bin=$(which install-catalog)
 	if [ -x $bin ]; then
@@ -2033,6 +2035,7 @@ doremove_catalog() {
 	
 }
 
+#
 # Install defaut settings
 gnome2_install_defaut_gconf() {
 	#type
@@ -2052,6 +2055,7 @@ gnome2_install_defaut_gconf() {
 	fi
 }
 
+#
 # Install schemas
 mate_install_schema() {
 	local schemas="$@"
@@ -2063,6 +2067,7 @@ mate_install_schema() {
 	fi
 }
 
+#
 # Unstall schemas
 mate_uninstall_schema() {
 	local schemas="$@"
@@ -2074,6 +2079,7 @@ mate_uninstall_schema() {
 	fi
 }
 
+#
 # Install schemas
 gnome2_install_schema() {
 	#this is this-is-deprecated
@@ -2087,6 +2093,7 @@ gnome2_install_schema() {
 	fi
 }
 
+#
 # Unstall schemas
 gnome2_uninstall_schema() {
 	#this is this-is-deprecated
@@ -2100,6 +2107,7 @@ gnome2_uninstall_schema() {
 	fi
 }
 
+#
 # Install mine
 gnome2_install_mine() {
 	local mines="$@"
@@ -2111,6 +2119,7 @@ gnome2_install_mine() {
 	fi
 }
 
+#
 # Unstall mine
 gnome2_uninstall_mine() {
 	local mines="$@"
@@ -2122,6 +2131,7 @@ gnome2_uninstall_mine() {
 	fi
 }
 
+#
 # Update rarian database
 gnome2_rarian_sk_update() {
 	if [ -x /usr/bin/rarian-sk-update ]; then
@@ -2130,6 +2140,7 @@ gnome2_rarian_sk_update() {
 	fi
 }
 
+#
 # Update desktop entries
 gnome2_desktop_database_update() {
 	if [ -x /usr/bin/update-desktop-database ]; then
@@ -2138,6 +2149,7 @@ gnome2_desktop_database_update() {
 	fi
 }
 
+#
 # Restart gconfd-2 if running to reload new gconf settings
 gnome2_gconfd_reload() {
 	if ps acx | grep -q gconfd-2; then
@@ -2146,6 +2158,7 @@ gnome2_gconfd_reload() {
 	fi
 }
 
+#
 # Update gtk-immodules
 gnome2_gtk_immodules_update() {
 	if [ -x /usr/bin/update-gtk-immodules ]; then
@@ -2154,6 +2167,7 @@ gnome2_gtk_immodules_update() {
         fi
 }
 
+#
 # Update gdk pixbuf loaders
 gnome2_gdk_pixbuf_loaders_update() {
 	if [ -d /etc/gtk-2.0 ] && [ -x /usr/bin/update-gdk-pixbuf-loaders ]; then
@@ -2162,6 +2176,7 @@ gnome2_gdk_pixbuf_loaders_update() {
 	fi
 }
 
+#
 # Updates Gtk+ icon cache files under /usr/share/icons if the current pbs
 # have installed anything under that location.
 gnome2_icon_cache_update() {
@@ -2184,6 +2199,7 @@ gnome2_icon_cache_update() {
 	"$updater" -f -q -t $dir
 }
 
+#
 # Update mime database
 gnome2_mime_database_update() {
 	if [ -x /usr/bin/update-mime-database ]; then
@@ -2191,6 +2207,14 @@ gnome2_mime_database_update() {
 	fi
 }
 
+#
+# Reboot flag
+#
+flag_reboot() {
+	local flag="/run/ypkg/reboot"
+	mkdir -p /run/ypkg
+	touch "$flag"
+}
 
 #
 # Install package

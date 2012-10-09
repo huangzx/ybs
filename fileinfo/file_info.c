@@ -1,5 +1,5 @@
 /*
-	fileinfo: file record tool for Ylmf_OS Linux package management system
+	fileinfo: file record tool for StartOS Linux package management system
 	file_info.c: main program of fileinfo
 
 	by Pinkme005 @ LinuxSir (First version)
