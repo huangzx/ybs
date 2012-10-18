@@ -220,6 +220,11 @@ if ! which diff >/dev/null 2>/dev/null; then
 	die " diff is required, please install diffutils"
 fi
 
+case x$1 in
+	x*h|x*help) show_usage
+	            exit 0
+esac
+
 case x$# in 
 	x0) YPK_DEST=$YPK_DEST;;
 	x1) [ -d $(readlink -f $1) ] && YPK_DEST=$(readlink -f $1);;

@@ -209,7 +209,8 @@ case "${1}" in
 		ymsg "* Fetch new $PBSLIB_PATH from $PBSLIB_URI"
 		msg "* Running git clone"
 		git clone $PBSLIB_URI
-		msg "* Running git checkout"
+		msg "* Running git checkout $PBSLIB_BRANCH"
+		cd $PBSLIB_PATH
 		git checkout $PBSLIB_BRANCH
 		date +%s >$logfile
 	fi
