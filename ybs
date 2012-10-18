@@ -1,53 +1,61 @@
 #!/bin/bash
 #
-# ybs -- StartOS Build System
+#   ybs -- StartOS Build System
 # 
-# Copyright © 2012 ivali.com
-# Maintainer: Zhongxin Huang <zhongxin.huang@gmail.com>
+#   Copyright © 2012 ivali.com
+#   Maintainer: Zhongxin Huang <zhongxin.huang@gmail.com>
+#
+#   This program is free software; you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation; either version 2 of the License, or
+#   (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-#
 [ -f /usr/lib/ybs/funcs ] && . /usr/lib/ybs/funcs
 
-# Creat PATH
-mkdir -p  $YPKDEST $WORKING_FIELD
+check_required_bin
 
-# Support set YPKG_ROOT 
-#
+# Create required folders
+mkdir -p $YPK_DEST $WORKING_FIELD
+
 if [ "x$YPKG_ROOT" = "x" ];then
    YPKG_ROOT="/"
 else
    mkdir -p "$YPKG_ROOT"
    YPKG_ROOT=$(readlink -f "$YPKG_ROOT")
 fi
-#
 
-ypkg_show_usage() {
+ybs_show_usage() {
 	cat <<EOF
 $0  
 
 Usage: $0 command [options] pkg1 [pkg2 ...]
 
-ybs (StartOS Build System) is a simple command line for download/compile/install package from source code.
+ybs (StartOS Build System) is a simple command line for download and build YPK package from source code.
 
 Commands:
        -h|--help                               Show usage   
-       -s|--search                             Search app in ybs tree
+       -s|--search                             Search package in ybs tree
        -d|--download                           Download source tartall of app
-       -r|--remove                             Remove app (same as ypkg -C foo)
-       -i|--install                            Compile app and dependency
-      -is|--install-single                     Forced install single app without checking dependency
-       -n|--notes                              Show user notes of app
-       -c|--comments                           Show user comments of app
-       -k|--depend                             Show dependency of app
-       -w|--showpbs                            Show avaliable pbsfile of app
-      -wr|--whatrequires                       Show which apps depends on this app
-       --sync [path]                           Sync pbslib via git to $YPPATH/pbslib
+       -r|--remove                             Remove package (same as ypkg -C foo)
+       -i|--build                              Build package and dependency
+      -is|--build-single                       Forced build single package without checking dependency
+       -w|--showpbs                            Show avaliable pbsfile of package 
+      -wr|--whatrequires                       Show which packages depends on this package
+       --sync [path]                           Sync pbslib via git to $PBSLIB_PATH
        --info                                  Show $0 parameters of /etc/ybs.conf
 
-Options for install:
-	-p|--pretend                           Instead of actually install, simply display what to do  
-	-F|--force                             Force install
+Options for build:
+	-p|--pretend                           Instead of actually build, simply display what to do  
+	-F|--force                             Force build
 	--fetch                                Break after download source tarball
 	--unpack   			       Break after unpack source tarball
 	--patch   			       Break after patch source
@@ -56,17 +64,14 @@ Options for install:
 	--check				       Break after make check/test
 	--mkinstall                            Break after make install    
 	--package                              Break after make ypk package    
-
-Base is at $YPPATH
 EOF
 }
 
-#
 i=0
 j=0
 for ((h=1;h<=$#;h++));do
 	arg=$(echo $(eval "echo \$${h}"))
-	# remove blank in string	
+	# Remove blank in string	
 	arg=$(echo $arg |tr -d '[:blank:]')
 	case $arg in
 		-*) argvs[${j}]="$arg"
@@ -75,9 +80,6 @@ for ((h=1;h<=$#;h++));do
 		    let i++
 	esac
 done
-
-#echo "packages: ${args[@]}"
-#echo "parameter: ${argvs[@]}"
 
 for i in ${argvs[@]}; do
 	case ${i} in
@@ -94,88 +96,83 @@ for i in ${argvs[@]}; do
 	esac
 done
 
-#
 case "${1}" in
 -info|--info)
-	# show build info
+	# Show build info
 	grep -v ^# "/etc/ybs.conf" |sed '/^$/d'
 	;;
 
 -s|--search)
-	# search package.
 	msg_ "* Searching for "
 	wmsg_ "${args[@]} "
 	msg "..."
 	for i in ${args[@]}; do
-		ypkg_search $i
+		ybs_search $i
 	done
 	;;
 
 -d|--download)
-	# download source
 	check_root
 	msg_ "* Source downloading "
 	wmsg_ "${args[@]} "
 	msg "..."
 	for i in ${args[@]}; do
-		ypkg_download $i
+		ybs_download $i
 	done
 	;;
 
--i|--install)
-	# install packages and depends
+-i|--build)
 	check_root
 	ymsg "* Calculating dependencies..."
 
 	for i in ${args[@]};do
 		app=${i}
-		pbsfile=$(ypkg_show "$app" pbs)
+		pbsfile=$(ybs_show "$app" pbs)
 		[ -f "$pbsfile" ] && . "$pbsfile" || (echo; rmsg "* [Error]: ${app} not found."; exit 1)
-		
 		deps=
+		
 		for dep in $BDEPEND; do
 			dep=${dep/-dev/} 
 			deps+="${dep} "
 		done
 
 		deps="$RDEPEND $deps"
-
   		#for dep in $(echo $deps |tr ' ' '\n' |tac |xargs); do
   		for dep in $deps; do
 			if [ "x$TERM" != "xlinux" ]; then
-				echo -ne "\033]0;ybs working: ${dep}\007"; ypkg_install ${dep} || exit 1
+				echo -ne "\033]0;ybs working: ${dep}\007"; ybs_build ${dep} || exit 1
 			else
-		  		ypkg_install ${dep} || exit 1
+		  		ybs_build ${dep} || exit 1
 		 	fi
 	      	done
 		
 		if [ "x$TERM" != "xlinux" ]; then
-			echo -ne "\033]0;ybs working: ${app}\007"; ypkg_install ${app} || exit 1
+			echo -ne "\033]0;ybs working: ${app}\007"; ybs_build ${app} || exit 1
 		else
-			ypkg_install ${app} || exit 1
+			ybs_build ${app} || exit 1
 		fi
 	done
 	;;
 
--is|--install-single) 
+-is|--build-single) 
 	check_root
-	#install single package
+	# Build single package
 	msg_ "* Installing "
 	wmsg_ "${args[@]} "
 	msg "..."
 	FORCE_INSTALL="yes"
 	for i in ${args[@]}; do
 		if [ "x$TERM" != "xlinux" ]; then
-			echo -ne "\033]0;ybs working: ${i}\007"; ypkg_install $i || exit 1
+			echo -ne "\033]0;ybs working: ${i}\007"; ybs_build $i || exit 1
 		else
-			ypkg_install $i || exit 1
+			ybs_build $i || exit 1
 		fi
 	done
 	;;
 
 -r|--remove)
 	check_root
-	#remove package
+	# Remove package
 	msg_ "* Removing "
 	wmsg_ "${args[@]} "
 	for i in ${args[@]}; do
@@ -184,77 +181,56 @@ case "${1}" in
 	;;
 
 --sync) 
-	#sync pbs libs with git.
-	check_app git
+	# Sync pbslib via git
 	check_root
 	logfile="/var/log/ybs.log"
-	ymsg "* Sync pbslibs via git ..."
+	
 	if [ x"$(cat $logfile 2>/dev/null)" != x ];then
 		echo
 		mmsg "* Last update: $(date -d "1970-01-01 UTC $(cat $logfile) seconds" +%F,%T,%z)"
 		echo
 	fi
-	mkdir -p $YPPATH
-	err_check "* [Error]: Create dir $YPPATH failed."
-	mkdir -p $YPPATH_LIB
-	err_check "* [Error]: Create dir $YPPATH_LIB failed."
-	cd $YPPATH_LIB
-	err_check "* [Error]: enter dir $YPPATH_LIB failed."
-	if [ -d .git ]; then
+	
+	mkdir -p $PBSLIB_PATH
+	err_check "* [Error]: Create dir $PBSLIB_PATH failed."
+
+	if [ -d $PBSLIB_PATH/.git ]; then
 		# Already exist.
+		cd $PBSLIB_PATH
+		msg "* Sync $PBSLIB_PATH from $PBSLIB_URI"
+		msg "* Running git pull"
 		git pull 
-		git checkout develop
+		msg "* Running git checkout"
+		git checkout $PBSLIB_BRANCH
 		date +%s >$logfile
+		exit 0
 	else
-		cd ..
-		# remove an system error.
-		[ -d /etc ] || mkdir /etc
-		[ -f /etc/hosts ] || touch /etc/hosts
-		git clone git://git.ylmf.com/pbslib.git 
-		git checkout develop
+		cd ${PBSLIB_PATH%/*}
+		ymsg "* Fetch new $PBSLIB_PATH from $PBSLIB_URI"
+		msg "* Running git clone"
+		git clone $PBSLIB_URI
+		msg "* Running git checkout"
+		git checkout $PBSLIB_BRANCH
 		date +%s >$logfile
 	fi
 	;;
 
--n|--notes)
-	# show users notes
-	for i in ${args[@]}; do
-		ypkg_show $i notes
-	done
-	;;
-
--c|--comments)
-	# show comments 
-	for i in ${args[@]}; do
-		ypkg_show $i comments
-	done
-	;;
-
--k|--depend)
-	#show dependence
-	for i in ${args[@]}; do
-		ypkg_show $i depend
-	done
-	;;
-
 -w|--showpbs)
-	#show pbs file
+	# Show pbs file
 	for i in ${args[@]}; do
-		ypkg_show $i pbs
+		ybs_show $i pbs
 	done
 	;;
 
 -wr|--whatrequires)
-	#show which package depends on pkg
 	msg "* [R] stand for run time depend, [B] for build, [A] for recommoneded, [C] for conflict."
 	for i in ${args[@]}; do
-		 ypkg_whatrequires $i
+		 ybs_whatrequires $i
 	done
 	;;
 
 *|-h|--help)
-	#show usage 
-	ypkg_show_usage
+	ybs_show_usage
 	exit 0
 	;;
 esac

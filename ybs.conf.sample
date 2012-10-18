@@ -18,7 +18,7 @@ CXXFLAGS="$CFLAGS"
 # program is compiled. Presently the only use is for specifying
 # the number of parallel makes (-j) to perform. The suggested number
 # for parallel makes is CPUs+1.
-MAKEOPTS="-j4"
+MAKEOPTS="-j6"
 
 #
 # stable OR testing
@@ -37,16 +37,23 @@ LANGUAGE=""
 SOURCE_URI="http://pkg.startos.org/sources"
 
 #
-# Whether or not install YPK packages after compilation.
+# Whether or not install YPK packages using ypkg after compilation.
 #
 AUTO_INSTALL="no"
 
 #
-# YPKDEST - packages locate directory.
+# YPK_DEST - packages locate directory.
 # WORKING_FIELD - working directory.
 #
-YPKDEST="/var/ypkg/packages"
+YPK_DEST="/var/ybs/packages"
 WORKING_FIELD="/var/tmp/ybs"
+
+#
+# PBSLIB_PATH - pbs tree
+#
+PBSLIB_URI="git://git.ylmf.com/pbslib.git"
+PBSLIB_PATH="/var/ybs/pbslib"
+PBSLIB_BRANCH="startos-5.x"
 
 #
 # Download tools, curl and wget are available
@@ -58,7 +65,7 @@ WGET_OPTIONS="--tries=3 --retry-connrefused --wait=2"
 #
 # Ypkg install OPTs
 #
-#YPKG_OPT="-f"
+YPKG_OPT="-f"
 
 #
 # Features are: 
@@ -75,10 +82,9 @@ WGET_OPTIONS="--tries=3 --retry-connrefused --wait=2"
 #   dev/nodev 
 # Split development files, such as .h
 #
-# Defualts: nolibtool strip dev
-FEATURES=""
-CCACHE_DIR="$WORKING_FIELD/.ccache"
-CCACHE_SIZE="5G"
+FEATURES="ccache"
+CCACHE_DIR="/var/tmp/ybs/.ccache"
+CCACHE_SIZE="20G"
 
 DISTCC_HOSTS=""
 

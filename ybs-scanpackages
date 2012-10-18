@@ -1,0 +1,260 @@
+#!/bin/bash
+#
+#   ybs-scanpackages -- create Packages index files  
+#
+#   Copyright © 2012 ivali.com
+#   Maintainer: Zhongxin Huang <zhongxin.huang@gmail.com>
+#
+#   This program is free software; you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation; either version 2 of the License, or
+#   (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+. /usr/lib/ybs/funcs
+
+filelist_all="/tmp/filelist-all"
+filelist_stable="/tmp/filelist-stable"
+filelist_testing="/tmp/filelist-testing"
+xml_stable="updates/stable.xml"
+xml_testing="updates/testing.xml"
+xml_removed="updates/removed.xml"
+
+show_usage() {
+	cat <<EOF
+$0 - create packages index files
+
+Usage: $0 binary-dir
+
+$0 sorts through a tree of YPK binary packages and creates some xml files, used by yget, to tell the user what packages are available  for installation.
+
+EOF
+}
+
+find_newest() {
+	local newest="$1"
+	local file
+
+	for file in $@; do
+		atom_cmp $newest $file
+		if [ $? -eq 2 ]; then 
+			 newest=$file
+		fi
+	done
+
+	echo $newest
+}
+
+find_ypk() {
+	local dir all
+	
+	find -type f -name "*.ypk" |sort -u >$filelist_all
+	
+	[ "x$(cat $filelist_all)" = "x" ] && die "Not any YPK package found."
+
+	if ! diff filelist.txt $filelist_all -ur; then
+		read -p "Do you want to continue? [Y/n]" ask
+		case $ask in
+			[Nn]o|[Nn]) exit 1 ;;
+				*)
+		esac
+	fi
+
+	>$filelist_stable
+	find -type d -name "stable" |sort -u |while read dir; do
+		all=$(find $dir -type f -name "*.ypk" |sort -u |xargs)
+		find_newest $all >>$filelist_stable
+	done
+
+	>$filelist_testing
+	find -type d -name "testing" |sort -u |while read dir; do
+		all=$(find $dir -type f -name "*.ypk" |sort -u |xargs)
+		find_newest $all >>$filelist_testing
+	done
+	
+	# 删除空行
+	sed -i '/^$/d' $filelist_stable $filelist_testing $filelist_all
+
+	echo "all: $(wc -l $filelist_all |awk '{print $1}')"          >filelist.txt 
+	echo "stable: $(wc -l $filelist_stable |awk '{print $1}')"   >>filelist.txt
+	echo "testing: $(wc -l $filelist_testing |awk '{print $1}')" >>filelist.txt
+	cat $filelist_all >>filelist.txt
+}
+
+get_info() {
+	local ypk="$1"
+	local xml="$2"
+
+	if [ ! -f "$xml" ]; then
+		local size=$(du "$ypk" -sb |awk '{print $1}')
+		local sha1=$(sha1sum "$ypk" |awk '{print $1}')
+		tar xf "$ypk" pkginfo
+		tar xf pkginfo control.xml --to-command='cat' \
+			    |sed -e '1d' -e '2d' -e '$d' -e '/<uri>/d' \
+			    |sed -e '/\<build_date\>/a\   <size>'"$size"'<\/size>' -e '/\<build_date\>/a\   <sha>'"$sha1"'<\/sha>' \
+			    -e '/\<build_date\>/a\   <uri>'"${ypk##./}"'<\/uri>'
+		rm pkginfo
+	else
+		cat $xml |sed -e '1d' -e '2d' -e '$d' -e '/<uri>/d' \
+		         |sed -e '/\<build_date\>/a\   <uri>'"${ypk##./}"'<\/uri>'
+	fi
+}
+
+merge_info() {
+	local filelist="$1"
+	local xmlfile="$2"
+
+	echo '<?xml version="1.0" encoding="UTF-8"?>' >$xmlfile
+	echo '<PackageInfo>' >>$xmlfile
+
+	cat $filelist |while read ypk; do 
+		xml=${ypk%.ypk}.xml
+		if [ ! -f "$xml" ]; then
+			echo '<?xml version="1.0" encoding="UTF-8"?>' >$xml
+			echo '<PackageInfo>' >>$xml
+			get_info ${ypk} >>$xml
+			echo '</PackageInfo>' >>$xml
+		fi
+		get_info ${ypk} ${xml} >>$xmlfile
+	done
+
+	echo '</PackageInfo>' >>$xmlfile
+	
+}
+
+check_xml() {
+	local xml="$1"
+
+	if ! xml fo $xml >/dev/null; then
+		echo "* $xml is broken."
+		exit 0
+	fi
+}
+
+extra_info() {
+	local xmlfile="$1"
+	removes="lightdm-ylmfos-greeter 
+	         nautilus-ylmf-extend 
+		 plymouth-theme-ylmf-logo 
+		 ylmfos-backgrounds 
+		 ylmfos-bug-fix 
+		 ylmfos-dbus-polkit 
+		 ylmfos-device-manager 
+		 ylmfos-gnome2-themes-black 
+		 ylmfos-gnome2-themes-white 
+		 ylmfos-icon-theme 
+		 ylmfos-mouse-theme 
+		 ylmfos-service-manager 
+		 ylmfos-software-center 
+		 ylmfos-driver-manager
+		 ylmfos-sounds 
+		 ylmfos-startup-menu 
+		 ycenter 
+		 yinst-source 
+		 startos-clone 
+		 jhbuild 115u-web midori deepinwine-thunder5 hal esound libelf gnu-ghostscript libusb cdrtools radioget adobe-reader 
+		 accountsservice accountsservice-dev alsa-driver-source ant ati-graphic-source-dev autoconf2.13-dev bochs-dev broadcom-sta-source cairo_perl cairo-perl-dev chmsee-dev dconf dconf-dev dd-rescue deadbeef-mpris-plugin deadbeef-mpris-plugin-dev dev86-dev eigen2-dev evolution evolution-dev evolution-mapi evolution-mapi-dev fcitx-keyboard freetuxtv-dev fxload gecko-sharp gecko-sharp-dev gfusevfs glib-perl-dev glide3-dev gnome2-canvas-perl-dev gnome2-gconf-perl-dev gnome2-perl-dev gnome2-vfs-perl-dev gnome2-wnck-perl-dev goo-canvas-perl-dev grub2-dev gst-fluendo-mpegmux gst-fluendo-mpegmux-dev gtk2-imageview-perl-dev gtk2-perl-dev gtk2-sexy-dev gtk2-trayicon-dev gtk2-unique-perl-dev ibus-table-chinese indicator-applet ipod-sharp ipod-sharp-dev ipw3945-ucode iscsitarget-driver iscsitarget-source iscsitarget-utils jpeg6 kbd-dev kdemultimedia kdemultimedia-dev ksecrets ksecrets-dev libav libav-dev libmapi libmapi-dev libtorrent-rasterba libtorrent-rasterba-dev libWindowsWM-dev likewise-lwsecurity-bin likewise-open likewise-open-bin likewise-open-bin-dev likewise-open-dev likewise-open-gui-bin madwifi-source mingw32-build mpc-dev nautilus-reload-dev nvidia-graphic-173-source nvidia-graphic-96-source nvidia-graphic-utils-dev ooplayer osinstaller-dev pango_perl pango-perl-dev perl-dev phoronix-test-suite pycairo pycairo-dev rt3090sta rtl8192ce-driver rtl8192ce-firmware rtl8192ce-source rtl8192cu-driver rtl8192cu-source rtl8192se-driver rtl8192se-firmware rtl8192se-source rtl8192su-driver rtl8192su-source spice-protocol-dev swig-dev sysvinit sysvinit-dev thunderbird-i18n-zh_CN thunderbird-i18n-zh_TW twisted-dev unity-greeter vdpauinfo virtuoso-dev webkitgtk3 webkitgtk3-dev xtrans-test xtrans-test-1.2.6 zd1211-firmware-dev"
+
+	echo '<?xml version="1.0" encoding="UTF-8"?>' >$xmlfile
+	echo '<PackageInfo>' >>$xmlfile
+
+	for i in $removes; do
+        	cat >>$xmlfile <<OOO
+<Package name="$i">
+	<version></version>
+	<delete>all</delete>
+</Package>
+<Package name="$i-dev">
+	<version></version>
+	<delete>all</delete>
+</Package>
+OOO
+	done
+
+	echo '</PackageInfo>' >>$xmlfile
+}
+
+final() {
+	# 目前，yget 只认解压后的文件为 update.xml
+	cp stable.xml update.xml
+	tar cJf stable.tar.xz update.xml
+	
+	cp testing.xml update.xml
+	tar cJf testing.tar.xz update.xml
+	
+	cp removed.xml update.xml
+	tar cJf removed.tar.xz update.xml
+
+	rm update.xml
+
+	>updates.list
+
+	# updates.date 和 updates.list 里的时间字段为了兼容之前的 ypkg2，以后将不存在
+	for i in testing.tar.xz stable.tar.xz removed.tar.xz; do
+		name=${i}
+		date=$(date +%s)
+		sha1=$(sha1sum $name |awk '{print $1}')
+		echo "$name $date $sha1"  >>updates.list
+		sleep 1
+	done
+
+	date +%s >updates.date
+}
+
+# main
+#
+
+if ! which ypkg >/dev/null 2>/dev/null; then
+	die " ypkg is required, please install ypkg2"
+fi
+
+if ! which diff >/dev/null 2>/dev/null; then
+	die " diff is required, please install diffutils"
+fi
+
+case x$# in 
+	x0) YPK_DEST=$YPK_DEST;;
+	x1) [ -d $(readlink -f $1) ] && YPK_DEST=$(readlink -f $1);;
+	x2|*) show_usage
+	    exit 0
+esac
+
+if [ ! -d $YPK_DEST ]; then
+	die " $YPK_DEST not found."
+fi
+
+START_TIME="$(date)"
+
+# 找出所有的 ypk 包，多个的话，只列出最大版本
+# 分支是：stable 和 testing
+cd $YPK_DEST                 
+mkdir -p $YPK_DEST/updates/
+ymsg "* YPK package pool: $YPK_DEST"
+ymsg "* YPK package index: $YPK_DEST/updates"
+find_ypk
+
+# 生成各个分支的 xml 文件，包含所含 ypk 包的信息
+merge_info $filelist_stable $xml_stable
+check_xml $xml_stable
+
+merge_info $filelist_testing  $xml_testing
+check_xml $xml_testing
+
+extra_info $xml_removed
+
+# 生成更新文件
+cd $YPK_DEST/updates/
+final
+
+echo "Begin with  --> $START_TIME"
+echo "End up with --> $(date)"
+
+# End of file

@@ -1,3 +1,19 @@
+#   Copyright © 2012 ivali.com
+#   Maintainer: Zhongxin Huang <zhongxin.huang@gmail.com>
+#
+#   This program is free software; you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation; either version 2 of the License, or
+#   (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
 
 [ -f /etc/ybs.conf ] && . /etc/ybs.conf
 
@@ -39,65 +55,56 @@ mmsg_() { mmsg "$@" | tr -d '\n'; }
 cmsg_() { cmsg "$@" | tr -d '\n'; }
 wmsg_() { wmsg "$@" | tr -d '\n'; }
 
-#
-# Path defines
-YPPATH="/var/ybs"
-YPPATH_LIB="$YPPATH/pbslib"
-YPPATH_SOURCE="$YPPATH/sources"
-YPPATH_SCRIPT="$YPPATH_LIB"
+# PATH defines
+YBS_PATH="/var/ybs"
+[ "x$PBSLIB_URI" = "x" ] && PBSLIB_URI="git://git.ylmf.com/pbslib.git"
+[ "x$PBSLIB_PATH" = "x" ] && PBSLIB_PATH="$YBS_PATH/pbslib"
+[ "x$PBSLIB_BRANCH" = "x" ] && PBSLIB_BRANCH="startos-5.x"
+YBS_SOURCE="$YBS_PATH/sources"
+PBSLIB_SCRIPT="$PBSLIB_PATH"
 [ "x$WORKING_FIELD" = "x" ] && WORKING_FIELD="/var/tmp/ybs"
-
 PACKAGE_DB="/var/ypkg/db/package.db"
 SQLITE="$(which sqlite3)"
-
-YPKPATH="/var/ypkg"
-YPPATH_DB="$YPKPATH/db"
-[ "x$YPKDEST" = "x" ] && YPKDEST="$YPKPATH/packages"
-
-#
+[ "x$YPK_DEST" = "x" ] && YPK_DEST="$YBS_PATH/packages"
 PACK_SUFFIX="ypk"
-
-#
 CPIO="/bin/cpio"
 #CPIO="/usr/bin/bsdcpio"
 XZ="/usr/bin/xz"
-
-#
 CHECK_TOOLS="md5sum sha1sum sha256sum"
 
-#
+# Strip para
 [ "x$STRIP_BINARIES" = "x" ] && STRIP_BINARIES="--strip-all"
 [ "x$STRIP_SHARED" = "x" ]  && STRIP_SHARED="--strip-unneeded"
 [ "x$STRIP_STATIC" = "x" ] && STRIP_STATIC="--strip-debug"
 
-#
+# Upx para
 [ "x$UPXFLAGS" = "x" ] && UPXFLAGS="-9"
 
-#
+# Ccache para
 [ "x$CCACHE_DIR" = "x" ] && CCACHE_DIR="$WORKING_FIELD/.ccache"
 [ "x$CCACHE_SIZE" = "x" ] && CCACHE_SIZE="5G"
 
-#
+# Distcc para
 [ "x$DISTCC_HOSTS" = "x" ] && DISTCC_HOSTS=""
 
-#
+# Make para
 [ "x$MAKEOPTS" = "x" ] && MAKEOPTS="-j3"
 
-#
+# Repo channel
 [ "x$ACCEPT_REPO" = "x" ] && ACCEPT_REPO="stable"
 
-#
+# Download tool
 [ "x$DOWNLOAD_TOOL" = "x" ] && DOWNLOAD_TOOL="wget"
 [ "x$WGET_OPTIONS" = "x" ] && WGET_OPTIONS="--tries=3 --retry-connrefused --wait=2"
 [ "x$CURL_OPTIONS" = "x" ] && CURL_OPTIONS="-L"
 
-#
+# Source uri
 [ "x$SOURCE_URI" = "x" ] && SOURCE_URI="http://pkg.startos.org/sources"
 
-#
+# Install ypk after building
 [ "x$AUTO_INSTALL" = "x" ] && AUTO_INSTALL="no"
 
-#
+# Get system arch
 get_arch() {
 	DIST_INFO=($(cat /var/ypkg/modules/kernel))
 	KERNEL_DIST=${DIST_INFO[0]}
@@ -123,6 +130,7 @@ get_arch() {
 get_arch >/dev/null
 
 LIBDIRSUFFIX=""
+
 case "$ARCH" in
 	"i686")	[ "x$CFLAGS" = "x" ] && CFLAGS="-O2 -march=i686 -mtune=i686 -pipe " ;;
 	"s390")	[ "x$CFLAGS" = "x" ] && CFLAGS="-O2 "   ;;
@@ -139,12 +147,11 @@ export CC="$CC "
 export CXX="$CXX "
 export CFLAGS
 export CXXFLAGS
-export YPKDEST
+export YPK_DEST
 export MAKEOPTS
 export ACCEPT_REPO
 export SOURCE_URI
 export AUTO_INSTALL
-export YPKDEST
 export DOWNLOAD_TOOL
 export CURL_OPTIONS
 export WGET_OPTIONS
@@ -157,13 +164,52 @@ export STRIP_SHARED
 export STRIP_STATIC
 export UPXFLAGS
 
-#
 pkgdata="pkgdata"
 pkginfo="pkginfo"
 control="control.xml"
 filelist="filelist"
 
-#
+# Check required app
+check_required_bin() {
+	local ccache
+	if str_isIn "$FEATURES" "ccache"; then
+		if ! which ccache >/dev/null 2>/dev/null; then 
+			die "Feature: ccache is enabled in ybs.conf. Please install ccache."		
+		fi
+	fi
+	
+	local distcc
+	if str_isIn "$FEATURES" "distcc"; then
+		if ! which distcc >/dev/null 2>/dev/null; then
+			die "Feature: distcc is enabled in ybs.conf. Please install distcc."
+		fi
+	fi
+	
+	local upx
+	if str_isIn "$FEATURES" "upx"; then
+		if ! which upx >/dev/null 2>/dev/null; then
+			die "Feature: upx is enabled in ybs.conf. Please install upx."
+		fi
+	fi
+
+	local strip
+	if str_isIn "$FEATURES" "strip"; then
+		if ! which strip >/dev/null 2>/dev/null; then
+			die "Feature: strip is enabled in ybs.conf. Please install binutils."
+		fi
+	fi
+	
+	local xz
+	if ! which xz >/dev/null 2>/dev/null; then
+		die "xz is required, please install xz-utils."
+	fi
+	
+	local i
+	if ! which $DOWNLOAD_TOOL >/dev/null 2>/dev/null; then
+		die "$DOWNLOAD_TOOL is enabled in ybs.conf. Please install $DOWNLOAD_TOOL"
+	fi
+}
+
 blank_funcs () {
 	DESCRIPTION=""
 	COMMENTS=""
@@ -216,15 +262,10 @@ blank_funcs () {
 	[ "x$1" = "xdesc" ] && :
 }
 
-#
-#
 file_is_exist () {
 	[ -f "$1" ] && return 0 || return 1
 }
 
-#
-# Check root
-#
 check_root () {
 	if [ "x$UID" != "x0" ];then
 	        rmsg "* You must be root to run this script."
@@ -233,44 +274,34 @@ check_root () {
 	fi
 }
 
-#
-# Check app
-#
-check_app() {
-	local app="$1"
-	if ! which "$app" 2>/dev/null; then	
-		rmsg "* $app not found."
-		exit 1
-	fi
-}
-
-#
-# Smmation
-# 
 summation() {
 	if [ "x$1" = "x" ];then
 		msg "* summation: you must specify a list of digit"
 		msg "* i.e. 'summation 1 2 3' "
 		return 1
 	fi
-        local sum=0
+        
+	local sum=0
+	
 	while [ "x$1" != "x" ]; do
 		local tmp=$1
 		let "sum=sum+tmp"
 		shift
 	done
+	
 	echo $sum
 	return 0
 }
 
-#
 get_abspath () {
 	local file="$1"
+	
 	if [ ! -h "$file" ]; then
-		 file=$(readlink -f "$file")
+		file=$(readlink -f "$file")
 	else
 		file=$(cd $(dirname $file) 2>/dev/null; pwd)/${file##*/}
 	fi
+
 	echo "$file"
 }
 
@@ -294,8 +325,6 @@ str_isIn() {
 	return 1
 }
 
-#
-#
 err_check() {
 	if [ $? != 0 ]; then
 		rmsg "$1"
@@ -303,21 +332,15 @@ err_check() {
 	fi
 }
 
-#
-#
 die() {
 	rmsg ":( $@"
 	exit 1
 }
 
-#
-#
 warn() {
 	ymsg "$@"
 }
 
-#
-#
 atom_parse() {
 	T=""
 	N=""
@@ -338,7 +361,7 @@ atom_parse() {
 
 	if echo "$string" |grep -q "/"; then
 		# /var/ybs/pbslib/net-ftp/lftp/lftp_4.3.3.pbs
-		if echo "$string" |grep -q "$YPPATH_LIB"; then
+		if echo "$string" |grep -q "$PBSLIB_PATH"; then
 			atom=${string##*/}
 			T=${string%/*}
 			T=${T%/*}
@@ -375,7 +398,7 @@ atom_parse() {
 		atom=foo_$atom
 	fi
 
-	#FIXME. it is hard-coded here!
+	#XXX, it is hard-coded here
 	atom=${atom%-i686}
 	atom=${atom%-x86_64}
 	atom=${atom%-any}
@@ -495,15 +518,11 @@ atom_cmp() {
 }
 
 #
-# Search packages
-#
-
-#
 # $1 $T 
 # $2 $N
 # $3 $V$R (this is the newest version) 
 #
-ypkg_searchInstalled() {
+ybs_searchInstalled() {
 	local pkgtype=$1
 	local pkgname=$2
 	local pkgver=$3
@@ -545,14 +564,12 @@ ypkg_searchInstalled() {
 	esac
 }
 
-#
-#
-ypkg_search() {
+ybs_search() {
 	local string="$1"
 	local pbsfile
 	local record=""
 
-	if ! ypkg_getpbsfile "$string" all; then
+	if ! ybs_getpbsfile "$string" all; then
 		rmsg "* $string not found."
 		return 1
 	fi
@@ -563,9 +580,9 @@ ypkg_search() {
 		str_isIn "$record" "$T/$N" && continue
 		record+="$T/$N "
 		
-		ypkg_getpbsfile $T/$N name
+		ybs_getpbsfile $T/$N name
 		
-		ypkg_searchInstalled $T $N $V$R
+		ybs_searchInstalled $T $N $V$R
 
 		msg=""
 		for pbsfile in $ALL_PBSFILE; do
@@ -597,7 +614,7 @@ ypkg_search() {
 do_download () {
 	local uri="$1"
 	local fname="$2"
-	local target="$YPPATH_SOURCE/$fname.tmp"
+	local target="$YBS_SOURCE/$fname.tmp"
 	
 	local wget="wget $WGET_OPTIONS"
 	local curl="curl $CURL_OPTIONS"
@@ -618,6 +635,7 @@ do_download () {
 	return 1
 }
 
+#
 # Check and download package
 # $1 is URL
 # $2 is local file name
@@ -629,18 +647,18 @@ check_and_download_raw() {
 	local checksum=$3
 	local download
 	local checkok
-	local target="${YPPATH_SOURCE}/${fname}"
+	local target="${YBS_SOURCE}/${fname}"
 
 	#
 	case ${uri%%:*} in
 		svn)
-		cd ${YPPATH_SOURCE}
+		cd ${YBS_SOURCE}
 		local name="$N"
 		cd $name && svn update || svn checkout ${1} "$N" ;;
 
 		git)	
 		local name=${fname%*.git}
-		cd ${YPPATH_SOURCE}
+		cd ${YBS_SOURCE}
 		cd $name 2>/dev/null && git pull || git clone ${1} 
 		[ "$?" == "0" ] && return 0 ;;
 
@@ -710,7 +728,7 @@ check_and_download_raw() {
 # ALL_PBSFILE : all version pbs files with full path 
 # $NEWEST: newest or specifid version pbs files with full path
 # 
-ypkg_getpbsfile() {
+ybs_getpbsfile() {
 	NEWEST=""	
 	local files_ready
 	local files_ready_raw
@@ -722,7 +740,7 @@ ypkg_getpbsfile() {
 	
 	atom_parse "$1"
 	local find_dir="${PBSDIR}"
-	[ "x$find_dir" = "x" ] && find_dir=$YPPATH_LIB	
+	[ "x$find_dir" = "x" ] && find_dir=$PBSLIB_PATH	
 
 	if [ "x$N" == "x" ]; then
 		echo "No package specified."
@@ -730,7 +748,7 @@ ypkg_getpbsfile() {
 	fi
 
 	local count=0
-	if [ "x$find_dir" = "x$YPPATH_LIB" ]; then
+	if [ "x$find_dir" = "x$PBSLIB_PATH" ]; then
 		local dir=$(find $find_dir/$T -maxdepth 2 -type d -iname "$N")
 		for pack in $dir; do let "count++"; done
 		
@@ -853,7 +871,8 @@ ypkg_getpbsfile() {
 
 #
 # $1 - pbsfile with abspath, such as NEWEST
-ypkg_begin_download() {
+#
+ybs_begin_download() {
 	local url
 	local pbsfile="$1"
 
@@ -870,7 +889,7 @@ ypkg_begin_download() {
 		--enable-shared "
 		#--disable-static
 
-	YPPATH_SCRIPT="$YPPATH_LIB/$T/$N"
+	PBSLIB_SCRIPT="$PBSLIB_PATH/$T/$N"
 
 	if [ -f "$pbsfile" ];then
 		. $pbsfile
@@ -879,8 +898,8 @@ ypkg_begin_download() {
 		err_check "* [Error]: $1pbsfile not found"
 	fi
 
-	mkdir -p $YPPATH_SOURCE
-	err_check "* [Error]: Create dir $YPPATH_SOURCE failed."
+	mkdir -p $YBS_SOURCE
+	err_check "* [Error]: Create dir $YBS_SOURCE failed."
 
 	# download all files
 	if [ "x${SRC_URI}" != "x" ]; then
@@ -901,15 +920,13 @@ ypkg_begin_download() {
 	return 0
 }
 
-#
-#
-ypkg_download() {
+ybs_download() {
 	local string="$1"
-	ypkg_getpbsfile "$string"
+	ybs_getpbsfile "$string"
 
 	if [ "$?" == "0" ]; then
 		# found, download it
-		ypkg_begin_download $NEWEST
+		ybs_begin_download $NEWEST
 		return 0
 	fi
 
@@ -920,7 +937,8 @@ ypkg_download() {
 
 #
 # Strip unrequested i18n in path $1
-ypkg_strip_i18n() {
+#
+ybs_strip_i18n() {
 	local ipath="$1/usr/share/locale"
 	local i18ns=$(ls $ipath 2>/dev/null)
 	local name
@@ -937,8 +955,9 @@ ypkg_strip_i18n() {
 }
 
 #
-# strip unrequested i18n in man path.
-ypkg_strip_mani18n() {
+# Strip unrequested i18n in man path.
+#
+ybs_strip_mani18n() {
 	local ipath="$1/usr/share/man"
 	local i18ns=$(ls $ipath 2>/dev/null)
 	local name
@@ -963,7 +982,8 @@ ypkg_strip_mani18n() {
 
 #
 # Upx for compressing executables files
-ypkg_upx_bin () {
+#
+ybs_upx_bin () {
 	local dir="$1"
 	local binary
 
@@ -978,14 +998,16 @@ ypkg_upx_bin () {
 
 #
 # Removing libtool files...
-ypkg_rm_libtool () {
+#
+ybs_rm_libtool () {
 	local dir="$1"
 	find $dir ! -type d -name "*.la" -exec rm -f -- '{}' \;
 }
 
 #
 # Strip binary in directory $1
-ypkg_strip_bin() {
+#
+ybs_strip_bin() {
 	[[ -z ${STRIP_SHARED+x} ]] && STRIP_SHARED="-S"
 	[[ -z ${STRIP_STATIC+x} ]] && STRIP_STATIC="-S"
 
@@ -1006,17 +1028,19 @@ ypkg_strip_bin() {
 
 #
 # Compress man doc and info 
-ypkg_gzip_extra() {
+#
+ybs_gzip_extra() {
 	local dir="$1"
 	rm "$dir"/usr/share/info/dir 2>/dev/null
 	find "$dir"/usr/{,share/}{man,doc,info} -type f -exec gzip -9 '{}' ';' 2>/dev/null
 }
 
+#
 # System Xorg Desktop Utilities Network Games Graphics Video             
 # Audio Office Development Security Science-education Drivers
 # Multimedia Misc Non-free
 #
-ypkg_get_category() {
+ybs_get_category() {
 	local type  category
 	type=$1
 	case ${type%%-*} in
@@ -1044,7 +1068,6 @@ sys|x11|gnome|kde|lxde|xfce|mate|app)
 	echo $category
 }
 
-#
 split_dev() {
 	local dir="$1"
 	local destdir="$workdir"
@@ -1062,6 +1085,7 @@ split_dev() {
 			i=${lib#$dir}
 			libdir=${i%/*}
 			domv $lib  $destdir/$N-dev_$V$R/$libdir
+			rmdir -p ${lib%/*} 2>/dev/null
 		done
 	fi
 
@@ -1073,6 +1097,7 @@ split_dev() {
 			i=${pc#$dir}
 			dirpc=${i%/*}
 			domv $pc $destdir/$N-dev_$V$R/$dirpc
+			rmdir -p ${pc%/*} 2>/dev/null
 		done
 	fi
 	
@@ -1088,34 +1113,28 @@ split_dev() {
 	return 1
 }
 
-#
 split_doc() {
 	local dir="$1"
 	local destdir="$workdir"
 	docs=$(ls -d $dir/usr/share/doc/* 2>/dev/null)
-	
-	#info=$(ls -d $dir/usr/share/info/* 2>/dev/null)
 	gtk_docs=$(ls -d $dir/usr/share/gtk-doc/html/* 2>/dev/null)
+	
 	if [ x"$docs" != "x" ]; then
 		domv $dir/usr/share/doc $destdir/$N-doc_$V$R/usr/share
 	fi
 	
-	#if [ x"$info" != "x" ]; then
-	#	domv $dir/usr/share/info $destdir/$N-doc_$V$R/usr/share
-	#fi
 	if [ x"$gtk_docs" != "x" ]; then
 		domv $dir/usr/share/gtk-doc/html $destdir/$N-doc_$V$R/usr/share/gtk-doc
 	fi
 	
-	#ypkg_gzip_info $destdir/$N-doc_$V$R
 	[ -d $destdir/$N-doc_$V$R ] && echo $destdir/$N-doc_$V$R && return 0
 	return 1
 }
 
-#
 split_i18n() {
 	local dir="$1"
 	local localdir="usr/share/locale"
+	
 	if ls -d $dir/$localdir/* >/dev/null 2>/dev/null; then
 		ls -d $dir/$localdir/* |while read line;do
 			lang=${line##*/}
@@ -1124,13 +1143,14 @@ split_i18n() {
 		done
 		return 0
 	fi
+	
 	return 1
 }
 
-#
 find_desktop() {
 	local source_dir=$1
 	local desktop=""
+	
 	file_is_exist "$source_dir/usr/share/applications/$N-gtk.desktop" && \
 		desktop="$source_dir/usr/share/applications/$N-gtk.desktop"
 	file_is_exist "$source_dir/usr/share/applications/$N-[[:digit:]].desktop" && \
@@ -1155,7 +1175,6 @@ find_desktop() {
 	return 1
 }
 
-#
 find_icon() {
 	local desktop=$1 
 	local source_dir=$2
@@ -1217,13 +1236,13 @@ xml_escape_convert() {
 
 #
 # $1 - source_dir
+#
 mkpackage() {
 	local sha
 	local pbsfile
 	local atom
 	local source_dir="$1"  
 	atom_parse $source_dir
-	local dbdir="${YPPATH_DB#/}/$N"
 	
 	# Creat pkgdate
 	cd $source_dir
@@ -1241,10 +1260,7 @@ mkpackage() {
 		DESCRIPTION="$DESCRIPTION (development files)" 
 	else
 		install=$INSTALL
-		
-		if [ "x$install" != "x" ] && file_is_exist "$filesdir"/$install; then
-			docp "$filesdir"/$install $dbdir
-		fi
+		#if [ "x$install" != "x" ] && file_is_exist "$filesdir"/$install; then
 	fi
 	
 	build_date="$(date +%s)"
@@ -1258,7 +1274,7 @@ mkpackage() {
 	pkgdir="${N}_$V$R-pkginfo"
 	mkdir -p $pkgdir
 
-	category=$(ypkg_get_category "$TT")
+	category=$(ybs_get_category "$TT")
 	name=$N
 	version=$V$R
 	priority=$PRIORITY
@@ -1295,13 +1311,13 @@ mkpackage() {
 
 	if [ "x$desktop" != "x" ]; then
 		cp $desktop  $pkgdir/"$N".desktop
-		cp $desktop  ${YPKDEST%/*}/desktops/"$N".desktop
+		cp $desktop  ${YPK_DEST%/*}/desktops/"$N".desktop
 		local icon=$(find_icon $desktop $source_dir)
 		
 		if [ "x$icon" != "x" ]; then
 			local tmp="$N"."${icon##*.}"
 			cp $icon  $pkgdir/$tmp
-			cp $icon  ${YPKDEST%/*}/icons/$tmp
+			cp $icon  ${YPK_DEST%/*}/icons/$tmp
 		fi
 	
 		# Find exec
@@ -1378,12 +1394,12 @@ OOO
 	cp $workdir/${N}_$V$R-$YARCH.filelist $filelist
 
 	if [ "x$install" != "x" ] && file_is_exist $filesdir/$install; then
-		cp $YPPATH_SCRIPT/files/$install .
+		cp $PBSLIB_SCRIPT/files/$install .
 	fi
 	
 	tar cjf ../$pkginfo *
 
-	# Creat ypkg package
+	# Creat ypk package
 	cd ..
 	
 
@@ -1391,27 +1407,29 @@ OOO
 		target="$2"
 		tar cjf $target $pkgdata $pkginfo && echo $target
 	else
-		YPKDEST_RAW="$YPKDEST/$(dirname $uri)"
-		mkdir -p $YPKDEST_RAW
-		tar cjf $YPKDEST/$uri $pkgdata $pkginfo && echo $YPKDEST/$uri
-		cp $workdir/{${N}_$V$R-$YARCH.buildlog,${N}_$V$R-$YARCH.filelist} $YPKDEST_RAW 2>/dev/null
+		YPK_DEST_RAW="$YPK_DEST/$(dirname $uri)"
+		mkdir -p $YPK_DEST_RAW
+		tar cjf $YPK_DEST/$uri $pkgdata $pkginfo && echo $YPK_DEST/$uri
+		cp $workdir/{${N}_$V$R-$YARCH.buildlog,${N}_$V$R-$YARCH.filelist} $YPK_DEST_RAW 2>/dev/null
 		# update xml, insert size and sha1 value
-		local control_target=$YPKDEST_RAW/${N}_$V$R-$YARCH.xml
+		local control_target=$YPK_DEST_RAW/${N}_$V$R-$YARCH.xml
 		cp $workdir/$pkgdir/$control $control_target
-		local size=$(du "$YPKDEST/$uri" -sb |awk '{print $1}')
-		local sha1=$(sha1sum "$YPKDEST/$uri" |awk '{print $1}')
+		local size=$(du "$YPK_DEST/$uri" -sb |awk '{print $1}')
+		local sha1=$(sha1sum "$YPK_DEST/$uri" |awk '{print $1}')
 		sed -i -e '/\<build_date\>/a\   <size>'"$size"'<\/size>' -e '/\<build_date\>/a\   <sha>'"$sha1"'<\/sha>' $control_target
 
 		# -dev do not copy changelog
 		if [ x"${N##*-}" != "xdev" ]; then
-			cp $pbsdir/changelog $YPKDEST_RAW 2>/dev/null
+			cp $pbsdir/changelog $YPK_DEST_RAW 2>/dev/null
 		fi
 
-		gzip -9 -f $YPKDEST_RAW/{${N}_$V$R-$YARCH.buildlog,${N}_$V$R-$YARCH.filelist,changelog}  2>/dev/null
+		gzip -9 -f $YPK_DEST_RAW/{${N}_$V$R-$YARCH.buildlog,${N}_$V$R-$YARCH.filelist,changelog}  2>/dev/null
 	fi
 }
 
+#
 # Check /dirs permission
+#
 check_perm_dirs () {
 	local dir="$1"
 	for i in tmp root proc sys; do	
@@ -1431,7 +1449,8 @@ check_perm_dirs () {
 
 #
 # $1- destdir
-ypkg_mkpackage() {
+#
+ybs_mkpackage() {
 	[ ! -d $destdir ] && return 0
 
 	# Source packages
@@ -1445,11 +1464,11 @@ ypkg_mkpackage() {
 	find "$destdir" -name "*.pipe" -type p -exec rm {} \;
 
 	if [ "x$LANGUAGE" != "x" ];then
-		#strip i18n 
-		ypkg_strip_i18n $destdir
+		# Strip i18n 
+		ybs_strip_i18n $destdir
 			
 		#strip unnessesary i18n in man path.
-		ypkg_strip_mani18n $destdir
+		ybs_strip_mani18n $destdir
 	fi
 	
 	# Remove .la files, default is not remove.
@@ -1458,7 +1477,7 @@ ypkg_mkpackage() {
 	str_isIn "$FEATURES" "nolibtool" && libtool="no"
 	str_isIn "$OPTIONS" "libtool" && libtool="yes" 
 	str_isIn "$OPTIONS" "nolibtool" && libtool="no" 
-	[ "$libtool" = "yes" ] && ypkg_rm_libtool $destdir
+	[ "$libtool" = "yes" ] && ybs_rm_libtool $destdir
 	
 	# Strip files, default is strip.
 	local strip="yes"
@@ -1466,7 +1485,7 @@ ypkg_mkpackage() {
 	str_isIn "$FEATURES" "nostrip" && strip="no"
 	str_isIn "$OPTIONS" "strip"  && strip="yes"
 	str_isIn "$OPTIONS" "nostrip"  && strip="no"
-	[ "$strip" = "yes" ] && ypkg_strip_bin $destdir
+	[ "$strip" = "yes" ] && ybs_strip_bin $destdir
 
 	# Upx executables files, default is not using upx
 	local upx="no"
@@ -1474,7 +1493,7 @@ ypkg_mkpackage() {
 	str_isIn "$FEATURES" "noupx" && upx="no"
 	str_isIn "$OPTIONS" "upx" && upx="yes"
 	str_isIn "$OPTIONS" "noupx" && upx="no"
-	[ "$upx" = "yes" ] && ypkg_upx_bin $destdir
+	[ "$upx" = "yes" ] && ybs_upx_bin $destdir
 
 	# Split i18n
 	#spacks+="$(split_i18n $destdir) "
@@ -1491,7 +1510,7 @@ ypkg_mkpackage() {
 	#spacks+="$(split_doc $destdir) "
 
 	# Compress man doc info
-	ypkg_gzip_extra $destdir
+	ybs_gzip_extra $destdir
 
 	# Mkpackges one by one
 	for pack in $spacks; do
@@ -1503,7 +1522,9 @@ ypkg_mkpackage() {
 	return 0
 }
 
+#
 # Cp desktop file to "$destdir"/usr/share/applications
+#
 dodesktop() {
 	local dfile="$1"
 	local picture="$2"
@@ -1529,7 +1550,9 @@ dodesktop() {
 	fi
 }
 
+#
 # Add unit for systemd
+#
 dounit() {
 	local file="$@"
 	if [ x"$file" != x ]; then
@@ -1543,8 +1566,9 @@ dounit() {
 	fi
 }
 
-
+#
 # Copy files to /etc/pam.d/
+#
 dopamd() {
 	local file="$@"
 	local dir="/etc/pam.d/"
@@ -1560,48 +1584,33 @@ dopamd() {
 	fi
 }
 
-# Cp script to "$destdir"/etc/init.d
-doinit() {
-	local file="$1"
-	mkdir -p "$destdir"/etc/init.d
-	if [ x"$file" != x ]; then
-		if file_is_exist "$file"; then
-       			install -m755 "$file" "$destdir"/etc/init.d
-		else
-       			install -m755 "$filesdir/$file" "$destdir"/etc/init.d
-		fi
-	fi
-}
-
-# cp
 docp() {
 	local end=${!#}
 	mkdir -p "$end"
 	cp -a "$@"
 }
 
-# cp and rename
 docp_rename() {
 	local end=${!#}
 	mkdir -p "$(dirname $end)"
 	cp -a "$@"
 }
 
-# mv
 domv() {
 	local end=${!#}
 	mkdir -p "$end"
 	mv "$@"
 }
 
-# mv and rename
 domv_rename() {
 	local end=${!#}
 	mkdir -p "$(dirname $end)"
 	mv "$@"
 }
 
-# cp man to dir
+#
+# Cp man to dir
+#
 doman() {
 	local name num
 	for i in $@; do
@@ -1616,7 +1625,6 @@ doman() {
 	done
 }
 
-# link
 doln(){
 	local end=${!#}
 	mkdir -p "$(dirname $end)"
@@ -1624,7 +1632,6 @@ doln(){
 	ln -sf $@
 }
 
-# font
 dofont() {
 	msg ">>> mkfontscale $1"
 	mkfontscale "$1"
@@ -1634,7 +1641,6 @@ dofont() {
 	fc-cache -f "$1"
 }
 
-#
 doinstall_info () {
 	msg ">>> install info: $@"
 	[ -x /usr/bin/install-info ] || return 0
@@ -1645,7 +1651,6 @@ doinstall_info () {
 	return 0
 }
 
-#
 doremove_info () {
 	msg ">>> remove info: $@"
 	[ -x /usr/bin/install-info ] || return 0
@@ -1656,8 +1661,6 @@ doremove_info () {
 	return 0
 }
 
-
-# patch
 dopatch(){
 	local file=""
 	local dir1=""
@@ -1684,21 +1687,21 @@ dopatch(){
 	done
 }
 
-#
+# Unpack
 dounpack() {
 	if [ "x$SRC_URI" = "x" ];then
 		for i in tar.bz2 tar.gz bz2 tgz tbz tbz2 rar zip 7z; do
-			file_is_exist "$YPPATH_SOURCE/$N-$V$R.${i}" && SRC_URI="$YPPATH_SOURCE/$N-$V$R.${i}"
+			file_is_exist "$YBS_SOURCE/$N-$V$R.${i}" && SRC_URI="$YBS_SOURCE/$N-$V$R.${i}"
 		done
 	else
 		file_is_exist "$SRC_URI" && SRC_URI="$SRC_URI"
-		file_is_exist "$YPPATH_SOURCE/$SRC_URI" && SRC_URI="$YPPATH_SOURCE/$SRC_URI"
+		file_is_exist "$YBS_SOURCE/$SRC_URI" && SRC_URI="$YBS_SOURCE/$SRC_URI"
 	fi
 
 	[ "x$SRC_URI" = "x" ] && return 0
 	SRC_URI=($SRC_URI)
 	local fname=$(basename $SRC_URI)
-	local tarball="$YPPATH_SOURCE/$fname"
+	local tarball="$YBS_SOURCE/$fname"
 	local srcdir="$N-$V$R"
 	rm -r "$srcdir" 2>/dev/null
 	
@@ -1758,8 +1761,8 @@ dounpack() {
 	       
 	       *.git)
 		        name=${fname%*.git}
-		    	mmsg ">>> cp -a ${YPPATH_SOURCE}/"$name" $PWD/"$srcdir""
-		        cp -a ${YPPATH_SOURCE}/"$name" "$srcdir"
+		    	mmsg ">>> cp -a ${YBS_SOURCE}/"$name" $PWD/"$srcdir""
+		        cp -a ${YBS_SOURCE}/"$name" "$srcdir"
 			;;
 	       
 	       *.rar) 
@@ -1942,7 +1945,6 @@ dodoc() {
 	cp -a "$@" "$destdir"/usr/share/doc/"$N"/
 }
 
-#
 # Ypkg useradd
 douseradd() {
 	local end=${!#}
@@ -1953,7 +1955,6 @@ douseradd() {
 	fi
 }
 
-#
 # Ypkg userdel
 douserdel() {
 	local end=${!#}
@@ -1964,7 +1965,6 @@ douserdel() {
 	fi
 }
 
-#
 # Ypkg groupadd
 dogroupadd() {
 	local end=${!#}
@@ -1975,8 +1975,6 @@ dogroupadd() {
 	fi
 }
 
-#
-#
 # Ypkg groupdel
 dogroupdel() {
 	local end=${!#}
@@ -1987,24 +1985,18 @@ dogroupdel() {
 	fi
 }
 
-#
-#
 dolibtool_finish () {
 	local dir="$@"
 	msg ">>> Libtool finish: $dir"
 	libtool --finish --silent $dir
 }
 
-#
-#
 perl_cleanup () {
 	msg ">>> Delete: .packlist *.pod files"
 	find "$destdir" -name '.packlist' -delete
 	find "$destdir" -name '*.pod' -delete
 }
 
-#
-#
 glib_compile_schemas() {
 	if [ -x /usr/bin/glib-compile-schemas ]; then
 		msg ">>> glib-compile-schemas /usr/share/glib-2.0/schemas"
@@ -2016,8 +2008,6 @@ glib_compile_schemas() {
 	return 0
 }
 
-#
-#
 doinstall_catalog() {
 	local bin=$(which install-catalog)
 	if [ -x $bin ]; then
@@ -2025,8 +2015,6 @@ doinstall_catalog() {
 	fi
 }
 
-#
-#
 doremove_catalog() {
 	local bin=$(which install-catalog)
 	if [ -x $bin ]; then
@@ -2035,7 +2023,6 @@ doremove_catalog() {
 	
 }
 
-#
 # Install defaut settings
 gnome2_install_defaut_gconf() {
 	#type
@@ -2055,7 +2042,6 @@ gnome2_install_defaut_gconf() {
 	fi
 }
 
-#
 # Install schemas
 mate_install_schema() {
 	local schemas="$@"
@@ -2067,7 +2053,6 @@ mate_install_schema() {
 	fi
 }
 
-#
 # Unstall schemas
 mate_uninstall_schema() {
 	local schemas="$@"
@@ -2079,7 +2064,6 @@ mate_uninstall_schema() {
 	fi
 }
 
-#
 # Install schemas
 gnome2_install_schema() {
 	#this is this-is-deprecated
@@ -2093,7 +2077,6 @@ gnome2_install_schema() {
 	fi
 }
 
-#
 # Unstall schemas
 gnome2_uninstall_schema() {
 	#this is this-is-deprecated
@@ -2107,7 +2090,6 @@ gnome2_uninstall_schema() {
 	fi
 }
 
-#
 # Install mine
 gnome2_install_mine() {
 	local mines="$@"
@@ -2119,7 +2101,6 @@ gnome2_install_mine() {
 	fi
 }
 
-#
 # Unstall mine
 gnome2_uninstall_mine() {
 	local mines="$@"
@@ -2131,7 +2112,6 @@ gnome2_uninstall_mine() {
 	fi
 }
 
-#
 # Update rarian database
 gnome2_rarian_sk_update() {
 	if [ -x /usr/bin/rarian-sk-update ]; then
@@ -2140,7 +2120,6 @@ gnome2_rarian_sk_update() {
 	fi
 }
 
-#
 # Update desktop entries
 gnome2_desktop_database_update() {
 	if [ -x /usr/bin/update-desktop-database ]; then
@@ -2149,7 +2128,6 @@ gnome2_desktop_database_update() {
 	fi
 }
 
-#
 # Restart gconfd-2 if running to reload new gconf settings
 gnome2_gconfd_reload() {
 	if ps acx | grep -q gconfd-2; then
@@ -2158,7 +2136,6 @@ gnome2_gconfd_reload() {
 	fi
 }
 
-#
 # Update gtk-immodules
 gnome2_gtk_immodules_update() {
 	if [ -x /usr/bin/update-gtk-immodules ]; then
@@ -2167,7 +2144,6 @@ gnome2_gtk_immodules_update() {
         fi
 }
 
-#
 # Update gdk pixbuf loaders
 gnome2_gdk_pixbuf_loaders_update() {
 	if [ -d /etc/gtk-2.0 ] && [ -x /usr/bin/update-gdk-pixbuf-loaders ]; then
@@ -2179,6 +2155,7 @@ gnome2_gdk_pixbuf_loaders_update() {
 #
 # Updates Gtk+ icon cache files under /usr/share/icons if the current pbs
 # have installed anything under that location.
+#
 gnome2_icon_cache_update() {
 	local dir=""
 	#gnome2_icon_cache_update /usr/share/icons/titans|titans
@@ -2199,7 +2176,6 @@ gnome2_icon_cache_update() {
 	"$updater" -f -q -t $dir
 }
 
-#
 # Update mime database
 gnome2_mime_database_update() {
 	if [ -x /usr/bin/update-mime-database ]; then
@@ -2207,9 +2183,7 @@ gnome2_mime_database_update() {
 	fi
 }
 
-#
 # Reboot flag
-#
 flag_reboot() {
 	local flag="/run/ypkg/reboot"
 	mkdir -p /run/ypkg
@@ -2229,7 +2203,7 @@ flag_reboot() {
 #check		 break after make check/test
 #mkinstall         break after make install    
 #package         break after make ypk package    
-
+#
 maybe_break() {
 	local string="$1"
 	local command="$(echo $@ |sed 's/'"$string"'//')"
@@ -2245,16 +2219,16 @@ maybe_break() {
 # pkgtype/pkgname -net-ftp/lftp
 # pbsfile - lftp_4.3.3.pbs 
 #
-ypkg_install() {
+ybs_build() {
 	local string="$1"
 	local stat
 
-	if ! ypkg_getpbsfile "$string"; then
+	if ! ybs_getpbsfile "$string"; then
 		rmsg "[Error]: $string not found."
 		return 1
 	fi
 
-	ypkg_searchInstalled $T $N $V$R >/dev/null
+	ybs_searchInstalled $T $N $V$R >/dev/null
 	
 	local new=$V$R
 	
@@ -2284,7 +2258,7 @@ ypkg_install() {
 		
 	[ "x$PRETEND" = "xyes" ] && return 0
 	
-	ypkg_begin_download $NEWEST || return 1
+	ybs_begin_download $NEWEST || return 1
 
 	maybe_break fetch 
 
@@ -2461,7 +2435,7 @@ EOF
 		atom_parse $destdir
 		ymsg ">> $TT/${N}_$V$R make package"
 		. ${descfiles[$j]}
-		packs+="$(ypkg_mkpackage $destdir) "
+		packs+="$(ybs_mkpackage $destdir) "
 		err_check "* [Error]: $TT/${N}_$V$R make binary package failed"
 		blank_funcs
 		let j=$j+1
@@ -2493,13 +2467,13 @@ EOF
 # $1 pkgname
 # $2 notes/comments/depend/pbs
 #
-ypkg_show() {
+ybs_show() {
 	local ret
 	local itype
 	local iname
 	local iver
 	local irver
-	ypkg_getpbsfile "$1"
+	ybs_getpbsfile "$1"
 
 	if [ $? == 0 ]; then
 		atom_parse $NEWEST
@@ -2537,15 +2511,13 @@ ypkg_show() {
 	fi
 }
 
-#
-#
-ypkg_whatrequires() {
+ybs_whatrequires() {
 	local string="$1"
 	local depend 
 	local file
 	ymsg "* "$string" is related with:"
 	
-	find "$YPPATH_LIB" -maxdepth 3 -type f -name "*.pbs" |while read file; do
+	find "$PBSLIB_PATH" -maxdepth 3 -type f -name "*.pbs" |while read file; do
 		. "$file"
 		for depend in RDEPEND BDEPEND RECOMMENDED CONFLICT REPLACE; do
 			if str_isIn "$(eval "echo \$${depend}")" "$string"; then
@@ -2574,4 +2546,4 @@ ypkg_whatrequires() {
 	msg ""
 }
 
-# end of file
+# End of file
