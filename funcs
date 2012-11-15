@@ -659,8 +659,19 @@ check_and_download_raw() {
 		git)	
 		local name=${fname%*.git}
 		cd ${YBS_SOURCE}
-		cd $name 2>/dev/null && git pull || git clone ${1} 
-		[ "$?" == "0" ] && return 0 ;;
+		if [ ! -d $name ];then 
+			rm $name 2>/dev/null
+			git clone ${uri} && return 0
+		fi
+		if [ -d $name/.git ]; then
+			olduri=$(grep "url =" $name/.git/config 2>/dev/null |sed 's/\	url\ =\ //g')
+			if [ "x$olduri" = "x$uri" ]; then
+				cd $name && git pull && return 0
+			else
+				rm -rf $name
+				git clone ${1} && return 0
+			fi	
+		fi ;;
 
     http|https|ftp|*)	
 		local checksum_server="$checksum"
@@ -1041,31 +1052,46 @@ ybs_gzip_extra() {
 # Multimedia Misc Non-free
 #
 ybs_get_category() {
-	local type  category
-	type=$1
-	case ${type%%-*} in
-		#sys)	     category="System"	      ;;
-		#x11)        category="Xorg"	      ;;
-#gnome|kde|lxde|xfce|mate)   
-			#category="Desktop"	      ;;
-		#app)	category="Utilities"	      ;;
-sys|x11|gnome|kde|lxde|xfce|mate|app)
-		        category="Utilities"          ;;
-       www|net|mail)	category="Network"	      ;;
-       		 im)    category="IM"		      ;;
-    	      games)	category="Games" 	      ;;
-    	   graphics)	category="Graphics" 	      ;;
-    	      media)	category="Multimedia" 	      ;;
-     printer|office)	category="Office" 	      ;;
-    	        dev)	category="Development" 	      ;;
-    	   security)	category="Security" 	      ;;
-	    drivers)    category="Drivers"	      ;;
-      education|sci)	category="Science-education"  ;;
-		non)	category="Non-free"	      ;;
-    	       misc)	category="Misc"               ;;
-    	          *)	category="Misc"               ;;
-	esac
-	echo $category
+	local type category desktop
+	type="$1"
+	desktop="$2"
+
+	if [ "x$desktop" != "x" ] && [ -f "$desktop" ]; then
+		egrep -q "(=|;)AudioVideo" "$desktop" && echo Multimedia && return
+		egrep -q "(=|;)Office"     "$desktop" && echo Office && return
+		if egrep -q "(=|;)Network" "$desktop"; then
+			egrep -q "(=|;)InstantMessaging" "$desktop" && echo IM && return
+			echo Network && return
+		fi
+		if egrep -q "(=|;)Education" "$desktop" || egrep -q "(=|;)Science" "$desktop"; then
+			echo Science-education && return
+		fi
+		egrep -q "(=|;)Game" "$desktop" && echo Games && return
+		egrep -q "(=|;)Graphics" "$desktop" && echo Graphics && return
+		egrep -q "(=|;)Development" "$desktop" && echo Development && return
+		if egrep -q "(=|;)Utility" "$desktop" || egrep -q "(=|;)System" "$desktop"; then
+			echo Utilities && return
+		fi
+	else	
+		case ${type%%-*} in
+		sys|x11|gnome|app)
+			        category="Utilities"          ;;
+	       www|net|mail)	category="Network"	      ;;
+       			 im)    category="IM"		      ;;
+    		      games)	category="Games" 	      ;;
+    		   graphics)	category="Graphics" 	      ;;
+    		      media)	category="Multimedia" 	      ;;
+ 	    printer|office)	category="Office" 	      ;;
+ 	   	        dev)	category="Development" 	      ;;
+ 	   	   security)	category="Security" 	      ;;
+		    drivers)    category="Drivers"	      ;;
+	      education|sci)	category="Science-education"  ;;
+			non)	category="Non-free"	      ;;
+	    	      misc|*)	category="Misc"               
+		esac
+		echo $category && return
+	fi
+	echo Misc
 }
 
 split_dev() {
@@ -1274,7 +1300,6 @@ mkpackage() {
 	pkgdir="${N}_$V$R-pkginfo"
 	mkdir -p $pkgdir
 
-	category=$(ybs_get_category "$TT")
 	name=$N
 	version=$V$R
 	priority=$PRIORITY
@@ -1321,14 +1346,8 @@ mkpackage() {
 		fi
 	
 		# Find exec
-			
-		if grep -q ^Exec= "$desktop"; then
-			exec="$(grep ^Exec= "$desktop" |head -n1 |sed 's/^Exec=//g')"
-		fi
-	
-		if grep -q ^TryExec= "$desktop"; then
-			tryexec="$(grep ^TryExec= "$desktop" |head -n1 |sed 's/^TryExec=//g')"
-		fi
+		grep -q ^Exec= "$desktop" && exec="$(grep ^Exec= "$desktop" |head -n1 |sed 's/^Exec=//g')"
+		grep -q ^TryExec= "$desktop" && tryexec="$(grep ^TryExec= "$desktop" |head -n1 |sed 's/^TryExec=//g')"
 		
 		exec="${exec-$tryexec}"
 		exec=$(xml_escape_convert "$exec")
@@ -1338,7 +1357,9 @@ mkpackage() {
 		gname="genericname"
 		gdescription="description"
 	fi
-
+	
+	category=$(ybs_get_category "$TT" "$desktop")
+	
 	data_count="1"
 	
 	cat >$pkgdir/$control <<OOO

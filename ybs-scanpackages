@@ -139,30 +139,9 @@ check_xml() {
 	fi
 }
 
-extra_info() {
+remove_info() {
 	local xmlfile="$1"
-	removes="lightdm-ylmfos-greeter 
-	         nautilus-ylmf-extend 
-		 plymouth-theme-ylmf-logo 
-		 ylmfos-backgrounds 
-		 ylmfos-bug-fix 
-		 ylmfos-dbus-polkit 
-		 ylmfos-device-manager 
-		 ylmfos-gnome2-themes-black 
-		 ylmfos-gnome2-themes-white 
-		 ylmfos-icon-theme 
-		 ylmfos-mouse-theme 
-		 ylmfos-service-manager 
-		 ylmfos-software-center 
-		 ylmfos-driver-manager
-		 ylmfos-sounds 
-		 ylmfos-startup-menu 
-		 ycenter 
-		 yinst-source 
-		 startos-clone 
-		 jhbuild 115u-web midori deepinwine-thunder5 hal esound libelf gnu-ghostscript libusb cdrtools radioget adobe-reader 
-		 accountsservice accountsservice-dev alsa-driver-source ant ati-graphic-source-dev autoconf2.13-dev bochs-dev broadcom-sta-source cairo_perl cairo-perl-dev chmsee-dev dconf dconf-dev dd-rescue deadbeef-mpris-plugin deadbeef-mpris-plugin-dev dev86-dev eigen2-dev evolution evolution-dev evolution-mapi evolution-mapi-dev fcitx-keyboard freetuxtv-dev fxload gecko-sharp gecko-sharp-dev gfusevfs glib-perl-dev glide3-dev gnome2-canvas-perl-dev gnome2-gconf-perl-dev gnome2-perl-dev gnome2-vfs-perl-dev gnome2-wnck-perl-dev goo-canvas-perl-dev grub2-dev gst-fluendo-mpegmux gst-fluendo-mpegmux-dev gtk2-imageview-perl-dev gtk2-perl-dev gtk2-sexy-dev gtk2-trayicon-dev gtk2-unique-perl-dev ibus-table-chinese indicator-applet ipod-sharp ipod-sharp-dev ipw3945-ucode iscsitarget-driver iscsitarget-source iscsitarget-utils jpeg6 kbd-dev kdemultimedia kdemultimedia-dev ksecrets ksecrets-dev libav libav-dev libmapi libmapi-dev libtorrent-rasterba libtorrent-rasterba-dev libWindowsWM-dev likewise-lwsecurity-bin likewise-open likewise-open-bin likewise-open-bin-dev likewise-open-dev likewise-open-gui-bin madwifi-source mingw32-build mpc-dev nautilus-reload-dev nvidia-graphic-173-source nvidia-graphic-96-source nvidia-graphic-utils-dev ooplayer osinstaller-dev pango_perl pango-perl-dev perl-dev phoronix-test-suite pycairo pycairo-dev rt3090sta rtl8192ce-driver rtl8192ce-firmware rtl8192ce-source rtl8192cu-driver rtl8192cu-source rtl8192se-driver rtl8192se-firmware rtl8192se-source rtl8192su-driver rtl8192su-source spice-protocol-dev swig-dev sysvinit sysvinit-dev thunderbird-i18n-zh_CN thunderbird-i18n-zh_TW twisted-dev unity-greeter vdpauinfo virtuoso-dev webkitgtk3 webkitgtk3-dev xtrans-test xtrans-test-1.2.6 zd1211-firmware-dev"
-
+	removes=""
 	echo '<?xml version="1.0" encoding="UTF-8"?>' >$xmlfile
 	echo '<PackageInfo>' >>$xmlfile
 
@@ -190,15 +169,14 @@ final() {
 	cp testing.xml update.xml
 	tar cJf testing.tar.xz update.xml
 	
-	cp removed.xml update.xml
-	tar cJf removed.tar.xz update.xml
+	#cp removed.xml update.xml
+	#tar cJf removed.tar.xz update.xml
 
 	rm update.xml
 
 	>updates.list
 
-	# updates.date 和 updates.list 里的时间字段为了兼容之前的 ypkg2，以后将不存在
-	for i in testing.tar.xz stable.tar.xz removed.tar.xz; do
+	for i in testing.tar.xz stable.tar.xz; do
 		name=${i}
 		date=$(date +%s)
 		sha1=$(sha1sum $name |awk '{print $1}')
@@ -242,8 +220,8 @@ START_TIME="$(date)"
 # 分支是：stable 和 testing
 cd $YPK_DEST                 
 mkdir -p $YPK_DEST/updates/
-ymsg "* YPK package pool: $YPK_DEST"
-ymsg "* YPK package index: $YPK_DEST/updates"
+ymsg "* YPK package binary-dir: $YPK_DEST"
+ymsg "* YPK package index-dir: $YPK_DEST/updates"
 find_ypk
 
 # 生成各个分支的 xml 文件，包含所含 ypk 包的信息
@@ -253,7 +231,7 @@ check_xml $xml_stable
 merge_info $filelist_testing  $xml_testing
 check_xml $xml_testing
 
-extra_info $xml_removed
+#remove_info $xml_removed
 
 # 生成更新文件
 cd $YPK_DEST/updates/

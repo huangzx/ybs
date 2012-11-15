@@ -1,0 +1,173 @@
+#!/bin/bash
+#
+#
+#   $0 - calculating runtime dependency of package.
+#
+#   Copyright © 2012 ivali.com
+#   Maintainer: Zhongxin Huang <zhongxin.huang@gmail.com>
+#
+#   This program is free software; you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation; either version 2 of the License, or
+#   (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+. /usr/lib/ybs/funcs
+
+show_usage() {
+        cat <<OOO
+$0 - use ldd and ypkg for calculating runtime dependency of package.
+
+Usage: $0 package
+
+OOO
+	exit
+}
+
+do_ldd() {
+	local pack=$1
+	local file=$2
+
+	ypkg2 -l $pack |awk -F\| '{print $3}' | \
+	grep -v /usr/share/doc/ | \
+	grep -v /usr/share/man/ | \
+	grep -v /usr/share/applications/ | \
+	grep -v /usr/share/info/ | \
+	grep -v /usr/share/gtk-doc/ | \
+	grep -v /usr/share/icons/ | \
+	grep -v /usr/share/themes/ | \
+	grep -v /usr/share/pixmaps/ | \
+	grep -v /usr/share/pixmaps/ | \
+	grep -v /usr/share/zoneinfo/ | \
+	grep -v /usr/share/i18n/ | \
+	grep -v /usr/share/X11/locale/ | \
+	grep -v /usr/share/locale/ | \
+	grep -v /usr/share/terminfo/ | \
+	grep -v .txt$ | \
+	grep -v .pyo$ | \
+	grep -v .pyc$ | \
+	grep -v .py$  | \
+	grep -v .png$ | \
+	grep -v .jpg$ | \
+	grep -v .svg$ | \
+	grep -v .svgz$ | \
+	grep -v .tga$ | \
+	grep -v .gz$ | \
+	grep -v .desktop$ | \
+	while read i; do 
+		case "$(file -bi "$i")" in
+			*application/x-sharedlib*|*application/x-executable*)
+				echo "# $i" >>"$file"
+				ldd "$i" 2>/dev/null >>"$file"
+		esac
+	done
+}
+
+do_ypkg() {
+	local file=$1
+	local resule
+
+	cat "$file" |while read i; do
+		i=$(readlink -f ${i})
+		
+		# Cache finding is first priority
+		resule=($(grep ${i} $ypkg_cache 2>/dev/null |tail -n1))
+		if [ "x${resule[0]}" != "x" ]; then
+			echo ${resule[0]}
+			continue
+		fi
+		
+		# Then run ypkg2
+		resule=($(ypkg2 -S ${i} |grep -v Searching |sed '/^$/d' |sed 's/\_[[:digit:]].*,//g' |sort -u))		
+		grep -q ${resule[@]} $ypkg_cache 2>/dev/null || echo ${resule[@]} >>$ypkg_cache
+		echo ${resule[0]}
+	done
+}
+
+# main
+#
+
+[ $# -eq 0 ] && show_usage
+
+while [ "x$1" != "x" ]; do 
+	wmsg "* $1"
+	
+	for i in $@; do
+		if ! ypkg2 -l ${i} >/dev/null 2>/dev/null; then
+			die "* ${i} is not installed."
+			exit 
+		fi
+	done
+
+	pack=$1
+	workdir="/tmp/cr_$pack"
+	rm -rf $workdir 2>/dev/null
+	mkdir -p $workdir
+	
+	ypkg_cache="/tmp/.ybs/cache"
+	mkdir -p ${ypkg_cache%/*}
+
+	# 1、ldd 
+	#
+	ldd_resule="$workdir/ldd_resule"
+	>$ldd_resule
+	do_ldd $pack $ldd_resule
+
+	grep "not found" $ldd_resule && sed -i '/not found/d' $ldd_resule
+		
+	# 2、
+	#
+	need_sharelibs="$workdir/need_sharelibs"
+	cat "$ldd_resule" |grep -v ^# |sort -u |grep "=>" |awk -F\=\> '{print $2}' |awk '{print $1}' |sort -u |grep -v \) >$need_sharelibs
+
+	# 3.
+	#
+	need_apps="$workdir/need_apps"
+	do_ypkg "$need_sharelibs" |grep -v ^$pack$ |sort -u >$need_apps
+	echo "* total rdepends:"
+	cat $need_apps |xargs
+
+	# 4.
+	#
+	base=$need_apps
+	record="$workdir/recordxx"
+	>$record
+	dir="$workdir/crxx"
+	rm -rf $dir 
+	mkdir -p $dir
+	cat $base |while read i; do
+		[ "x${i}" = "x" ] && continue
+		grep -wq ^${i}$ $record 2>/dev/null && continue
+		>$ldd_resule-
+		do_ldd ${i} $ldd_resule-
+		grep "not found" $ldd_resule- && sed -i '/not found/d' $ldd_resule-
+		cat $ldd_resule- |grep -v ^# |sort -u |grep "=>" |awk -F\=\> '{print $2}' |awk '{print $1}' |sort -u |grep -v \) >$need_sharelibs-
+		do_ypkg $need_sharelibs- |grep -v ^${i}$ |sort -u >"$dir/${i}"
+		cat "$dir/${i}" |while read i; do 
+			[ "x${i}" = "x" ] && continue
+			grep -wq ^${i}$ $record 2>/dev/null && continue
+			grep -wq ^${i}$ $base 2>/dev/null && echo "${i}" >>$record
+		done
+	done
+	cd $dir
+	for i in $(ls -1d *); do
+		if [ $(ls -1d * |wc -l) -ge 2 ]; then
+			grep -wq ^${i}$ $(ls -1d * |grep -vw ^${i}$ 2>/dev/null) 2>/dev/null && rm "${i}"
+		fi
+	done
+
+	echo "* final rdepends:"
+	ls -1d * |xargs
+shift
+done
+
+#End of file
+
