@@ -18,20 +18,28 @@
 #   You should have received a copy of the GNU General Public License
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
+#
+select_conf() {
+        while true; do
+		local files=($(ls /etc/ybs.conf.d/*.conf))
+		local default="/etc/ybs.conf"
 
-[ -f /usr/lib/ybs/funcs ] && . /usr/lib/ybs/funcs
+		if [ "x${files[1]}" != "x" ]; then
+			msg "Avaliable config files: ${files[@]}"
+			msg_ "Your choice is: "
+			read file
+			if [ "x$file" != "x" ] && [ -f "$file" ]; then
+				ln -svf "$file" "$default" && break
+			fi
+		else
+			ln -svf "$files" "$default" && break
+		fi
+	done
+}
 
-check_required_bin
-
-# Create required folders
-mkdir -p $YPK_DEST $WORKING_FIELD
-
-if [ "x$YPKG_ROOT" = "x" ];then
-   YPKG_ROOT="/"
-else
-   mkdir -p "$YPKG_ROOT"
-   YPKG_ROOT=$(readlink -f "$YPKG_ROOT")
-fi
+. /usr/lib/ybs/funcs
+[ ! -f /etc/ybs.conf ] && select_conf
+. /usr/lib/ybs/funcs
 
 ybs_show_usage() {
 	cat <<EOF
@@ -66,6 +74,20 @@ Options for build:
 	--package                              Break after make ypk package    
 EOF
 }
+
+check_required_bin
+
+# Create required folders
+mkdir -p $YPK_DEST $WORKING_FIELD
+
+if [ "x$YPKG_ROOT" = "x" ];then
+   YPKG_ROOT="/"
+else
+   mkdir -p "$YPKG_ROOT"
+   YPKG_ROOT=$(readlink -f "$YPKG_ROOT")
+fi
+
+[ "x$1" = "x" ] && select_conf
 
 i=0
 j=0
@@ -230,7 +252,7 @@ case "${1}" in
 	done
 	;;
 
-*|-h|--help)
+-h|--help|*)
 	ybs_show_usage
 	exit 0
 	;;
