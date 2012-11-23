@@ -6,7 +6,9 @@
 #
 # Put your specific architecture here.
 # if you are unsure of your arch, DO NOT MODIFY THIS.
-#
+# Defaults: 
+# i686 - CFLAGS="-O2 -march=i686 -mtune=i686 -pipe "
+# x86_64 - CFLAGS="-O2 -fPIC"
 ARCH=i686
 CC=gcc
 CXX=g++

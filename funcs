@@ -129,24 +129,29 @@ get_arch() {
 
 get_arch >/dev/null
 
+[ "x$CC" = "x" ] && CC=gcc
+[ "x$CXX" = "x" ] && CXX=g++
 LIBDIRSUFFIX=""
 
 case "$ARCH" in
-	"i686")	[ "x$CFLAGS" = "x" ] && CFLAGS="-O2 -march=i686 -mtune=i686 -pipe " ;;
+	"i686")	[ "x$CFLAGS" = "x" ] && CFLAGS="-O2 -march=i686 -mtune=i686 -pipe " ;;	
 	"s390")	[ "x$CFLAGS" = "x" ] && CFLAGS="-O2 "   ;;
-      "x86_64") [ "x$CFLAGS" = "x" ] && CFLAGS="-O2 -fPIC " ;;
+      "x86_64") 
+		[ "x$CFLAGS" = "x" ] && CFLAGS="-O2 -fPIC "
+		LIBDIRSUFFIX="64"
+		CC="$CC -m64"
+		CXX="$CXX -m64"
+		;;
 	     *)	[ "x$CFLAGS" = "x" ] && CFLAGS="-O2 "   
 esac
 
-[ "x$CC" = "x" ] && CC=gcc
-[ "x$CXX" = "x" ] && CXX=g++
-
 [ "x$CXXFLAGS" = "x" ] && CXXFLAGS="$CFLAGS "
 
-export CC="$CC "
-export CXX="$CXX "
+export CC
+export CXX
 export CFLAGS
 export CXXFLAGS
+export LIBDIRSUFFIX
 export YPK_DEST
 export MAKEOPTS
 export ACCEPT_REPO
@@ -893,12 +898,12 @@ ybs_begin_download() {
 
 	config="--prefix=/usr
 		--sysconfdir=/etc
-		--libdir=/usr/lib
+		--libdir=/usr/lib"$LIBDIRSUFFIX"
+		--libexecdir=/usr/lib"$LIBDIRSUFFIX"
 		--localstatedir=/var
 		--infodir=/usr/share/info
 		--mandir=/usr/share/man
 		--enable-shared "
-		#--disable-static
 
 	PBSLIB_SCRIPT="$PBSLIB_PATH/$T/$N"
 
@@ -1043,7 +1048,7 @@ ybs_strip_bin() {
 ybs_gzip_extra() {
 	local dir="$1"
 	rm "$dir"/usr/share/info/dir 2>/dev/null
-	find "$dir"/usr/{,share/}{man,doc,info} -type f -exec gzip -9 '{}' ';' 2>/dev/null
+	find "$dir"/usr/{,share/}{man,doc,info} -type f -exec gzip -9 -f '{}' ';' 2>/dev/null
 }
 
 #
@@ -1099,8 +1104,15 @@ split_dev() {
 	local destdir="$workdir"
 	
 	#/usr/include  /usr/share/include
-	[ -d $dir/usr/include ] && domv $dir/usr/include $destdir/$N-dev_$V$R/usr/
-	[ -d $dir/usr/share/include ] && domv $dir/usr/share/include $destdir/$N-dev_$V$R/usr/share/
+	if [ -d "$dir"/usr/include ]; then
+		rm -rf "$destdir"/"$N-dev_$V$R"/usr/include 2>/dev/null
+		domv "$dir"/usr/include "$destdir"/"$N-dev_$V$R"/usr/
+	fi
+
+	if [ -d "$dir"/usr/share/include ]; then
+		rm -rf "$destdir"/"$N-dev_$V$R"/usr/share/include 2>/dev/null
+		domv "$dir"/usr/share/include "$destdir"/"$N-dev_$V$R"/usr/share/
+	fi
 
 	# *.la *.a *.h *.hpp
 	devlib=$(find $dir/ -type f -name "*.la" -o -name "*.a" 2>/dev/null)
@@ -1122,6 +1134,7 @@ split_dev() {
 		for pc in $pcdir; do
 			i=${pc#$dir}
 			dirpc=${i%/*}
+			rm -rf "$destdir"/"$N-dev_$V$R"/"$dirpc"/pkgconfig 2>/dev/null
 			domv $pc $destdir/$N-dev_$V$R/$dirpc
 			rmdir -p ${pc%/*} 2>/dev/null
 		done
@@ -1131,6 +1144,7 @@ split_dev() {
 	acl=$(ls -d $dir/usr/share/aclocal/* 2>/dev/null)
 	
 	if [ x"$acl" != "x" ]; then
+		rm -rf "destdir"/"$N-dev_$V$R"/usr/share/aclocal 2>/dev/null
 		domv $dir/usr/share/aclocal $destdir/$N-dev_$V$R/usr/share
 	fi
 	
@@ -1444,7 +1458,7 @@ OOO
 			cp $pbsdir/changelog $YPK_DEST_RAW 2>/dev/null
 		fi
 
-		gzip -9 -f $YPK_DEST_RAW/{${N}_$V$R-$YARCH.buildlog,${N}_$V$R-$YARCH.filelist,changelog}  2>/dev/null
+		gzip -9 -f $YPK_DEST_RAW/{${N}_$V$R-$YARCH.buildlog,${N}_$V$R-$YARCH.filelist,changelog} 2>/dev/null
 	fi
 }
 

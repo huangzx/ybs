@@ -60,6 +60,8 @@ find_ypk() {
 	
 	[ "x$(cat $filelist_all)" = "x" ] && die "Not any YPK package found."
 
+	[ -f filelist.txt ] || touch filelist.txt
+
 	if ! diff filelist.txt $filelist_all -ur; then
 		read -p "Do you want to continue? [Y/n]" ask
 		case $ask in
