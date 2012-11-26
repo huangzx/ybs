@@ -132,8 +132,16 @@ while [ "x$1" != "x" ]; do
 	#
 	need_apps="$workdir/need_apps"
 	do_ypkg "$need_sharelibs" |grep -v ^$pack$ |sort -u >$need_apps
+	total_rdeps=($(cat $need_apps |xargs))
 	echo "* total rdepends:"
-	cat $need_apps |xargs
+	echo ${total_rdeps[@]}
+
+	if [ "x${total_rdeps[0]}" = "xglibc" ] && [ "x${total_rdeps[1]}" = "x" ]; then
+		echo "* final rdepends:"
+		echo ${total_rdeps[@]}	
+		shift
+		continue
+	fi
 
 	# 4.
 	#

@@ -626,6 +626,11 @@ do_download () {
 
 	msg ">>> Downloading: ${uri}"
 
+	# uri is file:///foo and foo is file
+	if [ "x${uri%%:*}" = "xfile" ]; then
+		[ -f "${uri##file:/}" ] && cp "${uri##file:/}" "$target" && return 0
+	fi
+	
 	case $DOWNLOAD_TOOL in
 		curl)
 			$curl $uri -o "$target" && return 0	;;
@@ -647,21 +652,22 @@ do_download () {
 # $3 is checksum value, md5sum/sha1sum/sha256sum, default is md5sum
 #
 check_and_download_raw() {
-	local uri=$1
-	local fname=$2
-	local checksum=$3
+	local uri="$1"
+	local fname="$2"
+	local checksum="$3"
 	local download
 	local checkok
 	local target="${YBS_SOURCE}/${fname}"
 
 	#
 	case ${uri%%:*} in
-		svn)
+	  svn)
 		cd ${YBS_SOURCE}
 		local name="$N"
-		cd $name && svn update || svn checkout ${1} "$N" ;;
+		cd $name && svn update || svn checkout ${1} "$N" 
+		;;
 
-		git)	
+	  git)	
 		local name=${fname%*.git}
 		cd ${YBS_SOURCE}
 		if [ ! -d $name ];then 
@@ -676,10 +682,24 @@ check_and_download_raw() {
 				rm -rf $name
 				git clone ${1} && return 0
 			fi	
-		fi ;;
+		fi 
+		;;
 
-    http|https|ftp|*)	
+    http|https|ftp|file|*)	
 		local checksum_server="$checksum"
+
+		# url is file:///foo and foo is dir
+		if [ "x${uri%%:*}" = "xfile" ]; then 
+			local file=$(readlink -f ${url##file:/})
+			if [ -d "$file" ]; then
+				if cp -a "$file" "${YBS_SOURCE}"; then
+					gmsg ">>> Rename: $target"
+					return 0
+				fi
+			else
+				[ -f "$file" ] || return 1
+			fi
+		fi
 
 		# target is exists and checksum_server is empty or checksum correct
 		if [ -f "$target" ]; then
@@ -1751,8 +1771,12 @@ dounpack() {
 			fi 
 
 			if [ ${#name[@]} -eq 1 ]; then
-				tar xf "$tarball"
-				[ "x$name" != "x$srcdir" ] && mv "$name" "$srcdir" || return 0
+				tar xf "$tarball" 
+				if [ "x$name" != "x$srcdir" ]; then
+					mv "$name" "$srcdir" && return 0
+				else
+					return 0
+				fi
 			fi
 			;;
 
@@ -1762,9 +1786,13 @@ dounpack() {
 
 			if [ ${#name[@]} -eq 1 ]; then
 				unzip "$tarball"
-				[ "x$name" != "x$srcdir" ] && mv "$name" "$srcdir" || return 0
+				if [ "x$name" != "x$srcdir" ]; then
+					mv "$name" "$srcdir" && return 0
+				else
+					return 0
+				fi
 			else
-				unzip "$tarball" -d "$srcdir"
+				unzip "$tarball" -d "$srcdir" && return 0
 			fi
 			;;
 
@@ -1774,7 +1802,7 @@ dounpack() {
 			mkdir -p "$srcdir" && cd "$srcdir"
 			ar x "$tarball"
 			mkdir -p data 
-			tar xf "$name" -C data && cd ../	 
+			tar xf "$name" -C data && cd ../ && return 0	 
 			;;
 
 		 *.rpm) 
@@ -1783,7 +1811,7 @@ dounpack() {
 			mkdir -p "$srcdir" && cd "$srcdir"
 		 	rpm2tarbz2 "$tarball"
 			mkdir -p data
-			tar xf $name.tar.bz2 -C data && cd ../
+			tar xf $name.tar.bz2 -C data && cd ../ && return 0
 			;;
 
 		*.7z)   
@@ -1791,22 +1819,31 @@ dounpack() {
 			name=$(7z l "$tarball" |grep -A2 "Size   Compressed  Name" |tail -n1 |awk '{print $6}')	
 			name=${name%%/*}
 			7z x "$tarball" 
-			[ "x$name" != "x$srcdir" ] && mv "$name" "$srcdir" || return 0
+			if [ "x$name" != "x$srcdir" ]; then
+				mv "$name" "$srcdir" && return 0
+			else
+				return 0
+			fi
 			;;
 	       
 	       *.git)
 		        name=${fname%*.git}
 		    	mmsg ">>> cp -a ${YBS_SOURCE}/"$name" $PWD/"$srcdir""
-		        cp -a ${YBS_SOURCE}/"$name" "$srcdir"
+		        cp -a ${YBS_SOURCE}/"$name" "$srcdir" && return 0 
 			;;
 	       
 	       *.rar) 
 			mmsg ">>> unrar xf $tarball"
-			unrar x "$tarball"
+			unrar x "$tarball" && return 0
 			;;
 	  
-	       *.ar)   return 1
+	       *)   
+	       		if [ -d "$tarball" ]; then
+				mmsg ">>> cp -a "$tarball" $PWD/"$srcdir""
+				cp -a "$tarball" "$srcdir" && return 0
+			fi
 	esac
+	return 1
 }
 
 # Configure
