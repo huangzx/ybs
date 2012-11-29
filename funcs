@@ -924,6 +924,8 @@ ybs_begin_download() {
 		--infodir=/usr/share/info
 		--mandir=/usr/share/man
 		--enable-shared "
+		
+	export PKG_CONFIG_PATH=/usr/lib"$LIBDIRSUFFIX"/pkgconfig
 
 	PBSLIB_SCRIPT="$PBSLIB_PATH/$T/$N"
 
@@ -1123,6 +1125,8 @@ split_dev() {
 	local dir="$1"
 	local destdir="$workdir"
 	
+	rm -rf "$destdir"/"$N-dev_$V$R" 2>/dev/null
+
 	#/usr/include  /usr/share/include
 	if [ -d "$dir"/usr/include ]; then
 		rm -rf "$destdir"/"$N-dev_$V$R"/usr/include 2>/dev/null
@@ -1161,11 +1165,16 @@ split_dev() {
 	fi
 	
 	# /usr/share/aclocal/ogg.m4
-	acl=$(ls -d $dir/usr/share/aclocal/* 2>/dev/null)
+	acls=$(ls -d $dir/usr/share/aclocal/* $dir/usr/share/aclocal-*/* 2>/dev/null)
 	
-	if [ x"$acl" != "x" ]; then
-		rm -rf "destdir"/"$N-dev_$V$R"/usr/share/aclocal 2>/dev/null
-		domv $dir/usr/share/aclocal $destdir/$N-dev_$V$R/usr/share
+	if [ x"$acls" != "x" ]; then
+		rm -rf "destdir"/"$N-dev_$V$R"/usr/share/{aclocal,aclocal-*} 2>/dev/null
+		for acl in $acls; do
+			i=${acl#$dir}
+			acldir=${i%/*}
+			domv "${acl}" $destdir/$N-dev_$V$R/"${acldir}"
+			rmdir -p "${acl%/*}" 2>/dev/null
+		done
 	fi
 	
 	[ -d $destdir/$N-dev_$V$R ] && echo $destdir/$N-dev_$V$R && return 0
@@ -1179,6 +1188,8 @@ split_doc() {
 	docs=$(ls -d $dir/usr/share/doc/* 2>/dev/null)
 	gtk_docs=$(ls -d $dir/usr/share/gtk-doc/html/* 2>/dev/null)
 	
+	rm -rf "$destdir"/"$N-doc_$V$R" 2>/dev/null
+
 	if [ x"$docs" != "x" ]; then
 		domv $dir/usr/share/doc $destdir/$N-doc_$V$R/usr/share
 	fi
@@ -1610,13 +1621,13 @@ dodesktop() {
 #
 dounit() {
 	local file="$@"
+	local dir
+	#FIXME 
+	[ -d /usr/lib/systemd/system ] && dir="$destdir"/usr/lib/systemd/system || dir="$destdir"/lib/systemd/system
+
 	if [ x"$file" != x ]; then
 		for i in $@; do
-			if file_is_exist "$i"; then
-				docp "$i" "$destdir"/lib/systemd/system
-			else
-				docp "$filesdir/$i"  "$destdir"/lib/systemd/system
-			fi
+			file_is_exist "$i" && docp "$i" "$dir" || docp "$filesdir/$i" "$dir"
 		done
 	fi
 }
@@ -1626,15 +1637,11 @@ dounit() {
 #
 dopamd() {
 	local file="$@"
-	local dir="/etc/pam.d/"
+	local dir="$destdir"/etc/pam.d/
 
 	if [ x"$file" != x ]; then
 		for i in $@; do
-			if file_is_exist "$i"; then
-				docp "$i" "$destdir"/"$dir"
-			else
-				docp "$filesdir/$i" "$destdir"/"$dir"
-			fi
+			file_is_exist "$i" && docp "$i" "$dir" || docp "$filesdir/$i" "$dir"
 		done
 	fi
 }
@@ -2339,6 +2346,7 @@ ybs_build() {
 	#		
 	
 	workdir="$WORKING_FIELD/$N"
+	rm -rf "$workdir"  2>/dev/null
 	mkdir -p $workdir
 	srcdir="$workdir"/"$N-$V$R"	
 	
@@ -2478,6 +2486,7 @@ EOF
 		for i in $PROVIDE; do
 			. ${descfiles[0]}
 			destdir="$workdir/${i}_$V$R"
+			rm -rf "$destdir" 2>/dev/null
 			atom_parse $destdir
 		
 			ymsg ">> $TT/${N}_$V$R make install"
