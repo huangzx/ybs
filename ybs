@@ -105,16 +105,32 @@ done
 
 for i in ${argvs[@]}; do
 	case ${i} in
-		-p|-pv|--pretend) PRETEND="yes"       ;;
-		-F|--force) 	  FORCE_INSTALL="yes" ;;
-		--fetch)          BREAK="fetch"       ;;
-		--unpack)	  BREAK="unpack"      ;;	
-		--patch)	  BREAK="patch"       ;;	
-		--config)	  BREAK="config"      ;;
-		--make)           BREAK="make"        ;;
-		--check)          BREAK="check"       ;;
-		--mkinstall)      BREAK="mkinstall"   ;;
-		--package)        BREAK="package"     
+	  -p|--pretend) PRETEND="yes"       ;;
+	  -F|--force)   FORCE_INSTALL="yes" ;;
+	  --fetch)      BREAK="fetch"       ;;
+	  --unpack)     BREAK="unpack"      ;;	
+	  --patch)      BREAK="patch"       ;;	
+	  --config)     BREAK="config"      ;;
+	  --make)       BREAK="make"        ;;
+	  --check)      BREAK="check"       ;;
+	  --mkinstall)  BREAK="mkinstall"   ;;
+	  --package)    BREAK="package"     ;;
+	  -h|--help|-s|--search| \
+          -d|--download|-r|--remove| \
+          -i|--build|-is|--build-single| \
+          -w|--showpbs|-wr|--whatrequires|--sync|--info) ;;
+ 		*)      msg "ybs: ${i} is not a ybs options. See ybs --help."
+			msg ""
+			case ${i##*-} in
+			  f*) msg "Did you mean: --fetch"  ;;
+			  u*) msg "Did you mean: --unpack" ;;
+                          p*) msg "Did you mean: --patch --package"  ;; 
+                          c*) msg "Did you mean: --config --check" ;;
+                          m*) msg "Did you mean: --make --mkinstall" ;;
+                           *) msg "Did you mean one of these?"
+                              msg "--fetch --unpack --patch --config --make --check --mkinstall --package"
+			esac	
+			exit 1
 	esac
 done
 
