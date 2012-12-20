@@ -165,6 +165,16 @@ export STRIP_SHARED
 export STRIP_STATIC
 export UPXFLAGS
 
+DEFAULT_CONFIG="--prefix=/usr
+		        --sysconfdir=/etc
+		        --libdir=/usr/lib"$LIBDIRSUFFIX"
+		        --libexecdir=/usr/lib"$LIBDIRSUFFIX"
+		        --localstatedir=/var
+		        --infodir=/usr/share/info
+		        --mandir=/usr/share/man
+		        --enable-shared "
+PKG_CONFIG_PATH=/usr/lib"$LIBDIRSUFFIX"/pkgconfig
+
 pkgdata="pkgdata"
 pkginfo="pkginfo"
 control="control.xml"
@@ -530,6 +540,12 @@ ybs_searchInstalled() {
 
 	local info=$($SQLITE $PACKAGE_DB "select name,version,repo,install_time from world where name='$pkgname'")
 
+    # Try find provide name
+    if [ "x$info" = "x" ]; then
+	    info=$($SQLITE $PACKAGE_DB "select name,version,repo,install_time from world where name='${PROVIDE_NAME}'")
+        PROVIDE_NAME=
+    fi
+
 	case "x$info" in
 		x) 
 			msg_ "[*] "
@@ -629,7 +645,7 @@ do_download () {
 	
 	case $DOWNLOAD_TOOL in
 		curl)
-			$curl $uri -o "$target"
+			$curl $uri -o "$target" || return 1
 			grep -q "404 Not Found" "$target" && return 1 || return 0 ;;
   	      wget|*)
 			if [ "x$(echo $uri |cut -c 1-5)" == "xhttps" ];then	
@@ -656,7 +672,8 @@ check_and_download_raw() {
 	local checkok
 	local target="${YBS_SOURCE}/${fname%.git}"
 	
-	msg "From $uri To $target"
+	msg "From: $uri"
+    msg "To: $target"
 
 	#
 	case ${uri%%:*} in
@@ -758,10 +775,10 @@ check_and_download_raw() {
 
 #
 # $1 - strings
-# $2 - all, name
+# $2 - all OR name
 # resules:
-# ALL_PBSFILE : all version pbs files with full path 
-# $NEWEST: newest or specifid version pbs files with full path
+# $ALL_PBSFILE : all version pbs files with absolutive path 
+# $NEWEST: newest or specifid version pbs files with absolutive path
 # 
 ybs_getpbsfile() {
 	NEWEST=""	
@@ -808,6 +825,7 @@ ybs_getpbsfile() {
 		# Fixme!
 		# find provide
 		pbsfiles=($(find $find_dir/"$T" -maxdepth 3 -type f -iname "*.pbs" |sort -u |xargs grep PROVIDE  |grep -w "$N" |awk -F: '{print $1}'))
+        PROVIDE_NAME="$N"
 	fi	
 
 	[ "x$pbsfiles" = "x" ] && return 1
@@ -915,16 +933,8 @@ ybs_begin_download() {
 
 	blank_funcs pbs
 
-	config="--prefix=/usr
-		--sysconfdir=/etc
-		--libdir=/usr/lib"$LIBDIRSUFFIX"
-		--libexecdir=/usr/lib"$LIBDIRSUFFIX"
-		--localstatedir=/var
-		--infodir=/usr/share/info
-		--mandir=/usr/share/man
-		--enable-shared "
-		
-	export PKG_CONFIG_PATH=/usr/lib"$LIBDIRSUFFIX"/pkgconfig
+	config=$DEFAULT_CONFIG
+	export PKG_CONFIG_PATH
 
 	PBSLIB_SCRIPT="$PBSLIB_PATH/$T/$N"
 
@@ -1378,12 +1388,14 @@ mkpackage() {
 
 	if [ "x$desktop" != "x" ]; then
 		cp $desktop  $pkgdir/"$N".desktop
+		mkdir -p ${YPK_DEST%/*}/desktops/
 		cp $desktop  ${YPK_DEST%/*}/desktops/"$N".desktop
 		local icon=$(find_icon $desktop $source_dir)
 		
 		if [ "x$icon" != "x" ]; then
 			local tmp="$N"."${icon##*.}"
 			cp $icon  $pkgdir/$tmp
+			mkdir -p ${YPK_DEST%/*}/icons/
 			cp $icon  ${YPK_DEST%/*}/icons/$tmp
 		fi
 	
@@ -1534,8 +1546,8 @@ ybs_mkpackage() {
 		ybs_strip_mani18n $destdir
 	fi
 	
-	# Remove .la files, default is not remove.
-	local libtool="no"
+	# Remove .la files, default is remove.
+	local libtool="yes"
 	str_isIn "$FEATURES" "libtool" && libtool="yes"
 	str_isIn "$FEATURES" "nolibtool" && libtool="no"
 	str_isIn "$OPTIONS" "libtool" && libtool="yes" 
@@ -1687,17 +1699,19 @@ doman() {
 doln(){
 	local end=${!#}
 	mkdir -p "$(dirname $end)"
-	#ln -sf "$1"  "$2"
 	ln -sf $@
 }
 
 dofont() {
-	msg "mkfontscale $1"
-	mkfontscale "$1"
-	msg "mkfontdir $1"
-	mkfontdir  "$1"
-	msg "fc-cache $1"
-	fc-cache -f "$1"
+	for i in $@; do 
+		msg "mkfontscale $i"
+		mkfontscale "$i"
+		msg "mkfontdir $i"
+		mkfontdir  "$i"
+		msg "fc-cache $i"
+		fc-cache -f "$i"
+	done
+	return 0
 }
 
 doinstall_info () {
@@ -1900,7 +1914,7 @@ doconfig() {
 	if file_is_exist CMakeLists.txt; then
 		command="mkdir -p build"
 		command1="cd build"
-		command2="cmake -D CMAKE_INSTALL_PREFIX=/usr $@ .." 
+		command2="cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=/usr/lib"$LIBDIRSUFFIX" -DLIB_SUFFIX="$LIBDIRSUFFIX" $@ .." 
 		mmsg "$command; $command1; $command2"
 		eval $command
 		eval $command1
@@ -1942,16 +1956,9 @@ domake() {
 	if file_is_exist Makefile || file_is_exist GNUmakefile; then
 		command="make $MAKEOPTS $@" 
 	fi
-	if file_is_exist makefile.linux; then
-                command="make $MAKEOPTS -f makefile.linux $@"
-	fi
-	if file_is_exist Imakefile; then
-		command="make $MAKEOPTS $@"
-	fi
-	if file_is_exist SConstruct; then
-	        return 0
-	fi
-
+	file_is_exist makefile.linux && command="make $MAKEOPTS -f makefile.linux $@"
+	file_is_exist Imakefile && command="make $MAKEOPTS $@"
+	file_is_exist SConstruct && return 0
 	mmsg "$command"
 	eval $command
 }
@@ -2307,31 +2314,36 @@ ybs_build() {
 	ybs_searchInstalled $T $N $V$R >/dev/null
 	
 	local new=$V$R
+	local force_flag=""	
+	[ "x$FORCE_INSTALL" = "xyes" ] && force_flag="F"
 	
-	if [ "x$INSTALL_STATUS" = "xuninstall" ]; then
-		stat="N"
-	else
-		atom_cmp $INSTALL_VERSION $new 
-		case $? in
-			1) stat="D"  ;;
-	 		2) stat="U"  ;;
-	 		0) stat="E"
-		esac
-	fi
-
-	[ "x$FORCE_INSTALL" != "xyes" ] && gmsg_ "[$stat]" || gmsg_ "["$stat"F]"
-
 	# N -- new install
 	# U -- upgrade
 	# D -- downgrade
 	# E -- same version
-	case $stat in
-        	E) msg " $T/${N}_$V$R "	
-		   [ "x$FORCE_INSTALL" != "xyes" ] && return 0         ;;
-		N) msg " $T/${N}_$V$R "				       ;;
-   	      U|D) msg " $T/${N}_$INSTALL_VERSION ----> $T/${N}_$V$R " 
-	esac
-		
+	if [ "x$INSTALL_STATUS" = "xuninstall" ]; then
+		stat="N"
+		ymsg_ "[$stat$force_flag]"
+                msg " $T/${N}_$V$R "
+	else
+		atom_cmp $INSTALL_VERSION $new 
+		case $? in
+			1) stat="D"  
+			   mmsg_ "[$stat$force_flag]" 
+			   msg " $T/${N}_$INSTALL_VERSION ----> $T/${N}_$V$R "	
+			   ;;
+	 		2) stat="U"  
+			   rmsg_ "[$stat$force_flag]" 
+			   msg " $T/${N}_$INSTALL_VERSION ----> $T/${N}_$V$R "	
+			   ;;
+	 		0) stat="E"  
+                           gmsg_ "[$stat$force_flag]"
+                           msg " $T/${N}_$V$R "
+                           [ "x$FORCE_INSTALL" != "xyes" ] && return 0 
+                           ;; 
+		esac
+	fi
+
 	[ "x$PRETEND" = "xyes" ] && return 0
 	
 	ybs_begin_download $NEWEST || return 1
@@ -2487,6 +2499,8 @@ EOF
 			atom_parse $destdir
 		
 			ymsg ">> $TT/${N}_$V$R make install"
+			cd "$srcdir"
+			config=$DEFAULT_CONFIG
 			${i}_install
 			err_check ":( $TT/${N}_$V$R call ${N}_install failed"
 
