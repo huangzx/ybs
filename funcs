@@ -2499,7 +2499,7 @@ EOF
 			atom_parse $destdir
 		
 			ymsg ">> $TT/${N}_$V$R make install"
-			cd "$srcdir"
+			# cd "$srcdir"
 			config=$DEFAULT_CONFIG
 			${i}_install
 			err_check ":( $TT/${N}_$V$R call ${N}_install failed"
