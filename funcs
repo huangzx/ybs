@@ -17,6 +17,10 @@
 
 [ -f /etc/ybs.conf ] && . /etc/ybs.conf
 
+for i in $(ls /etc/profile.d/*.sh); do
+    . "${i}"
+done
+
 ## -------------------- colourful print --------------------
 ## ANSI Foreground color codes:
 ## 30=black 31=red 32=green 33=yellow 34=blue 35=magenta 36=cyan 37=white 39=default
@@ -168,7 +172,7 @@ export UPXFLAGS
 DEFAULT_CONFIG="--prefix=/usr
 		        --sysconfdir=/etc
 		        --libdir=/usr/lib"$LIBDIRSUFFIX"
-		        --libexecdir=/usr/lib"$LIBDIRSUFFIX"
+		        --libexecdir=/usr/libexec
 		        --localstatedir=/var
 		        --infodir=/usr/share/info
 		        --mandir=/usr/share/man
@@ -543,9 +547,8 @@ ybs_searchInstalled() {
     # Try find provide name
     if [ "x$info" = "x" ]; then
 	    info=$($SQLITE $PACKAGE_DB "select name,version,repo,install_time from world where name='${PROVIDE_NAME}'")
-        PROVIDE_NAME=
     fi
-
+    PROVIDE_NAME=
 	case "x$info" in
 		x) 
 			msg_ "[*] "
@@ -672,10 +675,8 @@ check_and_download_raw() {
 	local checkok
 	local target="${YBS_SOURCE}/${fname%.git}"
 	
-	msg "From: $uri"
-    msg "To: $target"
+	msg "From: $uri - To: $target"
 
-	#
 	case ${uri%%:*} in
 	  svn)
 		cd ${YBS_SOURCE}
@@ -1360,7 +1361,7 @@ mkpackage() {
 	repo=$REPO
 	rir=$RIR
 	alias=$ALIAS
-	subdir="$(echo $N |cut -b1)"
+	subdir="$(echo $N |cut -b1 |tr '[A-Z]' '[a-z]')"
 	uri="$subdir/$N/"$repo"/${N}_$V$R-$YARCH.$PACK_SUFFIX"
 	license="$(xml_escape_convert "$LICENSE")"
 	packager="$(xml_escape_convert "$PACKAGER")"
@@ -1472,7 +1473,7 @@ OOO
 		cp $PBSLIB_SCRIPT/files/$install .
 	fi
 	
-	tar cjf ../$pkginfo *
+	tar cJf ../$pkginfo *
 
 	# Creat ypk package
 	cd ..
@@ -1480,25 +1481,26 @@ OOO
 
 	if [ "x$2" != "x" ]; then
 		target="$2"
-		tar cjf $target $pkgdata $pkginfo && echo $target
+		tar cJf $target $pkgdata $pkginfo && echo $target
 	else
 		YPK_DEST_RAW="$YPK_DEST/$(dirname $uri)"
-		mkdir -p $YPK_DEST_RAW
-		tar cjf $YPK_DEST/$uri $pkgdata $pkginfo && echo $YPK_DEST/$uri
-		cp $workdir/{${N}_$V$R-$YARCH.buildlog,${N}_$V$R-$YARCH.filelist} $YPK_DEST_RAW 2>/dev/null
+		mkdir -p $YPK_DEST_RAW/$N
+		tar cJf $YPK_DEST/$uri $pkgdata $pkginfo && echo $YPK_DEST/$uri
+		cp $workdir/${N}_$V$R-$YARCH.filelist $YPK_DEST_RAW 2>/dev/null
 		# update xml, insert size and sha1 value
 		local control_target=$YPK_DEST_RAW/${N}_$V$R-$YARCH.xml
 		cp $workdir/$pkgdir/$control $control_target
 		local size=$(du "$YPK_DEST/$uri" -sb |awk '{print $1}')
 		local sha1=$(sha1sum "$YPK_DEST/$uri" |awk '{print $1}')
 		sed -i -e '/\<build_date\>/a\   <size>'"$size"'<\/size>' -e '/\<build_date\>/a\   <sha>'"$sha1"'<\/sha>' $control_target
-
 		# -dev do not copy changelog
 		if [ x"${N##*-}" != "xdev" ]; then
 			cp $pbsdir/changelog $YPK_DEST_RAW 2>/dev/null
+            cp $workdir/${N}_$V$R-$YARCH.buildlog $YPK_DEST_RAW/$N 2>/dev/null
+            cp -a $pbsdir/{${N}_$V$R.pbs,files} $YPK_DEST_RAW/$N 2>/dev/null
 		fi
-
-		gzip -9 -f $YPK_DEST_RAW/{${N}_$V$R-$YARCH.buildlog,${N}_$V$R-$YARCH.filelist,changelog} 2>/dev/null
+        
+		#gzip -9 -f $YPK_DEST_RAW/{${N}_$V$R-$YARCH.buildlog,${N}_$V$R-$YARCH.filelist,changelog} 2>/dev/null
 	fi
 }
 
@@ -1874,7 +1876,7 @@ doconfig() {
 	[ -x waf ] && command="./waf configure $(echo $config |xargs) $@"
 	if [ x"$command" != x ];then
 		mmsg "$command"
-		eval $command && return 0
+		eval $command && return 0 || command=""
 	fi
 	
 	# generic
@@ -1882,7 +1884,7 @@ doconfig() {
 	[ -x Configure ] && command="./Configure $(echo $config |xargs) $@"
 	if [ x"$command" != x ];then
 		mmsg "$command"
-		eval $command && return 0
+		eval $command && return 0 || command=""
 	fi
 
 	# autogen
@@ -1893,7 +1895,7 @@ doconfig() {
 	if [ x"$command" != x ];then
 		mmsg "$command; $command1"
 		eval $command
-		eval $command1 && return 0
+		eval $command1 && return 0 || command=""
 	fi
 	
 	# perl module
@@ -1904,7 +1906,7 @@ doconfig() {
 		if ! eval $command; then
 			command="perl Makefile.PL PREFIX=/usr $@"
 			mmsg "$command"  
-			eval $command && return 0
+			eval $command && return 0 || command=""
 		else
 			return 0
 		fi
@@ -1918,86 +1920,108 @@ doconfig() {
 		mmsg "$command; $command1; $command2"
 		eval $command
 		eval $command1
-		eval $command2 && return 0
+		eval $command2 && return 0 || command=""
 	fi
 
 	# qmake
 	if ls *.pro >/dev/null 2>/dev/null; then
 		command="qmake $@"
-		mmsg "$command"
-		eval $command && return 0
+        if [ x"$command" != x ];then
+		    mmsg "$command"
+		    eval $command && return 0 || command=""
+        fi
 	fi
 
 	# scons
 	if file_is_exist SConstruct; then
 		command="scons $(echo $config |xargs) $@"
-		mmsg "$command"
-		eval $command 
+        if [ x"$command" != x ];then
+		    mmsg "$command"
+		    eval $command 
+        fi
 	fi	
 }
 
 # Make
 domake() {
 	local command="make $MAKEOPTS $@"
-	if [ -x waf ];then
+	# waf
+    if [ -x waf ];then
 		command="./waf build $MAKEOPTS $@"
-		mmsg "$command"
-		eval $command && return 0
+        if [ x"$command" != x ];then
+		    mmsg "$command"
+		    eval $command && return 0 || command=""
+        fi
 	fi
-	if file_is_exist setup.py;then
+	# setup.py
+    if file_is_exist setup.py; then
 		if [ "x$1"  = "xmake" ]; then
 			command="make $MAKEOPTS $@"
 		else
 			command="python setup.py build $@"
 		fi
-		mmsg "$command"
-		eval $command && return 0
+        if [ x"$command" != x ];then
+	    	mmsg "$command"
+		    eval $command && return 0 || command=""
+        fi
 	fi
+    # generic
 	if file_is_exist Makefile || file_is_exist GNUmakefile; then
 		command="make $MAKEOPTS $@" 
 	fi
+    # misc
 	file_is_exist makefile.linux && command="make $MAKEOPTS -f makefile.linux $@"
 	file_is_exist Imakefile && command="make $MAKEOPTS $@"
 	file_is_exist SConstruct && return 0
-	mmsg "$command"
-	eval $command
+    if [ x"$command" != x ];then
+    	mmsg "$command"
+    	eval $command
+    fi
 }
 
 # Make install
 domkinstall() {
 	local command="make DESTDIR="$destdir" "$@" install"
-	if [ -x waf ];then
+	# waf
+    if [ -x waf ];then
 		command="./waf install --destdir="$destdir" $@"
-		mmsg "$command"
-		eval $command && return 0
+        if [ x"$command" != x ];then
+		    mmsg "$command"
+		    eval $command && return 0 || command=""
+        fi
 	fi
+    # setup.py
 	if file_is_exist setup.py;then
 		if [ "x$1"  = "xmake" ]; then
 			command="make DESTDIR="$destdir" $@ install"		
 		else
 			command="python setup.py install --prefix=/usr --root="$destdir" $@"
 		fi
-		mmsg "$command"
-		eval $command && return 0
+        if [ x"$command" != x ];then
+		    mmsg "$command"
+		    eval $command && return 0 || command=""
+        fi
 	fi
-		
+	# scons	
 	if file_is_exist SConstruct;then
 		if [ x"$@" = x ]; then
 			command="scons --install-sandbox="$destdir" "$@" install"
 		else
 			command="scons "$@" install"
 		fi
-		mmsg "$command"
-		eval $command && return 0
+        if [ x"$command" != x ];then
+		    mmsg "$command"
+		    eval $command && return 0 || command=""
+        fi
 	fi	
-
+    # generic
 	if file_is_exist Makefile || file_is_exist GNUmakefile; then
 		command="make DESTDIR="$destdir" "$@" install"
 	fi
-
-	mmsg "$command"
-	eval $command 
-	ldconfig
+    if [ x"$command" != x ];then
+	    mmsg "$command"
+	    eval $command 
+    fi
 }
 
 # Cp src file to specified dir
@@ -2031,9 +2055,8 @@ dodoc() {
 # Ypkg useradd
 douseradd() {
 	local end=${!#}
-	local N=$end
-	if ! getent passwd "$N" >/dev/null; then 
-		msg "Creating: user $N"
+	if ! getent passwd "$end" >/dev/null; then 
+		msg "Creating: user $end"
 		useradd "$@"
 	fi
 }
@@ -2041,9 +2064,8 @@ douseradd() {
 # Ypkg userdel
 douserdel() {
 	local end=${!#}
-	local N=$end
-	if getent passwd "$N" >/dev/null; then 
-		msg "Deleting: user $N"
+	if getent passwd "$end" >/dev/null; then 
+		msg "Deleting: user $end"
 		userdel "$@"
 	fi
 }
@@ -2051,9 +2073,8 @@ douserdel() {
 # Ypkg groupadd
 dogroupadd() {
 	local end=${!#}
-	local N=$end
-	if ! getent group "$N" >/dev/null; then
-		msg "Creating: group $N"
+	if ! getent group "$end" >/dev/null; then
+		msg "Creating: group $end"
 		groupadd "$@"
 	fi
 }
@@ -2061,9 +2082,8 @@ dogroupadd() {
 # Ypkg groupdel
 dogroupdel() {
 	local end=${!#}
-	local N=$end
-	if getent group "$N" >/dev/null; then
-		msg "Deleting: group $N"
+	if getent group "$end" >/dev/null; then
+		msg "Deleting: group $end"
 		groupdel "$@"
 	fi
 }
