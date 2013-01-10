@@ -3,7 +3,7 @@
 #   ybs -- StartOS Build System
 # 
 #   Copyright © 2012 ivali.com
-#   Maintainer: Zhongxin Huang <zhongxin.huang@gmail.com>
+#   Maintainer: Zhongxin Huang <huangzhongxin@ivali.com>>
 #
 #   This program is free software; you can redistribute it and/or modify
 #   it under the terms of the GNU General Public License as published by
@@ -19,26 +19,7 @@
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 #
-select_conf() {
-        while true; do
-		local files=($(ls /etc/ybs.conf.d/*.conf))
-		local default="/etc/ybs.conf"
 
-		if [ "x${files[1]}" != "x" ]; then
-			msg "Avaliable config files: ${files[@]}"
-			msg_ "Your choice is: "
-			read file
-			if [ "x$file" != "x" ] && [ -f "$file" ]; then
-				ln -svf "$file" "$default" && break
-			fi
-		else
-			ln -svf "$files" "$default" && break
-		fi
-	done
-}
-
-. /usr/lib/ybs/funcs
-[ ! -f /etc/ybs.conf ] && select_conf
 . /usr/lib/ybs/funcs
 
 ybs_show_usage() {
@@ -50,28 +31,28 @@ Usage: $0 command [options] pkg1 [pkg2 ...]
 ybs (StartOS Build System) is a simple command line for download and build YPK package from source code.
 
 Commands:
-       -h|--help                               Show usage   
-       -s|--search                             Search package in ybs tree
-       -d|--download                           Download source tartall of app
-       -r|--remove                             Remove package (same as ypkg -C foo)
-       -i|--build                              Build package and dependency
-      -is|--build-single                       Forced build single package without checking dependency
-       -w|--showpbs                            Show avaliable pbsfile of package 
-      -wr|--whatrequires                       Show which packages depends on this package
-       --sync [path]                           Sync pbslib via git to $PBSLIB_PATH
-       --info                                  Show $0 parameters of /etc/ybs.conf
+    -h|--help               Show usage   
+    -s|--search             Search package in ybs tree
+    -d|--download           Download source tartall of package
+    -r|--remove             Remove package (same as ypkg -C foo)
+    -i|--build              Build package and dependencies
+    -is|--build-single      Build single package without checking dependencies
+    -w|--showpbs            Show avaliable pbsfile of package 
+    -wr|--whatrequires      Show which packages require specify package
+    --sync [path]           Sync pbslib via git to $PBSLIB_PATH
+    --info                  Show $0 parameters of /etc/ybs.conf
 
 Options for build:
-	-p|--pretend                           Instead of actually build, simply display what to do  
-	-F|--force                             Force build
-	--fetch                                Break after download source tarball
-	--unpack   			       Break after unpack source tarball
-	--patch   			       Break after patch source
-  	--config         		       Break after configure	
-	--make                	               Break after make a.k.s compile
-	--check				       Break after make check/test
-	--mkinstall                            Break after make install    
-	--package                              Break after make ypk package    
+    -p|--pretend            Instead of actually build, simply display what to do  
+    -F|--force              Force build
+    --fetch                 Break after download source tarball
+    --unpack                Break after unpack source tarball
+    --patch                 Break after patch source
+    --config                Break after configure	
+    --make                  Break after make a.k.s compile
+    --check                 Break after make check/test
+    --mkinstall             Break after make install    
+    --package               Break after make ypk package    
 EOF
 }
 
@@ -80,19 +61,9 @@ check_required_bin
 # Create required folders
 mkdir -p $YPK_DEST $WORKING_FIELD
 
-if [ "x$YPKG_ROOT" = "x" ];then
-   YPKG_ROOT="/"
-else
-   mkdir -p "$YPKG_ROOT"
-   YPKG_ROOT=$(readlink -f "$YPKG_ROOT")
-fi
-
-[ "x$1" = "x" ] && select_conf
-
 i=0
 j=0
-for ((h=1;h<=$#;h++));do
-	arg=$(echo $(eval "echo \$${h}"))
+for arg in $@;do 
 	# Remove blank in string	
 	arg=$(echo $arg |tr -d '[:blank:]')
 	case $arg in
@@ -124,11 +95,11 @@ for i in ${argvs[@]}; do
 			case ${i##*-} in
 			  f*) msg "Did you mean: --fetch"  ;;
 			  u*) msg "Did you mean: --unpack" ;;
-                          p*) msg "Did you mean: --patch --package"  ;; 
-                          c*) msg "Did you mean: --config --check" ;;
-                          m*) msg "Did you mean: --make --mkinstall" ;;
-                           *) msg "Did you mean one of these?"
-                              msg "--fetch --unpack --patch --config --make --check --mkinstall --package"
+              p*) msg "Did you mean: --patch --package"  ;; 
+              c*) msg "Did you mean: --config --check" ;;
+              m*) msg "Did you mean: --make --mkinstall" ;;
+               *) msg "Did you mean one of these?"
+                  msg "--fetch --unpack --patch --config --make --check --mkinstall --package"
 			esac	
 			exit 1
 	esac

@@ -1,5 +1,5 @@
 #   Copyright © 2012 ivali.com
-#   Maintainer: Zhongxin Huang <zhongxin.huang@gmail.com>
+#   Maintainer: Zhongxin Huang <huangzhongxin@ivali.com>
 #
 #   This program is free software; you can redistribute it and/or modify
 #   it under the terms of the GNU General Public License as published by
@@ -15,11 +15,7 @@
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-[ -f /etc/ybs.conf ] && . /etc/ybs.conf
-
-for i in $(ls /etc/profile.d/*.sh); do
-    . "${i}"
-done
+[ -e /etc/ybs.conf ] && . /etc/ybs.conf
 
 ## -------------------- colourful print --------------------
 ## ANSI Foreground color codes:
@@ -459,20 +455,20 @@ string_len() {
 }
 
 atom_cmp() {
-        local string1="$1"
+    local string1="$1"
 	local string2="$2"
 	local v1 v2
 	
-	string1=${string1##*_}
+	string1=${string1#*_}
 	v1=${string1%.[A-Za-z][A-Za-z][A-Za-z]}
 	v1=${v1%-$YARCH}
 	v1=$(echo $v1 |tr '[A-Z]' '[a-z]')
 
-	string2=${string2##*_}
+	string2=${string2#*_}
 	v2=${string2%.%.[A-Za-z][A-Za-z][A-Za-z]}
 	v2=${v2%-$YARCH}
 	v2=$(echo $v2 |tr '[A-Z]' '[a-z]')
-
+    
 	if [ "x$v1" = "x$v2" ] || test $v1 -eq $v2 2>/dev/null;then
 		return 0
 	fi
@@ -1576,7 +1572,7 @@ ybs_mkpackage() {
 	#spacks+="$(split_i18n $destdir) "
 
 	# Split dev files, default is split dev file
-	local dev="yes"
+	local dev="no"
 	str_isIn "$FEATURES" "dev" && dev="yes"
 	str_isIn "$FEATURES" "nodev" && dev="no"
 	str_isIn "$OPTIONS" "dev" && dev="yes"
@@ -1871,7 +1867,7 @@ doconfig() {
 	local command=""
 	local command1=""
 	local command2=""
-		
+
 	# waf
 	[ -x waf ] && command="./waf configure $(echo $config |xargs) $@"
 	if [ x"$command" != x ];then
@@ -1916,7 +1912,7 @@ doconfig() {
 	if file_is_exist CMakeLists.txt; then
 		command="mkdir -p build"
 		command1="cd build"
-		command2="cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=/usr/lib"$LIBDIRSUFFIX" -DLIB_SUFFIX="$LIBDIRSUFFIX" $@ .." 
+		command2="cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=/usr/lib"$LIBDIRSUFFIX" -DLIB_INSTALL_DIR=/usr/lib"$LIBDIRSUFFIX" -DLIB_SUFFIX="$LIBDIRSUFFIX" $@ .." 
 		mmsg "$command; $command1; $command2"
 		eval $command
 		eval $command1
@@ -2509,7 +2505,7 @@ EOF
 	err_check ":( $T/${N}_$V$R call pbs_install failed"
 
 	if [ "x$PROVIDE" != "x" ]; then	
-		ymsg ">> $T/${N}_$V$R splite $PROVIDE."
+		ymsg ">> $T/${N}_$V$R split $PROVIDE."
 		j=1
 
 		for i in $PROVIDE; do

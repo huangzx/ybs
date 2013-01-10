@@ -53,9 +53,11 @@ WORKING_FIELD="/var/tmp/ybs"
 #
 # PBSLIB_PATH - pbs tree
 #
-PBSLIB_URI="git://git.ylmf.com/pbslib.git"
+# git://git.ylmf.com/pbslib.git
+PBSLIB_URI=""
 PBSLIB_PATH="/var/ybs/pbslib"
-PBSLIB_BRANCH="startos-5.x"
+# startos-5.x OR startos-6.x
+PBSLIB_BRANCH=""
 
 #
 # Download tools, curl and wget are available
@@ -67,21 +69,21 @@ WGET_OPTIONS="--tries=3 --retry-connrefused --wait=2"
 #
 # Ypkg install OPTs
 #
-YPKG_OPT="-f"
+#YPKG_OPT="-f"
 
 #
 # Features are: 
-#   ccache/noccache  
+#   ccache/noccache, default: noccache
 # Caching pre-processor to C/C++ compilers, which often results in a 5 to 10 times speedup in common compilations. 
-#   distcc/nodistcc  
+#   distcc/nodistcc, default: nodistcc
 # A program to distribute builds of C, C++, Objective C or Objective C++ code across several machines on a network. 
-#   upx/noupx 
+#   upx/noupx, default: noupx  
 # Executable file compression and decompression utility 
-#   libtool/nolibtool 
+#   libtool/nolibtool, default: libtool
 # Remove *.la files
-#   strip/notrip
+#   strip/notrip, default: strip
 # Strip executable、sharedlib (.so)、staticlib (.a) and binary files 
-#   dev/nodev 
+#   dev/nodev, defualt: nodev
 # Split development files, such as .h
 #
 FEATURES="ccache"

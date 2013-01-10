@@ -3,7 +3,7 @@
 #   ybs-scanpackages -- create Packages index files  
 #
 #   Copyright © 2012 ivali.com
-#   Maintainer: Zhongxin Huang <zhongxin.huang@gmail.com>
+#   Maintainer: Zhongxin Huang <huangzhongxin@ivali.com>
 #
 #   This program is free software; you can redistribute it and/or modify
 #   it under the terms of the GNU General Public License as published by
@@ -26,7 +26,6 @@ filelist_stable="/tmp/filelist-stable"
 filelist_testing="/tmp/filelist-testing"
 xml_stable="updates/stable.xml"
 xml_testing="updates/testing.xml"
-xml_removed="updates/removed.xml"
 
 show_usage() {
 	cat <<EOF
@@ -171,9 +170,6 @@ final() {
 	cp testing.xml update.xml
 	tar cJf testing.tar.xz update.xml
 	
-	#cp removed.xml update.xml
-	#tar cJf removed.tar.xz update.xml
-
 	rm update.xml
 
 	>updates.list
@@ -232,8 +228,6 @@ check_xml $xml_stable
 
 merge_info $filelist_testing  $xml_testing
 check_xml $xml_testing
-
-#remove_info $xml_removed
 
 # 生成更新文件
 cd $YPK_DEST/updates/
