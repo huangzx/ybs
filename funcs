@@ -1316,13 +1316,15 @@ mkpackage() {
 	local sha
 	local pbsfile
 	local atom
-	local source_dir="$1"  
+	local source_dir="$1"
+    local pkginfo_dir="$(dirname $source_dir)/${N}_$V$R-pkginfo"
+
+    mkdir -p $pkginfo_dir
 	atom_parse $source_dir
 	
 	# Creat pkgdate
 	cd $source_dir
-	
-	find |sort -r |fileinfo > $workdir/${N}_$V$R-$YARCH.filelist
+	find |sort -r |fileinfo >$pkginfo_dir/filelist
 
 	if [ "x$N" = "x$NN-dev" ]; then
 		RDEPEND=
@@ -1335,20 +1337,17 @@ mkpackage() {
 		DESCRIPTION="$DESCRIPTION (development files)" 
 	else
 		install=$INSTALL
-		#if [ "x$install" != "x" ] && file_is_exist "$filesdir"/$install; then
+		if [ "x$install" != "x" ] && file_is_exist "$filesdir"/$install; then
+            docp "$filesdir"/$install var/ypkg/db/"$N"/
+            docp "$filesdir"/$install $pkginfo_dir/
+        fi
 	fi
 	
 	build_date="$(date +%s)"
 	declare -a install_size=($(du $source_dir -sb))
 	install_size=${install_size[0]}
 	
-	#creat pkginfo
-	#
-	cd ..
-
-	pkgdir="${N}_$V$R-pkginfo"
-	mkdir -p $pkgdir
-
+	# Creat pkginfo
 	name=$N
 	version=$V$R
 	priority=$PRIORITY
@@ -1372,11 +1371,10 @@ mkpackage() {
 	description=$(xml_escape_convert "$DESCRIPTION")
 
 	cd $source_dir
-	find . |$CPIO --quiet -o -H newc |$XZ -7 >../$pkgdata
-	size=($(du ../$pkgdata -sb))
+	find . |$CPIO --quiet -o -H newc |$XZ -7 >$workdir/$pkgdata
+	size=($(du $workdir/$pkgdata -sb))
 	size=${size[0]}
 	
-	cd ..
 	local gname
 	local gdescription
 	
@@ -1384,14 +1382,14 @@ mkpackage() {
 	local desktop=$(find_desktop $source_dir)
 
 	if [ "x$desktop" != "x" ]; then
-		cp $desktop  $pkgdir/"$N".desktop
+		cp $desktop  $pkginfo_dir/"$N".desktop
 		mkdir -p ${YPK_DEST%/*}/desktops/
 		cp $desktop  ${YPK_DEST%/*}/desktops/"$N".desktop
 		local icon=$(find_icon $desktop $source_dir)
 		
 		if [ "x$icon" != "x" ]; then
 			local tmp="$N"."${icon##*.}"
-			cp $icon  $pkgdir/$tmp
+			cp $icon  $pkginfo_dir/$tmp
 			mkdir -p ${YPK_DEST%/*}/icons/
 			cp $icon  ${YPK_DEST%/*}/icons/$tmp
 		fi
@@ -1413,7 +1411,7 @@ mkpackage() {
 	
 	data_count="1"
 	
-	cat >$pkgdir/$control <<OOO
+	cat >$pkginfo_dir/$control <<OOO
 <?xml version="1.0" encoding="UTF-8"?>
 <PackageInfo>
  <Package name="$name">
@@ -1435,12 +1433,12 @@ mkpackage() {
 OOO
 
 if [ "x$exec" != "x" ]; then
-       cat >>$pkgdir/$control <<OOO
+       cat >>$pkginfo_dir/$control <<OOO
    <exec>$exec</exec>
 OOO
 fi
 
-cat >>$pkgdir/$control <<OOO
+cat >>$pkginfo_dir/$control <<OOO
    <build_date>$build_date</build_date>    
    <$gdescription>
      <keyword lang="en">$description</keyword>
@@ -1462,18 +1460,11 @@ cat >>$pkgdir/$control <<OOO
 OOO
 	
 
-	cd $pkgdir
-	cp $workdir/${N}_$V$R-$YARCH.filelist $filelist
-
-	if [ "x$install" != "x" ] && file_is_exist $filesdir/$install; then
-		cp $PBSLIB_SCRIPT/files/$install .
-	fi
-	
-	tar cJf ../$pkginfo *
+	cd $pkginfo_dir
+	tar cJf $workdir/$pkginfo *
 
 	# Creat ypk package
-	cd ..
-	
+	cd $workdir
 
 	if [ "x$2" != "x" ]; then
 		target="$2"
@@ -1482,10 +1473,10 @@ OOO
 		YPK_DEST_RAW="$YPK_DEST/$(dirname $uri)"
 		mkdir -p $YPK_DEST_RAW/$N
 		tar cJf $YPK_DEST/$uri $pkgdata $pkginfo && echo $YPK_DEST/$uri
-		cp $workdir/${N}_$V$R-$YARCH.filelist $YPK_DEST_RAW 2>/dev/null
+		cp $pkginfo_dir/filelist $YPK_DEST_RAW/${N}_$V$R-$YARCH.filelist 2>/dev/null
 		# update xml, insert size and sha1 value
 		local control_target=$YPK_DEST_RAW/${N}_$V$R-$YARCH.xml
-		cp $workdir/$pkgdir/$control $control_target
+		cp $pkginfo_dir/$control $control_target
 		local size=$(du "$YPK_DEST/$uri" -sb |awk '{print $1}')
 		local sha1=$(sha1sum "$YPK_DEST/$uri" |awk '{print $1}')
 		sed -i -e '/\<build_date\>/a\   <size>'"$size"'<\/size>' -e '/\<build_date\>/a\   <sha>'"$sha1"'<\/sha>' $control_target
@@ -1505,10 +1496,11 @@ OOO
 #
 check_perm_dirs () {
 	local dir="$1"
-	for i in tmp root proc sys; do	
+	# These dir(s) in ypk package is invalid
+    for i in tmp root proc sys var/run var/lock; do	
 		[ -d $dir/${i} ] && rm -rf $dir/${i}
 	done
-
+    # These dir(s) permission
 	for i in bin boot dev etc home lib media mnt opt sbin usr var; do
 		if [ -d $dir/${i} ];then
 			chown root:root $dir/${i}
