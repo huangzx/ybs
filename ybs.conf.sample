@@ -9,11 +9,11 @@
 # Defaults: 
 # i686 - CFLAGS="-O2 -march=i686 -mtune=i686 -pipe "
 # x86_64 - CFLAGS="-O2 -fPIC"
-ARCH=i686
+ARCH=
 CC=gcc
 CXX=g++
-CFLAGS="-O2 -march=i686 -mtune=i686 -pipe "
-CXXFLAGS="$CFLAGS"
+CFLAGS=""
+CXXFLAGS=""
 
 #
 # MAKEOPTS provides extra options that may be passed to 'make' when a
