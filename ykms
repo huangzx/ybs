@@ -1,0 +1,196 @@
+#!/bin/bash
+#
+#   ykms - Kernel modules make/mkinstall automatically.
+# 
+#   Copyright © 2012 ivali.com
+#   Maintainer: Zhongxin Huang <huangzhongxin@ivali.com>
+#
+#   This program is free software; you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation; either version 2 of the License, or
+#   (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+. /usr/lib/ybs/funcs
+
+usage() {
+	msg "$0 - Kernel modules make/mkinstall automatically."
+	msn "Usage: "
+	msg " $0 install name version"
+	msg " $0 remove name version"
+	msg " $0 autoinstall"
+	return 0
+}
+
+#
+# $1 action: build delete
+# $2 name
+# $3 version
+# e.g: /usr/src/rtl8101_1.020.00
+# name=rtl8101
+# version=1.020.00
+#
+
+show_usage=
+[ "x$1" = "x" ] && show_usage=yes
+
+case "$1" in
+	install|remove|autoinstall) : ;;
+	help|*)     show_usage=yes
+esac
+
+if [ "x$show_usage" = "xyes" ]; then
+	usage
+	exit 0
+fi
+
+action="$1"
+name="$2"
+version="$3"
+args="$4 $5 $6"
+dir="$YPKPATH/modules"
+source_dir="/usr/src/"${name}_$version""
+
+if [ x"$KERNEL_RUNNING" != "x$KERNEL_DIST" ]; then
+	msg "* kernel version updates, skip."
+	msg "* please build $source_dir manually."
+	exit 0
+fi
+
+if [ "x$action" != "xautoinstall" ]; then
+	if [ ! -d $source_dir ]; then
+		rmsg "* $source_dir: not such directory"
+		exit 1
+	fi
+fi
+
+# main
+case "$action" in 
+	install)
+		cd $source_dir
+		preparelog="$PWD/prepare-log"
+		makelog="$PWD/make-log"
+		mkinstalllog="$PWD/mkinstall-log"
+		post_instlog="$PWD/post_inst-log"
+
+		[ -f ./ykms.conf ] && . ./ykms.conf
+
+		#if [ "x$patches" != "x" ]; then
+		#	msg "* ${name}_$version kernel modules patching." 
+		#	for patch in $patches; do
+		#		dopatch "$patch"
+		#	done
+		#
+		#fi
+
+		if [ "x$prepare" != "x" ]; then
+			msg "* ${name}_$version kernel modules preparing." 
+        	        if ! eval $prepare >$preparelog 2>&1; then 
+				rmsg "* [Error]: prepare kernel modules failed!"
+			        rmsg "* prepare log: $preparelog"
+		                exit 1
+			fi
+		fi   
+
+		msg "* ${name}_$version kernel modules compiling."
+		if ! make $MAKEOPTS $make_args >$makelog 2>&1; then
+			rmsg "* [Error]: build kernel modules failed!"
+			rmsg "* build log: $makelog"
+			exit 1
+		fi	
+
+		msg "* ${name}_$version kernel modules installing."
+		
+		if [ "x$mkinstall_args" = "x" ]; then
+			command="make $MAKEOPTS install"
+		else
+			command="make $MAKEOPTS $mkinstall_args"
+		fi
+
+		if ! eval "$command" >$mkinstalllog 2>&1; then
+			rmsg "* [Error]: install kernel modules failed!"
+			rmsg "* install log: $mkinstalllog"
+			exit 1
+		fi
+		
+		record="$dir"/"$name"/"$version"/"$ARCH_RUNNING"/"$KERNEL_RUNNING"
+		mkdir -p $record
+		>$record/modules
+		
+		find . -type f -name "*.ko" |sort -u |while read i; do
+			origin="$i"
+			name=${i##.*/}
+			target="$(find /lib/modules/"$KERNEL_RUNNING" -type f -name ${i##*/} |head -n1)"
+		
+			if diff $origin $target >/dev/null 2>&1; then	
+				msg "$name -> $target"
+				sha1sum $target |while read sha1 name; do 
+					echo $name $sha1 >>$record/modules
+				done
+			fi
+		done 
+		
+		make $MAKEOPTS clean >/dev/null 2>&1
+
+		if [ "x$post_inst" != "x" ]; then
+			msg "* ${name}_$version kernel modules post install." 
+        	        
+			if ! eval $post_inst >$post_instlog 2>&1; then 
+				rmsg "* [Error]: post install kernel modules failed!"
+			        rmsg "* post_inst log: $post_instlog"
+		                return 1
+			fi
+		fi   
+
+		rm -rf $makepipe $makelog $mkinstallpipe $mkinstalllog $preparelog 2>/dev/null 	
+		;;
+	remove)
+		record="$dir"/"$name"/"$version"/"$ARCH_RUNNING"/"$KERNEL_RUNNING"
+		
+		cat $record/modules |while read file sha1; do
+			sha1_old=${sha1}
+						
+			if [ -f $file ]; then
+				file=($(sha1sum $file))
+				sha1_new=${file[0]}
+			fi
+
+			if [ "x$sha1_old" = "x$sha1_new" ]; then
+				msg "<< file: ${file[1]}"
+				rm -f ${file[1]}
+			fi
+		done
+		
+		msg "<< file: $record/modules"
+		rm -f $record/modules
+		
+		#if [ -d $source_dir ]; then
+		#	msg "<< dir: $source_dir"
+		#	rm -rf $source_dir 2>/dev/null  
+		#fi
+
+		rmdir -p $record 2>/dev/null  
+		;;
+
+	autoinstall)
+		ls -d1 "$dir"/*/* 2>/dev/null |awk -F\/ '{print $5 " " $6}' |while read name version;do
+			ykms install $name $version
+			prepare=""
+			make_args=""
+			mkinstall_args=""
+			post_inst=""
+		done   
+		;;
+
+		*) usage
+esac	
+
+exit 0

@@ -1,0 +1,100 @@
+#
+# Please consult /usr/share/ybs/ybs.conf.sample for a more
+# detailed example.
+#
+
+#
+# Put your specific architecture here.
+# if you are unsure of your arch, DO NOT MODIFY THIS.
+# Defaults: 
+# i686 - CFLAGS="-O2 -march=i686 -mtune=i686 -pipe "
+# x86_64 - CFLAGS="-O2 -fPIC"
+ARCH=
+CC=gcc
+CXX=g++
+CFLAGS=""
+CXXFLAGS=""
+
+#
+# MAKEOPTS provides extra options that may be passed to 'make' when a
+# program is compiled. Presently the only use is for specifying
+# the number of parallel makes (-j) to perform. The suggested number
+# for parallel makes is CPUs+1.
+MAKEOPTS="-j6"
+
+#
+# stable OR testing
+#
+ACCEPT_REPO="stable"
+
+#
+# Put your specific languages here, which are not in this list would be removed.
+# LANGUAGE="en zh_CN zh_TW zh_HK ..."
+# 
+LANGUAGE=""
+
+#
+# Servers alternatived for source-codes tallball.
+#
+SOURCE_URI="http://pkg.startos.org/sources"
+
+#
+# Whether or not install YPK packages using ypkg after compilation.
+#
+AUTO_INSTALL="no"
+
+#
+# YPK_DEST - packages locate directory.
+# WORKING_FIELD - working directory.
+#
+YPK_DEST="/var/ybs/packages"
+WORKING_FIELD="/var/tmp/ybs"
+
+#
+# PBSLIB_PATH - pbs tree
+#
+# git://git.ylmf.com/pbslib.git
+PBSLIB_URI=""
+PBSLIB_PATH="/var/ybs/pbslib"
+# startos-5.x OR startos-6.x
+PBSLIB_BRANCH=""
+
+#
+# Download tools, curl and wget are available
+#
+DOWNLOAD_TOOL="curl"
+CURL_OPTIONS="-L"
+WGET_OPTIONS="--tries=3 --retry-connrefused --wait=2"
+
+#
+# Ypkg install OPTs
+#
+#YPKG_OPT="-f"
+
+#
+# Features are: 
+#   ccache/noccache, default: noccache
+# Caching pre-processor to C/C++ compilers, which often results in a 5 to 10 times speedup in common compilations. 
+#   distcc/nodistcc, default: nodistcc
+# A program to distribute builds of C, C++, Objective C or Objective C++ code across several machines on a network. 
+#   upx/noupx, default: noupx  
+# Executable file compression and decompression utility 
+#   libtool/nolibtool, default: libtool
+# Remove *.la files
+#   strip/notrip, default: strip
+# Strip executable、sharedlib (.so)、staticlib (.a) and binary files 
+#   dev/nodev, defualt: nodev
+# Split development files, such as .h
+#
+FEATURES="ccache"
+CCACHE_DIR="/var/tmp/ybs/.ccache"
+CCACHE_SIZE="20G"
+
+DISTCC_HOSTS=""
+
+STRIP_BINARIES="--strip-all"
+STRIP_SHARED="--strip-unneeded"
+STRIP_STATIC="--strip-debug"
+
+UPXFLAGS="-9"
+

@@ -1,0 +1,248 @@
+#!/bin/bash
+#
+#   ybs -- StartOS Build System
+# 
+#   Copyright © 2012 ivali.com
+#   Maintainer: Zhongxin Huang <huangzhongxin@ivali.com>>
+#
+#   This program is free software; you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation; either version 2 of the License, or
+#   (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+#
+
+. /usr/lib/ybs/funcs
+
+ybs_show_usage() {
+	cat <<EOF
+$0  
+
+Usage: $0 command [options] pkg1 [pkg2 ...]
+
+ybs (StartOS Build System) is a simple command line for download and build YPK package from source code.
+
+Commands:
+    -h|--help               Show usage   
+    -s|--search             Search package in ybs tree
+    -d|--download           Download source tartall of package
+    -r|--remove             Remove package (same as ypkg -C foo)
+    -i|--build              Build package and dependencies
+    -is|--build-single      Build single package without checking dependencies
+    -w|--showpbs            Show avaliable pbsfile of package 
+    -wr|--whatrequires      Show which packages require specify package
+    --sync [path]           Sync pbslib via git to $PBSLIB_PATH
+    --info                  Show $0 parameters of /etc/ybs.conf
+
+Options for build:
+    -p|--pretend            Instead of actually build, simply display what to do  
+    -F|--force              Force build
+    --fetch                 Break after download source tarball
+    --unpack                Break after unpack source tarball
+    --patch                 Break after patch source
+    --config                Break after configure	
+    --make                  Break after make a.k.s compile
+    --check                 Break after make check/test
+    --mkinstall             Break after make install    
+    --package               Break after make ypk package    
+EOF
+}
+
+check_required_bin
+
+# Create required folders
+mkdir -p $YPK_DEST $WORKING_FIELD
+
+i=0
+j=0
+for arg in $@;do 
+	# Remove blank in string	
+	arg=$(echo $arg |tr -d '[:blank:]')
+	case $arg in
+		-*) argvs[${j}]="$arg"
+		    let j++	;;
+		*)  args[${i}]="$arg"
+		    let i++
+	esac
+done
+
+for i in ${argvs[@]}; do
+	case ${i} in
+	  -p|--pretend) PRETEND="yes"       ;;
+	  -F|--force)   FORCE_INSTALL="yes" ;;
+	  --fetch)      BREAK="fetch"       ;;
+	  --unpack)     BREAK="unpack"      ;;	
+	  --patch)      BREAK="patch"       ;;	
+	  --config)     BREAK="config"      ;;
+	  --make)       BREAK="make"        ;;
+	  --check)      BREAK="check"       ;;
+	  --mkinstall)  BREAK="mkinstall"   ;;
+	  --package)    BREAK="package"     ;;
+	  -h|--help|-s|--search| \
+          -d|--download|-r|--remove| \
+          -i|--build|-is|--build-single| \
+          -w|--showpbs|-wr|--whatrequires|--sync|--info) ;;
+ 		*)      msg "ybs: ${i} is not a ybs options. See ybs --help."
+			msg ""
+			case ${i##*-} in
+			  f*) msg "Did you mean: --fetch"  ;;
+			  u*) msg "Did you mean: --unpack" ;;
+              p*) msg "Did you mean: --patch --package"  ;; 
+              c*) msg "Did you mean: --config --check" ;;
+              m*) msg "Did you mean: --make --mkinstall" ;;
+               *) msg "Did you mean one of these?"
+                  msg "--fetch --unpack --patch --config --make --check --mkinstall --package"
+			esac	
+			exit 1
+	esac
+done
+
+case "${1}" in
+-info|--info)
+	# Show build info
+	grep -v ^# "/etc/ybs.conf" |sed '/^$/d'
+	;;
+
+-s|--search)
+	msg_ "* Searching for "
+	wmsg_ "${args[@]} "
+	msg "..."
+	for i in ${args[@]}; do
+		ybs_search $i
+	done
+	;;
+
+-d|--download)
+	check_root
+	msg_ "* Source downloading "
+	wmsg_ "${args[@]} "
+	msg "..."
+	for i in ${args[@]}; do
+		ybs_download $i
+	done
+	;;
+
+-i|--build)
+	check_root
+	ymsg "* Calculating dependencies..."
+
+	for i in ${args[@]};do
+		app=${i}
+		pbsfile=$(ybs_show "$app" pbs)
+		[ -f "$pbsfile" ] && . "$pbsfile" || (echo; rmsg "* [Error]: ${app} not found."; exit 1)
+		deps=
+		
+		for dep in $BDEPEND; do
+			dep=${dep/-dev/} 
+			deps+="${dep} "
+		done
+
+		deps="$RDEPEND $deps"
+  		#for dep in $(echo $deps |tr ' ' '\n' |tac |xargs); do
+  		for dep in $deps; do
+			if [ "x$TERM" != "xlinux" ]; then
+				echo -ne "\033]0;ybs working: ${dep}\007"; ybs_build ${dep} || exit 1
+			else
+		  		ybs_build ${dep} || exit 1
+		 	fi
+	      	done
+		
+		if [ "x$TERM" != "xlinux" ]; then
+			echo -ne "\033]0;ybs working: ${app}\007"; ybs_build ${app} || exit 1
+		else
+			ybs_build ${app} || exit 1
+		fi
+	done
+	;;
+
+-is|--build-single) 
+	check_root
+	# Build single package
+	msg_ "* Installing "
+	wmsg_ "${args[@]} "
+	msg "..."
+	FORCE_INSTALL="yes"
+	for i in ${args[@]}; do
+		if [ "x$TERM" != "xlinux" ]; then
+			echo -ne "\033]0;ybs working: ${i}\007"; ybs_build $i || exit 1
+		else
+			ybs_build $i || exit 1
+		fi
+	done
+	;;
+
+-r|--remove)
+	check_root
+	# Remove package
+	msg_ "* Removing "
+	wmsg_ "${args[@]} "
+	for i in ${args[@]}; do
+		ypkg -C $i
+	done
+	;;
+
+--sync) 
+	# Sync pbslib via git
+	check_root
+	logfile="/var/log/ybs.log"
+	
+	if [ x"$(cat $logfile 2>/dev/null)" != x ];then
+		echo
+		mmsg "* Last update: $(date -d "1970-01-01 UTC $(cat $logfile) seconds" +%F,%T,%z)"
+		echo
+	fi
+	
+	mkdir -p $PBSLIB_PATH
+	err_check "* [Error]: Create dir $PBSLIB_PATH failed."
+
+	if [ -d $PBSLIB_PATH/.git ]; then
+		# Already exist.
+		cd $PBSLIB_PATH
+		msg "* Sync $PBSLIB_PATH from $PBSLIB_URI"
+		msg "* Running git pull"
+		git pull 
+		msg "* Running git checkout"
+		git checkout $PBSLIB_BRANCH
+		date +%s >$logfile
+		exit 0
+	else
+		cd ${PBSLIB_PATH%/*}
+		ymsg "* Fetch new $PBSLIB_PATH from $PBSLIB_URI"
+		msg "* Running git clone"
+		git clone $PBSLIB_URI
+		msg "* Running git checkout $PBSLIB_BRANCH"
+		cd $PBSLIB_PATH
+		git checkout $PBSLIB_BRANCH
+		date +%s >$logfile
+	fi
+	;;
+
+-w|--showpbs)
+	# Show pbs file
+	for i in ${args[@]}; do
+		ybs_show $i pbs
+	done
+	;;
+
+-wr|--whatrequires)
+	msg "* [R] stand for run time depend, [B] for build, [A] for recommoneded, [C] for conflict."
+	for i in ${args[@]}; do
+		 ybs_whatrequires $i
+	done
+	;;
+
+-h|--help|*)
+	ybs_show_usage
+	exit 0
+	;;
+esac
+
+# End of file

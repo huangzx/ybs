@@ -1,0 +1,81 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.8	//
+CC_FLAG	Makefile	/^CC_FLAG=-O2$/;"	m
+Decode	md5.c	/^static void Decode (output, input, len)$/;"	f	file:
+Encode	md5.c	/^static void Encode (output, input, len)$/;"	f	file:
+F	md5.c	65;"	d	file:
+FF	md5.c	77;"	d	file:
+FILE_MODE_MASK	file_info.c	19;"	d	file:
+G	md5.c	66;"	d	file:
+GG	md5.c	82;"	d	file:
+H	md5.c	67;"	d	file:
+HH	md5.c	87;"	d	file:
+I	md5.c	68;"	d	file:
+II	md5.c	92;"	d	file:
+MAX_NAME_LEN	file_info.c	18;"	d	file:
+MD	mddriver.c	21;"	d	file:
+MD5	file_info.c	21;"	d	file:
+MD5	mddriver.c	19;"	d	file:
+MD5Final	md5.c	/^void MD5Final (digest, context)$/;"	f
+MD5Init	md5.c	/^void MD5Init (context)$/;"	f
+MD5Transform	md5.c	/^static void MD5Transform (state, block)$/;"	f	file:
+MD5Update	md5.c	/^void MD5Update (context, input, inputLen)$/;"	f
+MD5_CTX	md5.h	/^} MD5_CTX;$/;"	t	typeref:struct:__anon1
+MD5_memcpy	md5.c	/^static void MD5_memcpy (output, input, len)$/;"	f	file:
+MD5_memset	md5.c	/^static void MD5_memset (output, value, len)$/;"	f	file:
+MDFile	mddriver.c	/^int MDFile(const char *filename, char* pMd5Sum, int iBufLen)$/;"	f
+MDFinal	mddriver.c	53;"	d	file:
+MDFinal	mddriver.c	59;"	d	file:
+MDFinal	mddriver.c	65;"	d	file:
+MDInit	mddriver.c	51;"	d	file:
+MDInit	mddriver.c	57;"	d	file:
+MDInit	mddriver.c	63;"	d	file:
+MDPrint	mddriver.c	/^static void MDPrint (digest, buf, iMaxBuf)$/;"	f	file:
+MDString	mddriver.c	/^static void MDString (string)$/;"	f	file:
+MDTestSuite	mddriver.c	/^static void MDTestSuite ()$/;"	f	file:
+MDTimeTrial	mddriver.c	/^static void MDTimeTrial ()$/;"	f	file:
+MDUpdate	mddriver.c	52;"	d	file:
+MDUpdate	mddriver.c	58;"	d	file:
+MDUpdate	mddriver.c	64;"	d	file:
+MD_CTX	mddriver.c	50;"	d	file:
+MD_CTX	mddriver.c	56;"	d	file:
+MD_CTX	mddriver.c	62;"	d	file:
+PADDING	md5.c	/^static unsigned char PADDING[64] = {$/;"	v	file:
+POINTER	global.h	/^typedef unsigned char *POINTER;$/;"	t
+PROTOTYPES	global.h	10;"	d
+PROTO_LIST	global.h	27;"	d
+PROTO_LIST	global.h	29;"	d
+ROTATE_LEFT	md5.c	72;"	d	file:
+S11	md5.c	32;"	d	file:
+S12	md5.c	33;"	d	file:
+S13	md5.c	34;"	d	file:
+S14	md5.c	35;"	d	file:
+S21	md5.c	36;"	d	file:
+S22	md5.c	37;"	d	file:
+S23	md5.c	38;"	d	file:
+S24	md5.c	39;"	d	file:
+S31	md5.c	40;"	d	file:
+S32	md5.c	41;"	d	file:
+S33	md5.c	42;"	d	file:
+S34	md5.c	43;"	d	file:
+S41	md5.c	44;"	d	file:
+S42	md5.c	45;"	d	file:
+S43	md5.c	46;"	d	file:
+S44	md5.c	47;"	d	file:
+SHA256	file_info.c	22;"	d	file:
+TEST_BLOCK_COUNT	mddriver.c	42;"	d	file:
+TEST_BLOCK_LEN	mddriver.c	41;"	d	file:
+TIME_MODIFY_BUF	file_info.c	20;"	d	file:
+UINT2	global.h	/^typedef unsigned short int UINT2;$/;"	t
+UINT4	global.h	/^typedef unsigned long int UINT4;$/;"	t
+buffer	md5.h	/^  unsigned char buffer[64];                         \/* input buffer *\/$/;"	m	struct:__anon1
+count	md5.h	/^  UINT4 count[2];        \/* number of bits, modulo 2^64 (lsb first) *\/$/;"	m	struct:__anon1
+get_info	file_info.c	/^int get_info(char* csFileName)$/;"	f
+headers	Makefile	/^headers=global.h md5.h$/;"	m
+main	file_info.c	/^int main(argc,argv)$/;"	f
+sources	Makefile	/^sources=file_info.c md5.c mddriver.c$/;"	m
+state	md5.h	/^  UINT4 state[4];                                   \/* state (ABCD) *\/$/;"	m	struct:__anon1
