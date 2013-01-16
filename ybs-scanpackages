@@ -175,7 +175,7 @@ xml_stable="updates/stable.xml"
 mkdir -p "$YPK_DEST"/updates
 
 ymsg "* YPK package binary-dir: $YPK_DEST"
-ymsg "* YPK package index-dir: $update_dir"
+ymsg "* YPK package index-dir: $YPK_DEST/updates"
 
 START_TIME="$(date)"
 

@@ -63,9 +63,9 @@ PACKAGE_DB="/var/ypkg/db/package.db"
 SQLITE="$(which sqlite3)"
 [ "x$YPK_DEST" = "x" ] && YPK_DEST="$YBS_PATH/packages"
 PACK_SUFFIX="ypk"
-CPIO="/bin/cpio"
-#CPIO="/usr/bin/bsdcpio"
-XZ="/usr/bin/xz"
+CPIO="$(which cpio)"
+#CPIO="$(which bsdcpio)"
+XZ="$(which xz)"
 CHECK_TOOLS="md5sum sha1sum sha256sum"
 
 # Strip para

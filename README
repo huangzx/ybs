@@ -1,0 +1,29 @@
+/usr/bin/ybs  
+
+Usage: /usr/bin/ybs command [options] pkg1 [pkg2 ...]
+
+ybs (StartOS Build System) is a simple command line for download and build YPK package from source code.
+
+Commands:
+    -h|--help               Show usage   
+    -s|--search             Search package in ybs tree
+    -d|--download           Download source tartall of package
+    -r|--remove             Remove package (same as ypkg -C foo)
+    -i|--build              Build package and dependencies
+    -is|--build-single      Build single package without checking dependencies
+    -w|--showpbs            Show avaliable pbsfile of package 
+    -wr|--whatrequires      Show which packages require specify package
+    --sync [path]           Sync pbslib via git to /var/ybs/pbslib
+    --info                  Show /usr/bin/ybs parameters of /etc/ybs.conf
+
+Options for build:
+    -p|--pretend            Instead of actually build, simply display what to do  
+    -F|--force              Force build
+    --fetch                 Break after download source tarball
+    --unpack                Break after unpack source tarball
+    --patch                 Break after patch source
+    --config                Break after configure	
+    --make                  Break after make a.k.s compile
+    --check                 Break after make check/test
+    --mkinstall             Break after make install    
+    --package               Break after make ypk package    
