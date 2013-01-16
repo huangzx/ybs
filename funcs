@@ -1357,7 +1357,7 @@ mkpackage() {
 	rir=$RIR
 	alias=$ALIAS
 	subdir="$(echo $N |cut -b1 |tr '[A-Z]' '[a-z]')"
-	uri="$subdir/$N/"$repo"/${N}_$V$R-$YARCH.$PACK_SUFFIX"
+	uri="$subdir/$N/${N}_$V$R-$YARCH.$PACK_SUFFIX"
 	license="$(xml_escape_convert "$LICENSE")"
 	packager="$(xml_escape_convert "$PACKAGER")"
 	homepage="$(xml_escape_convert "$HOMEPAGE")"
