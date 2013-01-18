@@ -15,8 +15,6 @@
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-[ -e /etc/ybs.conf ] && . /etc/ybs.conf
-
 ## -------------------- colourful print --------------------
 ## ANSI Foreground color codes:
 ## 30=black 31=red 32=green 33=yellow 34=blue 35=magenta 36=cyan 37=white 39=default
@@ -51,11 +49,24 @@ mmsg_() { mmsg "$@" | tr -d '\n'; }
 cmsg_() { cmsg "$@" | tr -d '\n'; }
 wmsg_() { wmsg "$@" | tr -d '\n'; }
 
-# PATH defines
+#
+[ -e /etc/ybs.conf ] && . /etc/ybs.conf
+
+# PATH
 YBS_PATH="/var/ybs"
-[ "x$PBSLIB_URI" = "x" ] && PBSLIB_URI="git://git.ylmf.com/pbslib.git"
+
+# Startos release verison and pbslib git uri
+RV=$(lsb_release -r)
 [ "x$PBSLIB_PATH" = "x" ] && PBSLIB_PATH="$YBS_PATH/pbslib"
-[ "x$PBSLIB_BRANCH" = "x" ] && PBSLIB_BRANCH="startos-5.x"
+
+case ${RV%%.*} in
+    5)
+[ "x$PBSLIB_URI" = "x" ] && PBSLIB_URI="git://git.ylmf.com/pbslib.git"
+[ "x$PBSLIB_BRANCH" = "x" ] && PBSLIB_BRANCH="startos-5.x" ;;
+    6)
+[ "x$PBSLIB_URI" = "x" ] && PBSLIB_URI="git://github.com/StartOS/pbslib.git"
+esac
+
 YBS_SOURCE="$YBS_PATH/sources"
 PBSLIB_SCRIPT="$PBSLIB_PATH"
 [ "x$WORKING_FIELD" = "x" ] && WORKING_FIELD="/var/tmp/ybs"
@@ -63,9 +74,9 @@ PACKAGE_DB="/var/ypkg/db/package.db"
 SQLITE="$(which sqlite3)"
 [ "x$YPK_DEST" = "x" ] && YPK_DEST="$YBS_PATH/packages"
 PACK_SUFFIX="ypk"
-CPIO="/bin/cpio"
-#CPIO="/usr/bin/bsdcpio"
-XZ="/usr/bin/xz"
+CPIO="$(which cpio)"
+#CPIO="$(which bsdcpio)"
+XZ="$(which xz)"
 CHECK_TOOLS="md5sum sha1sum sha256sum"
 
 # Strip para
@@ -671,6 +682,30 @@ check_and_download_raw() {
 	local checkok
 	local target="${YBS_SOURCE}/${fname%.git}"
 	
+    # uri with suffix of .git
+    if [ "x.${uri##*.}" = "x.git" ]; then
+		local name="$N"
+        target="${YBS_SOURCE}/$name"
+
+	    msg "From: $uri - To: $target"
+        cd ${YBS_SOURCE}
+		
+        if [ ! -d "$name" ];then 
+			rm "$name" 2>/dev/null
+			git clone "${uri}" "$name" && return 0
+		fi
+		
+        if [ -d "$name"/.git ]; then
+			olduri=$(grep "url =" $name/.git/config 2>/dev/null |sed 's/\	url\ =\ //g')
+			if [ "x${olduri}" = "x${uri}" ]; then
+				cd "$name" && git pull && return 0
+			else
+				rm -rf "$name"
+				git clone "${uri}" "$name" && return 0
+			fi	
+		fi 
+    fi
+
 	msg "From: $uri - To: $target"
 
 	case ${uri%%:*} in
@@ -678,24 +713,6 @@ check_and_download_raw() {
 		cd ${YBS_SOURCE}
 		local name="$N"
 		cd "$name" && svn update || svn checkout "${uri}" "$N" 
-		;;
-
-	  git)	
-		local name="$N"
-		cd ${YBS_SOURCE}
-		if [ ! -d "$name" ];then 
-			rm "$name" 2>/dev/null
-			git clone "${uri}" "$name" && return 0
-		fi
-		if [ -d "$name"/.git ]; then
-			olduri=$(grep "url =" $name/.git/config 2>/dev/null |sed 's/\	url\ =\ //g')
-			if [ "x$olduri" = "x$uri" ]; then
-				cd "$name" && git pull && return 0
-			else
-				rm -rf "$name"
-				git clone "${uri}" "$name" && return 0
-			fi	
-		fi 
 		;;
 
     http|https|ftp|file|*)	
@@ -738,7 +755,7 @@ check_and_download_raw() {
 			if do_download $uri $fname; then
 				download="done"
 			else
-				# Try ylmfos dist source
+				# Try Startos dist source
 				uri="$SOURCE_URI/${fname}"
 				do_download $uri $fname && download="done" || download="error"
 			fi

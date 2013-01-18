@@ -209,8 +209,10 @@ case "${1}" in
 		msg "* Sync $PBSLIB_PATH from $PBSLIB_URI"
 		msg "* Running git pull"
 		git pull 
-		msg "* Running git checkout"
-		git checkout $PBSLIB_BRANCH
+        if [ "x$PBSLIB_BRANCH" != "x" ]; then
+    		msg "* Running git checkout"
+	    	git checkout $PBSLIB_BRANCH
+        fi
 		date +%s >$logfile
 		exit 0
 	else
@@ -218,9 +220,11 @@ case "${1}" in
 		ymsg "* Fetch new $PBSLIB_PATH from $PBSLIB_URI"
 		msg "* Running git clone"
 		git clone $PBSLIB_URI
-		msg "* Running git checkout $PBSLIB_BRANCH"
-		cd $PBSLIB_PATH
-		git checkout $PBSLIB_BRANCH
+        if [ "x$PBSLIB_BRANCH" != "x" ]; then
+    		msg "* Running git checkout $PBSLIB_BRANCH"
+	    	cd $PBSLIB_PATH
+	    	git checkout $PBSLIB_BRANCH
+        fi
 		date +%s >$logfile
 	fi
 	;;
