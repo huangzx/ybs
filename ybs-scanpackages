@@ -160,7 +160,7 @@ esac
 
 case x$# in 
 	x0) YPK_DEST=$YPK_DEST;;
-	x1) [ -d $(readlink -f $1) ] && YPK_DEST=$(readlink -f $1);;
+	x1) YPK_DEST=$(readlink -f $1) ;;
 	x2|*) show_usage
 	    exit 0
 esac
