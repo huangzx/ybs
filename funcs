@@ -59,12 +59,13 @@ YBS_PATH="/var/ybs"
 RV=$(lsb_release -r)
 [ "x$PBSLIB_PATH" = "x" ] && PBSLIB_PATH="$YBS_PATH/pbslib"
 
-case ${RV%%.*} in
-    5)
-[ "x$PBSLIB_URI" = "x" ] && PBSLIB_URI="git://git.ylmf.com/pbslib.git"
-[ "x$PBSLIB_BRANCH" = "x" ] && PBSLIB_BRANCH="startos-5.x" ;;
-    6)
-[ "x$PBSLIB_URI" = "x" ] && PBSLIB_URI="git://github.com/StartOS/pbslib.git"
+RELEASE="${RV%%.*}"
+case "$RELEASE" in
+   5)
+ [ "x$PBSLIB_URI" = "x" ] && PBSLIB_URI="git://git.ylmf.com/pbslib.git"
+ [ "x$PBSLIB_BRANCH" = "x" ] && PBSLIB_BRANCH="startos-5.x" ;;
+ 6|*)
+  [ "x$PBSLIB_URI" = "x" ] && PBSLIB_URI="git://github.com/StartOS/pbslib.git"
 esac
 
 YBS_SOURCE="$YBS_PATH/sources"
@@ -75,7 +76,6 @@ SQLITE="$(which sqlite3)"
 [ "x$YPK_DEST" = "x" ] && YPK_DEST="$YBS_PATH/packages"
 PACK_SUFFIX="ypk"
 CPIO="$(which cpio)"
-#CPIO="$(which bsdcpio)"
 XZ="$(which xz)"
 CHECK_TOOLS="md5sum sha1sum sha256sum"
 
@@ -113,6 +113,7 @@ CHECK_TOOLS="md5sum sha1sum sha256sum"
 
 # Get system arch
 get_arch() {
+    YARCH=""
 	DIST_INFO=($(cat /var/ypkg/modules/kernel))
 	KERNEL_DIST=${DIST_INFO[0]}
 	ARCH_DIST=${DIST_INFO[1]}
@@ -143,13 +144,13 @@ LIBDIRSUFFIX=""
 case "$ARCH" in
 	"i686")	[ "x$CFLAGS" = "x" ] && CFLAGS="-O2 -march=i686 -mtune=i686 -pipe " ;;	
 	"s390")	[ "x$CFLAGS" = "x" ] && CFLAGS="-O2 "   ;;
-      "x86_64") 
-		[ "x$CFLAGS" = "x" ] && CFLAGS="-O2 -fPIC "
-		LIBDIRSUFFIX="64"
-		CC="$CC -m64"
-		CXX="$CXX -m64"
-		;;
-	     *)	[ "x$CFLAGS" = "x" ] && CFLAGS="-O2 "   
+  "x86_64") 
+            [ "x$CFLAGS" = "x" ] && CFLAGS="-O2 -fPIC "
+    		LIBDIRSUFFIX="64"
+    		CC="$CC -m64"
+	    	CXX="$CXX -m64"
+    		;;
+        *)	[ "x$CFLAGS" = "x" ] && CFLAGS="-O2 "   
 esac
 
 [ "x$CXXFLAGS" = "x" ] && CXXFLAGS="$CFLAGS "
@@ -331,22 +332,24 @@ get_abspath () {
 # If $2 in $1 return 0, else return 1
 #
 str_isIn() {
-        if [ "x$2" = "x" ];then
-		msg "str_isIn: you must specify at least two strings."
-	        msg "i.e. 'str_isIn \"a b c\" b'"
+    if [ "x$2" = "x" ];then
+		msg "str_isIn: you must specify two strings at least."
+	    msg "i.e. 'str_isIn \"a b c\" b'"
 		return 1
 	fi
 	
 	local string=($1)
 	local substring="$2"
+    local i
 
 	for i in ${string[@]}; do
-		[ "x$i" = "x$substring" ] && return 0
+        [ "x$i" = "x$substring" ] && return 0
 	done
 
 	return 1
 }
 
+#
 err_check() {
 	if [ $? != 0 ]; then
 		rmsg "$1"
@@ -354,15 +357,18 @@ err_check() {
 	fi
 }
 
+#
 die() {
 	rmsg ":( $@"
 	exit 1
 }
 
+#
 warn() {
 	ymsg "$@"
 }
 
+#
 atom_parse() {
 	T=""
 	N=""
@@ -457,12 +463,14 @@ string_len() {
 	local string=$1
 	local sep=$2
 	local i
-  	if [ "x$sep" = "x" ]; then
-		i=($(echo $string |awk '{print $1" "$2" "$3" "$4" "$6" "$7}'))
+  	
+    if [ "x$sep" = "x" ]; then
+	    i=($(echo $string |awk '{print $1" "$2" "$3" "$4" "$6" "$7}'))
 	else
-	        i=($(echo $string |awk -F$sep '{print $1" "$2" "$3" "$4" "$6" "$7}'))
+	    i=($(echo $string |awk -F$sep '{print $1" "$2" "$3" "$4" "$6" "$7}'))
 	fi  
-        echo ${#i[@]}
+    
+    echo ${#i[@]}
 }
 
 atom_cmp() {
@@ -485,9 +493,12 @@ atom_cmp() {
 	fi
 
 	# seperator is -
+    local maxnum
 	local v1=($(echo $v1 |awk -F- '{print $1" "$2" "$3" "$4" "$6" "$7}'))
 	local v2=($(echo $v2 |awk -F- '{print $1" "$2" "$3" "$4" "$6" "$7}'))
 	[ "1${#v1[@]}" -lt "1${#v2[@]}" ] && maxnum=${#v2[@]} || maxnum=${#v1[@]}
+
+    local i j a b a_len b_len max c d coa doa cod dod coa doa cod dod
 
 	for ((i=0; i<maxnum; i++)); do
 		a=${v1[i]}.
@@ -555,6 +566,7 @@ ybs_searchInstalled() {
     if [ "x$info" = "x" ]; then
 	    info=$($SQLITE $PACKAGE_DB "select name,version,repo,install_time from world where name='${PROVIDE_NAME}'")
     fi
+    
     PROVIDE_NAME=
 	case "x$info" in
 		x) 
@@ -612,17 +624,18 @@ ybs_search() {
 		ybs_searchInstalled $T $N $V$R
 
 		msg=""
+
 		for pbsfile in $ALL_PBSFILE; do
 			REPO=""
 			atom_parse $pbsfile
 			. $pbsfile
 			case $REPO in
-				[Tt]esting) repo="t"  ;;
-	                  	 [Ss]table) repo="s" ;;
-	               	       [Uu]nusable) repo="u" ;;
-	                                 *) repo="s"
-	                 esac
-	                 msg+="$(mmsg $V$R[$repo]) | "
+	    		[Tt]esting) repo="t" ;;
+	         	 [Ss]table) repo="s" ;;
+	           [Uu]nusable) repo="u" ;;
+	                     *) repo="s"
+	        esac
+	        msg+="$(mmsg $V$R[$repo]) | "
 		done
 
 		echo -e "\t$(gmsg "Available:") $msg"
@@ -657,8 +670,8 @@ do_download () {
 		curl)
 			$curl $uri -o "$target" || return 1
 			grep -q "404 Not Found" "$target" && return 1 || return 0 ;;
-  	      wget|*)
-			if [ "x$(echo $uri |cut -c 1-5)" == "xhttps" ];then	
+  	  wget|*)
+			if [ "x$(echo $uri |cut -c 1-5)" == "xhttps" ]; then	
 				$wget --no-check-certificate $uri -O "$target" && return 0
 			else
 				$wget $uri -O "$target" && return 0
@@ -820,18 +833,17 @@ ybs_getpbsfile() {
 		
 		if [ "$count"0 -gt 10 ]; then
 			rmsg "Too more results: "
-		        echo $dir
-		        return 1
+		    echo $dir
+		    return 1
 		fi
 	fi
 
 	VR="$(echo $VR |tr -d '()')"
 	
 	case $range in
-		all)   iname="*${N}*.pbs" ;;
-	       name|*) iname="${N}_*.pbs"
+		all) iname="*${N}*.pbs" ;;
+	 name|*) iname="${N}_*.pbs"
 	esac
-
 
 	local pbsfiles=($(find $find_dir/"$T" -maxdepth 3 -type f -iname "$iname" |sort -u))
 	
@@ -909,14 +921,15 @@ ybs_getpbsfile() {
 
 	[ "x$files_ready" = "x" ] && return 1 || files_ready=($files_ready)
 
+    local file
 	for file in ${files_ready[@]}; do
 		blank_funcs pbs
 		. $file
 		case $REPO in
-			[Tt]esting)  
-		  [ "x$ACCEPT_REPO" = "xtesting" ] && files_ready_raw+="$file " || continue  ;;
-		         *)
-		  files_ready_raw+="$file "
+    		[Tt]esting)  
+           [ "x$ACCEPT_REPO" = "xtesting" ] && files_ready_raw+="$file " || continue  ;;
+        	         *)
+		   files_ready_raw+="$file "
 		esac
 	done
 
@@ -1002,7 +1015,7 @@ ybs_download() {
 ybs_strip_i18n() {
 	local ipath="$1/usr/share/locale"
 	local i18ns=$(ls $ipath 2>/dev/null)
-	local name
+	local name i
 
 	for i in $i18ns; do
 		name=${i##*/}
@@ -1020,7 +1033,7 @@ ybs_strip_i18n() {
 ybs_strip_mani18n() {
 	local ipath="$1/usr/share/man"
 	local i18ns=$(ls $ipath 2>/dev/null)
-	local name
+	local name i
 
 	for i in $i18ns; do
 		name=${i##*/}
@@ -1100,52 +1113,56 @@ ybs_gzip_extra() {
 # Multimedia Misc Non-free
 #
 ybs_get_category() {
-	local type category desktop
-	type="$1"
-	desktop="$2"
+	local category
+	local type="$1"
+	local desktop="$2"
 
 	if [ "x$desktop" != "x" ] && [ -f "$desktop" ]; then
 		egrep -q "(=|;)AudioVideo" "$desktop" && echo Multimedia && return
 		egrep -q "(=|;)Office"     "$desktop" && echo Office && return
-		if egrep -q "(=|;)Network" "$desktop"; then
+		
+        if egrep -q "(=|;)Network" "$desktop"; then
 			egrep -q "(=|;)InstantMessaging" "$desktop" && echo IM && return
 			echo Network && return
 		fi
-		if egrep -q "(=|;)Education" "$desktop" || egrep -q "(=|;)Science" "$desktop"; then
+		
+        if egrep -q "(=|;)Education" "$desktop" || egrep -q "(=|;)Science" "$desktop"; then
 			echo Science-education && return
 		fi
-		egrep -q "(=|;)Game" "$desktop" && echo Games && return
+		
+        egrep -q "(=|;)Game" "$desktop" && echo Games && return
 		egrep -q "(=|;)Graphics" "$desktop" && echo Graphics && return
 		egrep -q "(=|;)Development" "$desktop" && echo Development && return
-		if egrep -q "(=|;)Utility" "$desktop" || egrep -q "(=|;)System" "$desktop"; then
+		
+        if egrep -q "(=|;)Utility" "$desktop" || egrep -q "(=|;)System" "$desktop"; then
 			echo Utilities && return
 		fi
 	else	
 		case ${type%%-*} in
-		sys|x11|gnome|app)
-			        category="Utilities"          ;;
-	       www|net|mail)	category="Network"	      ;;
-       			 im)    category="IM"		      ;;
-    		      games)	category="Games" 	      ;;
-    		   graphics)	category="Graphics" 	      ;;
-    		      media)	category="Multimedia" 	      ;;
- 	    printer|office)	category="Office" 	      ;;
- 	   	        dev)	category="Development" 	      ;;
- 	   	   security)	category="Security" 	      ;;
-		    drivers)    category="Drivers"	      ;;
-	      education|sci)	category="Science-education"  ;;
-			non)	category="Non-free"	      ;;
+		sys|x11|gnome|app)  category="Utilities"          ;;
+	         www|net|mail)	category="Network"	      ;;
+       			       im)  category="IM"		      ;;
+    		        games)	category="Games" 	      ;;
+    		     graphics)	category="Graphics" 	      ;;
+    		        media)	category="Multimedia" 	      ;;
+ 	       printer|office)	category="Office" 	      ;;
+ 	   	              dev)	category="Development" 	      ;;
+ 	   	         security)	category="Security" 	      ;;
+		          drivers)  category="Drivers"	      ;;
+	        education|sci)	category="Science-education"  ;;
+			          non)	category="Non-free"	      ;;
 	    	      misc|*)	category="Misc"               
 		esac
 		echo $category && return
 	fi
+
 	echo Misc
 }
 
 split_dev() {
 	local dir="$1"
 	local destdir="$workdir"
-	
+	local i
 	rm -rf "$destdir"/"$N-dev_$V$R" 2>/dev/null
 
 	#/usr/include  /usr/share/include
@@ -1160,6 +1177,7 @@ split_dev() {
 	fi
 
 	# *.la *.a *.h *.hpp
+    local devlib lib
 	devlib=$(find $dir/ -type f -name "*.la" -o -name "*.a" 2>/dev/null)
 	devlib+=" $(find $dir/ -type f -name "*.h" -o -name "*.hpp" 2>/dev/null |grep "/include/")"
 	
@@ -1173,6 +1191,7 @@ split_dev() {
 	fi
 
 	# pkgconfig
+    local pcdir pc dirpc
 	pcdir=$(find $dir -type d -name "pkgconfig" 2>/dev/null)
 	
 	if [ x"$pcdir" != "x" ]; then
@@ -1186,6 +1205,7 @@ split_dev() {
 	fi
 	
 	# /usr/share/aclocal/ogg.m4
+    local acls acl acldir
 	acls=$(ls -d $dir/usr/share/aclocal/* $dir/usr/share/aclocal-*/* 2>/dev/null)
 	
 	if [ x"$acls" != "x" ]; then
@@ -1206,6 +1226,7 @@ split_dev() {
 split_doc() {
 	local dir="$1"
 	local destdir="$workdir"
+    local docs gtk_docs
 	docs=$(ls -d $dir/usr/share/doc/* 2>/dev/null)
 	gtk_docs=$(ls -d $dir/usr/share/gtk-doc/html/* 2>/dev/null)
 	
@@ -1268,6 +1289,7 @@ find_desktop() {
 }
 
 find_icon() {
+    local i
 	local desktop=$1 
 	local source_dir=$2
 	local icon_name="$(grep ^Icon= $desktop |sed -e 's/Icon=//g')"
@@ -1330,10 +1352,8 @@ xml_escape_convert() {
 # $1 - source_dir
 #
 mkpackage() {
-	local sha
-	local pbsfile
-	local atom
-	local source_dir="$1"
+	local i sha pbsfile atom
+    local source_dir="$1"
     local pkginfo_dir="$(dirname $source_dir)/${N}_$V$R-pkginfo"
 
     mkdir -p $pkginfo_dir
@@ -1512,11 +1532,13 @@ OOO
 # Check /dirs permission
 #
 check_perm_dirs () {
-	local dir="$1"
+	local i dir="$1"
+
 	# These dir(s) in ypk package is invalid
     for i in tmp root proc sys var/run var/lock; do	
 		[ -d $dir/${i} ] && rm -rf $dir/${i}
 	done
+    
     # These dir(s) permission
 	for i in bin boot dev etc home lib media mnt opt sbin usr var; do
 		if [ -d $dir/${i} ];then
@@ -1595,6 +1617,7 @@ ybs_mkpackage() {
 	ybs_gzip_extra $destdir
 
 	# Mkpackges one by one
+    local pack
 	for pack in $spacks; do
 		# skip empty dirs
 		local files=$(find $pack -type f)
@@ -1611,21 +1634,26 @@ dodesktop() {
 	local dfile="$1"
 	local picture="$2"
 	local icon=""
-	file_is_exist "$filesdir/${dfile##*/}"   && dfile="$filesdir/${dfile##*/}"
+	
+    file_is_exist "$filesdir/${dfile##*/}"   && dfile="$filesdir/${dfile##*/}"
 	file_is_exist "$filesdir/${picture##*/}" && picture="$filesdir/${picture##*/}"
-	if [ x"$dfile" != x ] && file_is_exist "$dfile"; then
+	
+    if [ x"$dfile" != x ] && file_is_exist "$dfile"; then
 		mkdir -p "$destdir"/usr/share/applications
 		install -m755 "$dfile" "$destdir"/usr/share/applications 
 	fi
-	if [ x"$picture" != x ] && file_is_exist "$picture"; then 
+	
+    if [ x"$picture" != x ] && file_is_exist "$picture"; then 
 		docp "$picture"   "$destdir"/usr/share/pixmaps
 	fi
-	dfile="${dfile##*/}"
+	
+    dfile="${dfile##*/}"
 	picture="${picture##*/}"
 	icon=$(grep ^Icon= "$destdir"/usr/share/applications/"$dfile" |sed 's/Icon=//g')
 	name=${icon%.*}
 	type=${picture##*.}
-	if [ x"$type" != x ] && [ x"$picture" != x"$name.$type" ]; then 
+	
+    if [ x"$type" != x ] && [ x"$picture" != x"$name.$type" ]; then 
 		mv "$destdir"/usr/share/pixmaps/"$picture" "$destdir"/usr/share/pixmaps/"$name"."$type" 
 	else
 		return 0
@@ -1637,10 +1665,11 @@ dodesktop() {
 #
 dounit() {
 	local file="$@"
-	local dir
-	#FIXME 
+	local i dir
+	
+    #FIXME 
 	[ -d /usr/lib/systemd/system ] && dir="$destdir"/usr/lib/systemd/system || dir="$destdir"/lib/systemd/system
-
+    
 	if [ x"$file" != x ]; then
 		for i in $@; do
 			file_is_exist "$i" && docp "$i" "$dir" || docp "$filesdir/$i" "$dir"
@@ -1652,7 +1681,7 @@ dounit() {
 # Copy files to /etc/pam.d/
 #
 dopamd() {
-	local file="$@"
+	local i file="$@"
 	local dir="$destdir"/etc/pam.d/
 
 	if [ x"$file" != x ]; then
@@ -1690,7 +1719,8 @@ domv_rename() {
 # Cp man to dir
 #
 doman() {
-	local name num
+	local i name num
+
 	for i in $@; do
 		name=${i%.[0-9]}
 		num=${i##$name}
@@ -1710,6 +1740,8 @@ doln(){
 }
 
 dofont() {
+    local i
+
 	for i in $@; do 
 		msg "mkfontscale $i"
 		mkfontscale "$i"
@@ -1718,27 +1750,32 @@ dofont() {
 		msg "fc-cache $i"
 		fc-cache -f "$i"
 	done
-	return 0
+	
+    return 0
 }
 
 doinstall_info () {
 	msg "install info: $@"
 	[ -x /usr/bin/install-info ] || return 0
-	infodir=/usr/share/info
-	for i in $@; do
+	local i infodir=/usr/share/info
+	
+    for i in $@; do
 		install-info "$infodir"/"$i" $infodir/dir 2>/dev/null
 	done	
-	return 0
+	
+    return 0
 }
 
 doremove_info () {
 	msg "remove info: $@"
 	[ -x /usr/bin/install-info ] || return 0
-	infodir=/usr/share/info
-	for i in $@; do
+	local i infodir=/usr/share/info
+	
+    for i in $@; do
 		install-info --delete "$infodir"/"$i" $infodir/dir 2>/dev/null
 	done
-	return 0
+	
+    return 0
 }
 
 dopatch(){
@@ -1746,22 +1783,27 @@ dopatch(){
 	local dir1=""
 	local dir2=""
 	local num=""
-	while [ "x$1" != "x" ]; do
+	
+    while [ "x$1" != "x" ]; do
 		file="$1"
 		file_is_exist "$file" || file="$filesdir/$1"
 		file_is_exist "$file" || file="$filesdir/patches/$1"
-		if ! file_is_exist "$file"; then
+		
+        if ! file_is_exist "$file"; then
 			rmsg ":( \"$1\" not found."
 			exit  1
 		fi
-		dir1="$(grep ^--- "$file" |head -n1 |awk '{print $2}' |awk -F/ '{print $1}' |tr -d '\r')"
+		
+        dir1="$(grep ^--- "$file" |head -n1 |awk '{print $2}' |awk -F/ '{print $1}' |tr -d '\r')"
 		dir2="$(grep ^+++ "$file" |head -n1 |awk '{print $2}' |awk -F/ '{print $1}' |tr -d '\r')"
-		if ls -d "$dir1" >/dev/null 2>/dev/null || ls -d "$dir2" >/dev/null 2>/dev/null;then
+		
+        if ls -d "$dir1" >/dev/null 2>/dev/null || ls -d "$dir2" >/dev/null 2>/dev/null;then
 			num="0"
 		else
 			num="1"
 		fi
-		mmsg "Patching ${file##*/} ..."
+		
+        mmsg "Patching ${file##*/} ..."
 		patch -p$num -i "$file" 
 		shift
 	done
@@ -1769,7 +1811,9 @@ dopatch(){
 
 # Unpack
 dounpack() {
-	if [ "x$SRC_URI" = "x" ];then
+    local i
+
+    if [ "x$SRC_URI" = "x" ];then
 		for i in tar.bz2 tar.gz bz2 tgz tbz tbz2 rar zip 7z; do
 			file_is_exist "$YBS_SOURCE/$N-$V$R.${i}" && SRC_URI="$YBS_SOURCE/$N-$V$R.${i}"
 		done
@@ -1783,6 +1827,7 @@ dounpack() {
 	local fname=${SRC_URI##*/}
 	local tarball="$YBS_SOURCE/$fname"
 	local srcdir="$N-$V$R"
+    local name
 	rm -r "$srcdir" 2>/dev/null
 	
 	case $fname in
@@ -1906,7 +1951,8 @@ doconfig() {
 	# perl module
 	file_is_exist Makefile.pl && mv Makefile.pl Makefile.PL
 	file_is_exist Makefile.PL && command="perl Makefile.PL -y PREFIX=/usr $@"
-	if [ x"$command" != x ];then
+	
+    if [ x"$command" != x ];then
 		mmsg "$command"
 		if ! eval $command; then
 			command="perl Makefile.PL PREFIX=/usr $@"
@@ -1950,7 +1996,8 @@ doconfig() {
 # Make
 domake() {
 	local command="make $MAKEOPTS $@"
-	# waf
+	
+    # waf
     if [ -x waf ];then
 		command="./waf build $MAKEOPTS $@"
         if [ x"$command" != x ];then
@@ -1958,26 +2005,31 @@ domake() {
 		    eval $command && return 0 || command=""
         fi
 	fi
-	# setup.py
+	
+    # setup.py
     if file_is_exist setup.py; then
 		if [ "x$1"  = "xmake" ]; then
 			command="make $MAKEOPTS $@"
 		else
 			command="python setup.py build $@"
 		fi
+    
         if [ x"$command" != x ];then
 	    	mmsg "$command"
 		    eval $command && return 0 || command=""
         fi
 	fi
+    
     # generic
 	if file_is_exist Makefile || file_is_exist GNUmakefile; then
 		command="make $MAKEOPTS $@" 
 	fi
+    
     # misc
 	file_is_exist makefile.linux && command="make $MAKEOPTS -f makefile.linux $@"
 	file_is_exist Imakefile && command="make $MAKEOPTS $@"
 	file_is_exist SConstruct && return 0
+    
     if [ x"$command" != x ];then
     	mmsg "$command"
     	eval $command
@@ -1987,7 +2039,8 @@ domake() {
 # Make install
 domkinstall() {
 	local command="make DESTDIR="$destdir" "$@" install"
-	# waf
+	
+    # waf
     if [ -x waf ];then
 		command="./waf install --destdir="$destdir" $@"
         if [ x"$command" != x ];then
@@ -1995,6 +2048,7 @@ domkinstall() {
 		    eval $command && return 0 || command=""
         fi
 	fi
+    
     # setup.py
 	if file_is_exist setup.py;then
 		if [ "x$1"  = "xmake" ]; then
@@ -2007,22 +2061,26 @@ domkinstall() {
 		    eval $command && return 0 || command=""
         fi
 	fi
-	# scons	
+	
+    # scons	
 	if file_is_exist SConstruct;then
 		if [ x"$@" = x ]; then
 			command="scons --install-sandbox="$destdir" "$@" install"
 		else
 			command="scons "$@" install"
 		fi
+    
         if [ x"$command" != x ];then
 		    mmsg "$command"
 		    eval $command && return 0 || command=""
         fi
 	fi	
+    
     # generic
 	if file_is_exist Makefile || file_is_exist GNUmakefile; then
 		command="make DESTDIR="$destdir" "$@" install"
 	fi
+    
     if [ x"$command" != x ];then
 	    mmsg "$command"
 	    eval $command 
@@ -2113,19 +2171,22 @@ glib_compile_schemas() {
 		msg ":( /usr/bin/glib-compile-schemas not found."
 		return 1
 	fi
-	return 0
+	
+    return 0
 }
 
 doinstall_catalog() {
 	local bin=$(which install-catalog)
-	if [ -x $bin ]; then
+	
+    if [ -x $bin ]; then
 		$bin --add $@
 	fi
 }
 
 doremove_catalog() {
 	local bin=$(which install-catalog)
-	if [ -x $bin ]; then
+	
+    if [ -x $bin ]; then
 		$bin --remove $@
 	fi
 	
@@ -2140,7 +2201,8 @@ gnome2_install_defaut_gconf() {
 	#value
 	local v=$3
 	msg "Setting: \"$n\" \"$v\""
-	if [ -x /usr/bin/gconftool-2 ]; then
+	
+    if [ -x /usr/bin/gconftool-2 ]; then
 		configfile=$(/usr/bin/gconftool-2 --get-default-source)
 		if [ "x$t" = "xlist" ];then
 			/usr/bin/gconftool-2 --direct --config-source="$configfile" --type list --set "$n" --list-type string "$v"
@@ -2153,7 +2215,8 @@ gnome2_install_defaut_gconf() {
 # Install schemas
 mate_install_schema() {
 	local schemas="$@"
-	if [ x"$schemas" != x ] && [ -x /usr/bin/mateconftool-2 ];then
+	
+    if [ x"$schemas" != x ] && [ -x /usr/bin/mateconftool-2 ];then
 		for schema in $schemas; do
 			msg "Installing: $schema"
 			MATECONF_CONFIG_SOURCE="$(mateconftool-2 --get-default-source)" mateconftool-2 --makefile-install-rule "$schema"  >/dev/null
@@ -2164,7 +2227,8 @@ mate_install_schema() {
 # Unstall schemas
 mate_uninstall_schema() {
 	local schemas="$@"
-	if [ x"$schemas" != x ] && [ -x /usr/bin/mateconftool-2 ];then
+	
+    if [ x"$schemas" != x ] && [ -x /usr/bin/mateconftool-2 ];then
 		for schema in $schemas; do
 			msg "Uninstalling: $schema"
 			MATECONF_CONFIG_SOURCE="$(mateconftool-2 --get-default-source)" mateconftool-2 --makefile-uninstall-rule "$schema"  >/dev/null
@@ -2177,7 +2241,8 @@ gnome2_install_schema() {
 	#this is this-is-deprecated
 	#return 0
 	local schemas="$@"
-	if [ x"$schemas" != x ] && [ -x /usr/bin/gconftool-2 ];then
+	
+    if [ x"$schemas" != x ] && [ -x /usr/bin/gconftool-2 ];then
 		for schema in $schemas; do
 			msg "Installing: $schema"
 			GCONF_CONFIG_SOURCE="$(gconftool-2 --get-default-source)" gconftool-2 --makefile-install-rule "$schema"  >/dev/null
@@ -2190,7 +2255,8 @@ gnome2_uninstall_schema() {
 	#this is this-is-deprecated
 	#return 0
 	local schemas="$@"
-	if [ x"$schemas" != x ] && [ -x /usr/bin/gconftool-2 ];then
+	
+    if [ x"$schemas" != x ] && [ -x /usr/bin/gconftool-2 ];then
 		for schema in $schemas; do
 			msg "Uninstalling: $schema"
 			GCONF_CONFIG_SOURCE="$(gconftool-2 --get-default-source)" gconftool-2 --makefile-uninstall-rule "$schema"  >/dev/null
@@ -2201,7 +2267,8 @@ gnome2_uninstall_schema() {
 # Install mine
 gnome2_install_mine() {
 	local mines="$@"
-	if [ x"$mines" != x ] && [ -x /usr/bin/xdg-mime ];then
+	
+    if [ x"$mines" != x ] && [ -x /usr/bin/xdg-mime ];then
 		for mine in $mines; do
 			msg "Installing: $mine"
 			xdg-mime install --mode system "$mine"  >/dev/null
@@ -2212,7 +2279,8 @@ gnome2_install_mine() {
 # Unstall mine
 gnome2_uninstall_mine() {
 	local mines="$@"
-	if [ x"$mines" != x ] && [ -x /usr/bin/xdg-mime ];then
+	
+    if [ x"$mines" != x ] && [ -x /usr/bin/xdg-mime ];then
 		for mine in $mines; do
 			msg "Uninstalling: $mine"
 			xdg-mime uninstall --mode system "$mine"  >/dev/null
@@ -2249,7 +2317,7 @@ gnome2_gtk_immodules_update() {
 	if [ -x /usr/bin/update-gtk-immodules ]; then
 		msg "Updating gtk immodules ..."
 		update-gtk-immodules --verbose
-        fi
+    fi
 }
 
 # Update gdk pixbuf loaders
@@ -2268,18 +2336,16 @@ gnome2_icon_cache_update() {
 	local dir=""
 	#gnome2_icon_cache_update /usr/share/icons/titans|titans
 	local updater="$(type -p gtk-update-icon-cache 2> /dev/null)"
-	if [ "x$*" = "x" ]; then
+	
+    if [ "x$*" = "x" ]; then
 		dir="/usr/share/icons/hicolor"
 	else
 		while [ "x$1" != "x" ]; do
-			if [ ! -d "$1" ]; then
-				dir+="/usr/share/icons/"${1##*/}" "
-			else	
-				dir+="$1 "
-			fi
+		    [ ! -d "$1" ] && dir+="/usr/share/icons/"${1##*/}" " || dir+="$1 "
 			shift
 		done
 	fi
+
 	msg "Updating icons cache: $dir"
 	"$updater" -f -q -t $dir
 }
@@ -2303,22 +2369,75 @@ flag_reboot() {
 #
 
 #
-#fetch           break after download source tarball
-#upack           break after unpack source tarball
-#patch           break after patch source
-#config          break after configure	
-#make           break after make a.k.s compile
-#check		 break after make check/test
-#mkinstall         break after make install    
-#package         break after make ypk package    
+#fetch  break after download source tarball
+#upack  break after unpack source tarball
+#patch  break after patch source
+#config break after configure	
+#make   break after make a.k.s compile
+#check  break after make check/test
+#mkinstall  break after make install    
+#package    break after make ypk package    
 #
 maybe_break() {
 	local string="$1"
 	local command="$(echo $@ |sed 's/'"$string"'//')"
-	if echo "$BREAK" | egrep -q "(,|^)$string(,|$)"; then
+	
+    if echo "$BREAK" | egrep -q "(,|^)$string(,|$)"; then
 		$command
 		exit 1
 	fi
+}
+
+#
+reverse_order() {
+    local i=($@)
+    local max=${#i[@]}
+    
+    while [ $max -gt 0 ]; do
+        let max=max-1
+        echo ${i[$max]}
+    done
+}
+
+#
+ybs_build() {
+    local pkg="$1"
+    local record=""
+    local finded=""
+    local deps="$pkg "
+    local i dep
+
+    while true; do
+       echo "$deps" >/tmp/.pre_deps
+       
+       for i in ${deps}; do
+            str_isIn "$finded" "${i}" 2>/dev/null && continue
+            pbsfile=$(ybs_show "$i" pbs)
+            [ -f "$pbsfile" ] && . "$pbsfile" || die "$i not found."
+            finded+=" ${i} "
+       
+            for dep in $RDEPEND $BDEPEND; do
+                dep="${dep/-dev/}"
+                dep="${dep//(*)}"
+                str_isIn "$record" "$dep" 2>/dev/null && continue
+                str_isIn "$deps" "$dep" || deps+="$dep "
+                record+=" $dep "
+            done
+        done
+    
+        echo "$deps" >/tmp/.post_deps
+        diff /tmp/.pre_deps /tmp/.post_deps >/dev/null && break
+    done
+
+    # In reverse order
+    deps=$(reverse_order $deps)
+    for dep in $deps; do
+        if [ "x$TERM" != "xlinux" ]; then
+            echo -ne "\033]0;ybs working: ${dep}\007"; ybs_build_raw "${dep}" || die
+        else
+            ybs_build_raw "${dep}" || die
+        fi
+    done
 }
 
 #
@@ -2327,9 +2446,8 @@ maybe_break() {
 # pkgtype/pkgname -net-ftp/lftp
 # pbsfile - lftp_4.3.3.pbs 
 #
-ybs_build() {
+ybs_build_raw() {
 	local string="$1"
-	local stat
 
 	if ! ybs_getpbsfile "$string"; then
 		rmsg ":( $string not found."
@@ -2338,6 +2456,7 @@ ybs_build() {
 
 	ybs_searchInstalled $T $N $V$R >/dev/null
 	
+    local stat
 	local new=$V$R
 	local force_flag=""	
 	[ "x$FORCE_INSTALL" = "xyes" ] && force_flag="F"
@@ -2398,16 +2517,16 @@ ybs_build() {
 	filesdir="${pbsdir}"/files
 	buildlog="$PWD/${N}_$V$R-$YARCH.buildlog"
 
-	local 	 patchpipe="$PWD/patch.pipe"
-	local     patchlog="$PWD/patch-log"
-	local 	 configpipe="$PWD/config.pipe"
-	local     configlog="$PWD/configure-log"
-	local      makepipe="$PWD/make.pipe"
-	local       makelog="$PWD/make-log"
-	local     checkpipe="$PWD/check.pipe"
-	local      checklog="$PWD/check-log"
-	local mkinstallpipe="$PWD/mkinstall.pipe"
-	local  mkinstalllog="$PWD/mkinstall-log"
+	local 	  patchpipe="$PWD"/patch.pipe
+	local      patchlog="$PWD"/patch-log
+	local    configpipe="$PWD"/config.pipe
+	local     configlog="$PWD"/configure-log
+	local      makepipe="$PWD"/make.pipe
+	local       makelog="$PWD"/make-log
+	local     checkpipe="$PWD"/check.pipe
+	local      checklog="$PWD"/check-log
+	local mkinstallpipe="$PWD"/mkinstall.pipe
+	local  mkinstalllog="$PWD"/mkinstall-log
 
 	mkdir -p "$srcdir"
 	cd "$srcdir"
@@ -2512,7 +2631,8 @@ EOF
 	tee $mkinstalllog < $mkinstallpipe & 
 	pbs_install > $mkinstallpipe
 	err_check ":( $T/${N}_$V$R call pbs_install failed"
-
+    
+    local i j
 	if [ "x$PROVIDE" != "x" ]; then	
 		ymsg ">> $T/${N}_$V$R split $PROVIDE."
 		j=1
@@ -2567,6 +2687,7 @@ EOF
 	# install to system
 	ymsg ">> $TT/${N}_$V$R $PROVIDE install to system"
 
+    local pack
 	for pack in $packs; do
 		case "x$AUTO_INSTALL" in
 			xyes) mmsg "Install: $pack"
@@ -2628,6 +2749,7 @@ ybs_show() {
 	fi
 }
 
+#
 ybs_whatrequires() {
 	local string="$1"
 	local depend 

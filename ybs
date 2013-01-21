@@ -131,37 +131,12 @@ case "${1}" in
 	;;
 
 -i|--build)
-	check_root
-	ymsg "* Calculating dependencies..."
-
-	for i in ${args[@]};do
-		app=${i}
-		pbsfile=$(ybs_show "$app" pbs)
-		[ -f "$pbsfile" ] && . "$pbsfile" || (echo; rmsg "* [Error]: ${app} not found."; exit 1)
-		deps=
-		
-		for dep in $BDEPEND; do
-			dep=${dep/-dev/} 
-			deps+="${dep} "
-		done
-
-		deps="$RDEPEND $deps"
-  		#for dep in $(echo $deps |tr ' ' '\n' |tac |xargs); do
-  		for dep in $deps; do
-			if [ "x$TERM" != "xlinux" ]; then
-				echo -ne "\033]0;ybs working: ${dep}\007"; ybs_build ${dep} || exit 1
-			else
-		  		ybs_build ${dep} || exit 1
-		 	fi
-	      	done
-		
-		if [ "x$TERM" != "xlinux" ]; then
-			echo -ne "\033]0;ybs working: ${app}\007"; ybs_build ${app} || exit 1
-		else
-			ybs_build ${app} || exit 1
-		fi
-	done
-	;;
+    check_root
+    ymsg "* Calculating dependencies..."
+    for i in ${args[@]};do
+        ybs_build ${i}
+    done
+    ;;
 
 -is|--build-single) 
 	check_root
@@ -172,9 +147,9 @@ case "${1}" in
 	FORCE_INSTALL="yes"
 	for i in ${args[@]}; do
 		if [ "x$TERM" != "xlinux" ]; then
-			echo -ne "\033]0;ybs working: ${i}\007"; ybs_build $i || exit 1
+			echo -ne "\033]0;ybs working: ${i}\007"; ybs_build_raw $i || exit 1
 		else
-			ybs_build $i || exit 1
+			ybs_build_raw $i || exit 1
 		fi
 	done
 	;;
@@ -201,7 +176,7 @@ case "${1}" in
 	fi
 	
 	mkdir -p $PBSLIB_PATH
-	err_check "* [Error]: Create dir $PBSLIB_PATH failed."
+	die "Create dir $PBSLIB_PATH failed"
 
 	if [ -d $PBSLIB_PATH/.git ]; then
 		# Already exist.
