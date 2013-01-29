@@ -22,7 +22,7 @@
 . /usr/lib/ybs/funcs
 
 show_usage() {
-	cat <<EOF
+    cat <<EOF
 $0 - create packages index files
 
 Usage: $0 binary-dir
@@ -33,37 +33,37 @@ EOF
 }
 
 find_newest() {
-	local newest="$1"
-	local file
+    local newest="$1"
+    local file
 
-	for file in $@; do
-		atom_cmp $newest $file
-		if [ $? -eq 2 ]; then 
-			 newest=$file
-		fi
-	done
+    for file in $@; do
+        atom_cmp $newest $file
+        if [ $? -eq 2 ]; then 
+             newest=$file
+        fi
+    done
 
-	echo $newest
+    echo $newest
 }
 
 find_ypk() {
-	local dir all
-	
-	find -type f -name "*.ypk" |sort -u >$filelist_all
-	
-	[ "x$(cat $filelist_all)" = "x" ] && die "YPK package not found."
+    local dir all
+    
+    find -type f -name "*.ypk" |sort -u >$filelist_all
+    
+    [ "x$(cat $filelist_all)" = "x" ] && die "YPK package not found."
 
-	[ -f filelist.txt ] || touch filelist.txt
+    [ -f filelist.txt ] || touch filelist.txt
 
-	if ! diff filelist.txt $filelist_all -ur; then
-		read -p "Do you want to continue? [Y/n]" ask
-		case $ask in
-			[Nn]o|[Nn]) exit 1 ;;
-				*)
-		esac
-	fi
+    if ! diff filelist.txt $filelist_all -ur; then
+        read -p "Do you want to continue? [Y/n]" ask
+        case $ask in
+            [Nn]o|[Nn]) exit 1 ;;
+                *)
+        esac
+    fi
 
-	>$filelist_stable
+    >$filelist_stable
     find -type f -name "*.ypk" |while read i; do 
         local ypkdir=$(dirname ${i})
         if pushd $ypkdir 1>/dev/null; then
@@ -74,99 +74,99 @@ find_ypk() {
         fi
     done
 
-	# 删除空行
-	sed -i '/^$/d' $filelist_stable $filelist_all
+    # 删除空行
+    sed -i '/^$/d' $filelist_stable $filelist_all
 
-	echo "all: $(wc -l $filelist_all |awk '{print $1}')" >filelist.txt 
-	cat $filelist_all >>filelist.txt
+    echo "all: $(wc -l $filelist_all |awk '{print $1}')" >filelist.txt 
+    cat $filelist_all >>filelist.txt
 }
 
 get_info() {
-	local ypk="$1"
-	local xml="$2"
+    local ypk="$1"
+    local xml="$2"
     local uri="${ypk/$YPK_DEST\//}"
 
-	if [ ! -f "$xml" ]; then
-		local size=$(du "$ypk" -sb |awk '{print $1}')
-		local sha1=$(sha1sum "$ypk" |awk '{print $1}')
-		tar xf "$ypk" pkginfo
-		tar xf pkginfo control.xml --to-command='cat' \
-			    |sed -e '1d' -e '2d' -e '$d' -e '/<uri>/d' \
-			    |sed -e '/\<build_date\>/a\   <size>'"$size"'<\/size>' -e '/\<build_date\>/a\   <sha>'"$sha1"'<\/sha>' \
-			    -e '/\<build_date\>/a\   <uri>'"$uri"'<\/uri>'
-		rm pkginfo
-	else
-		cat $xml |sed -e '1d' -e '2d' -e '$d' -e '/<uri>/d' \
-		         |sed -e '/\<build_date\>/a\   <uri>'"$uri"'<\/uri>'
-	fi
+    if [ ! -f "$xml" ]; then
+        local size=$(du "$ypk" -sb |awk '{print $1}')
+        local sha1=$(sha1sum "$ypk" |awk '{print $1}')
+        tar xf "$ypk" pkginfo
+        tar xf pkginfo control.xml --to-command='cat' \
+                |sed -e '1d' -e '2d' -e '$d' -e '/<uri>/d' \
+                |sed -e '/\<build_date\>/a\   <size>'"$size"'<\/size>' -e '/\<build_date\>/a\   <sha>'"$sha1"'<\/sha>' \
+                -e '/\<build_date\>/a\   <uri>'"$uri"'<\/uri>'
+        rm pkginfo
+    else
+        cat $xml |sed -e '1d' -e '2d' -e '$d' -e '/<uri>/d' \
+                 |sed -e '/\<build_date\>/a\   <uri>'"$uri"'<\/uri>'
+    fi
 }
 
 merge_info() {
-	local filelist="$1"
-	local xmlfile="$2"
+    local filelist="$1"
+    local xmlfile="$2"
 
-	echo '<?xml version="1.0" encoding="UTF-8"?>' >$xmlfile
-	echo '<PackageInfo>' >>$xmlfile
+    echo '<?xml version="1.0" encoding="UTF-8"?>' >$xmlfile
+    echo '<PackageInfo>' >>$xmlfile
 
-	cat $filelist |while read ypk; do 
-		xml=${ypk%.ypk}.xml
-		if [ ! -f "$xml" ]; then
-			echo '<?xml version="1.0" encoding="UTF-8"?>' >$xml
-			echo '<PackageInfo>' >>$xml
-			get_info ${ypk} >>$xml
-			echo '</PackageInfo>' >>$xml
-		fi
-		get_info ${ypk} ${xml} >>$xmlfile
-	done
+    cat $filelist |while read ypk; do 
+        xml=${ypk%.ypk}.xml
+        if [ ! -f "$xml" ]; then
+            echo '<?xml version="1.0" encoding="UTF-8"?>' >$xml
+            echo '<PackageInfo>' >>$xml
+            get_info ${ypk} >>$xml
+            echo '</PackageInfo>' >>$xml
+        fi
+        get_info ${ypk} ${xml} >>$xmlfile
+    done
 
-	echo '</PackageInfo>' >>$xmlfile
-	
+    echo '</PackageInfo>' >>$xmlfile
+    
 }
 
 final() {
-	cp stable.xml update.xml
-	tar cJf stable.tar.xz update.xml
-	
-	rm update.xml
+    cp stable.xml update.xml
+    tar cJf stable.tar.xz update.xml
+    
+    rm update.xml
 
-	>updates.list
+    >updates.list
 
-	for i in stable.tar.xz; do
-		name=${i}
-		date=$(date +%s)
-		sha1=$(sha1sum $name |awk '{print $1}')
-		echo "$name $date $sha1"  >>updates.list
-		sleep 1
-	done
+    for i in stable.tar.xz; do
+        name=${i}
+        date=$(date +%s)
+        sha1=$(sha1sum $name |awk '{print $1}')
+        echo "$name $date $sha1"  >>updates.list
+        sleep 1
+    done
 
-	date +%s >updates.date
+    date +%s >updates.date
 }
 
 # main
 #
 
 if ! which ypkg >/dev/null 2>/dev/null; then
-	die " ypkg is required, please install ypkg2"
+    die " ypkg is required, please install ypkg2"
 fi
 
 if ! which diff >/dev/null 2>/dev/null; then
-	die " diff is required, please install diffutils"
+    die " diff is required, please install diffutils"
 fi
 
 case x$1 in
-	x*h|x*help) show_usage
-	            exit 0
+    x*h|x*help) show_usage
+                exit 0
 esac
 
 case x$# in 
-	x0) YPK_DEST=$YPK_DEST;;
-	x1) YPK_DEST=$(readlink -f $1) ;;
-	x2|*) show_usage
-	    exit 0
+    x0) YPK_DEST=$YPK_DEST;;
+    x1) YPK_DEST=$(readlink -f $1) ;;
+    x2|*) show_usage
+        exit 0
 esac
 
 if [ ! -d $YPK_DEST ]; then
-	die " $YPK_DEST not found."
+    die " $YPK_DEST not found."
 fi
 
 filelist_all="/tmp/.filelist-all"

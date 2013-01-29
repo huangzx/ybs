@@ -23,7 +23,7 @@
 . /usr/lib/ybs/funcs
 
 ybs_show_usage() {
-	cat <<EOF
+    cat <<EOF
 $0  
 
 Usage: $0 command [options] pkg1 [pkg2 ...]
@@ -48,7 +48,7 @@ Options for build:
     --fetch                 Break after download source tarball
     --unpack                Break after unpack source tarball
     --patch                 Break after patch source
-    --config                Break after configure	
+    --config                Break after configure    
     --make                  Break after make a.k.s compile
     --check                 Break after make check/test
     --mkinstall             Break after make install    
@@ -64,71 +64,71 @@ mkdir -p $YPK_DEST $WORKING_FIELD
 i=0
 j=0
 for arg in $@;do 
-	# Remove blank in string	
-	arg=$(echo $arg |tr -d '[:blank:]')
-	case $arg in
-		-*) argvs[${j}]="$arg"
-		    let j++	;;
-		*)  args[${i}]="$arg"
-		    let i++
-	esac
+    # Remove blank in string    
+    arg=$(echo $arg |tr -d '[:blank:]')
+    case $arg in
+      -*) argvs[${j}]="$arg"
+          let j++    ;;
+       *)  args[${i}]="$arg"
+          let i++
+    esac
 done
 
 for i in ${argvs[@]}; do
-	case ${i} in
-	  -p|--pretend) PRETEND="yes"       ;;
-	  -F|--force)   FORCE_INSTALL="yes" ;;
-	  --fetch)      BREAK="fetch"       ;;
-	  --unpack)     BREAK="unpack"      ;;	
-	  --patch)      BREAK="patch"       ;;	
-	  --config)     BREAK="config"      ;;
-	  --make)       BREAK="make"        ;;
-	  --check)      BREAK="check"       ;;
-	  --mkinstall)  BREAK="mkinstall"   ;;
-	  --package)    BREAK="package"     ;;
-	  -h|--help|-s|--search| \
-          -d|--download|-r|--remove| \
-          -i|--build|-is|--build-single| \
-          -w|--showpbs|-wr|--whatrequires|--sync|--info) ;;
- 		*)      msg "ybs: ${i} is not a ybs options. See ybs --help."
-			msg ""
-			case ${i##*-} in
-			  f*) msg "Did you mean: --fetch"  ;;
-			  u*) msg "Did you mean: --unpack" ;;
-              p*) msg "Did you mean: --patch --package"  ;; 
-              c*) msg "Did you mean: --config --check" ;;
-              m*) msg "Did you mean: --make --mkinstall" ;;
-               *) msg "Did you mean one of these?"
-                  msg "--fetch --unpack --patch --config --make --check --mkinstall --package"
-			esac	
-			exit 1
-	esac
+    case ${i} in
+      -p|--pretend) PRETEND="yes"       ;;
+      -F|--force)   FORCE_INSTALL="yes" ;;
+      --fetch)      BREAK="fetch"       ;;
+      --unpack)     BREAK="unpack"      ;;    
+      --patch)      BREAK="patch"       ;;    
+      --config)     BREAK="config"      ;;
+      --make)       BREAK="make"        ;;
+      --check)      BREAK="check"       ;;
+      --mkinstall)  BREAK="mkinstall"   ;;
+      --package)    BREAK="package"     ;;
+      -h|--help|-s|--search| \
+      -d|--download|-r|--remove| \
+      -i|--build|-is|--build-single| \
+      -w|--showpbs|-wr|--whatrequires|--sync|--info) ;;
+            *)      msg "ybs: ${i} is not a ybs options. See ybs --help."
+             msg ""
+              case ${i##*-} in
+               f*) msg "Did you mean: --fetch"  ;;
+               u*) msg "Did you mean: --unpack" ;;
+               p*) msg "Did you mean: --patch --package" ;; 
+               c*) msg "Did you mean: --config --check" ;;
+               m*) msg "Did you mean: --make --mkinstall" ;;
+                *) msg "Did you mean one of these?"
+                   msg "--fetch --unpack --patch --config --make --check --mkinstall --package"
+            esac    
+            exit 1
+    esac
 done
 
 case "${1}" in
 -info|--info)
-	# Show build info
-	grep -v ^# "/etc/ybs.conf" |sed '/^$/d'
-	;;
+    # Show build info
+    grep -v ^# "/etc/ybs.conf" |sed '/^$/d'
+    ;;
 
 -s|--search)
-	msg_ "* Searching for "
-	wmsg_ "${args[@]} "
-	msg "..."
-	for i in ${args[@]}; do
-		ybs_search $i
-	done
-	;;
+    msg_ "* Searching for "
+    wmsg_ "${args[@]} "
+    msg "..."
+    for i in ${args[@]}; do
+        ybs_search $i
+    done
+    ;;
 
 -d|--download)
-	check_root
-	msg_ "* Source downloading "
-	wmsg_ "${args[@]} "
-	msg "..."
-	for i in ${args[@]}; do
-		ybs_download $i
-	done
-	;;
+    check_root
+    msg_ "* Source downloading "
+    wmsg_ "${args[@]} "
+    msg "..."
+    for i in ${args[@]}; do
+        ybs_download $i
+    done
+    ;;
 
 -i|--build)
     check_root
@@ -139,89 +139,89 @@ case "${1}" in
     ;;
 
 -is|--build-single) 
-	check_root
-	# Build single package
-	msg_ "* Installing "
-	wmsg_ "${args[@]} "
-	msg "..."
-	FORCE_INSTALL="yes"
-	for i in ${args[@]}; do
-		if [ "x$TERM" != "xlinux" ]; then
-			echo -ne "\033]0;ybs working: ${i}\007"; ybs_build_raw $i || exit 1
-		else
-			ybs_build_raw $i || exit 1
-		fi
-	done
-	;;
+    check_root
+    # Build single package
+    msg_ "* Installing "
+    wmsg_ "${args[@]} "
+    msg "..."
+    FORCE_INSTALL="yes"
+    for i in ${args[@]}; do
+        if [ "x$TERM" != "xlinux" ]; then
+            echo -ne "\033]0;ybs working: ${i}\007"; ybs_build_raw $i || exit 1
+        else
+            ybs_build_raw $i || exit 1
+        fi
+    done
+    ;;
 
 -r|--remove)
-	check_root
-	# Remove package
-	msg_ "* Removing "
-	wmsg_ "${args[@]} "
-	for i in ${args[@]}; do
-		ypkg -C $i
-	done
-	;;
+    check_root
+    # Remove package
+    msg_ "* Removing "
+    wmsg_ "${args[@]} "
+    for i in ${args[@]}; do
+        ypkg -C $i
+    done
+    ;;
 
 --sync) 
-	# Sync pbslib via git
-	check_root
-	logfile="/var/log/ybs.log"
-	
-	if [ x"$(cat $logfile 2>/dev/null)" != x ];then
-		echo
-		mmsg "* Last update: $(date -d "1970-01-01 UTC $(cat $logfile) seconds" +%F,%T,%z)"
-		echo
-	fi
-	
-	mkdir -p $PBSLIB_PATH
-	die "Create dir $PBSLIB_PATH failed"
+    # Sync pbslib via git
+    check_root
+    logfile="/var/log/ybs.log"
+    
+    if [ x"$(cat $logfile 2>/dev/null)" != x ];then
+        echo
+        mmsg "* Last update: $(date -d "1970-01-01 UTC $(cat $logfile) seconds" +%F,%T,%z)"
+        echo
+    fi
+    
+    mkdir -p $PBSLIB_PATH
+    die "Create dir $PBSLIB_PATH failed"
 
-	if [ -d $PBSLIB_PATH/.git ]; then
-		# Already exist.
-		cd $PBSLIB_PATH
-		msg "* Sync $PBSLIB_PATH from $PBSLIB_URI"
-		msg "* Running git pull"
-		git pull 
+    if [ -d $PBSLIB_PATH/.git ]; then
+        # Already exist.
+        cd $PBSLIB_PATH
+        msg "* Sync $PBSLIB_PATH from $PBSLIB_URI"
+        msg "* Running git pull"
+        git pull 
         if [ "x$PBSLIB_BRANCH" != "x" ]; then
-    		msg "* Running git checkout"
-	    	git checkout $PBSLIB_BRANCH
+            msg "* Running git checkout"
+            git checkout $PBSLIB_BRANCH
         fi
-		date +%s >$logfile
-		exit 0
-	else
-		cd ${PBSLIB_PATH%/*}
-		ymsg "* Fetch new $PBSLIB_PATH from $PBSLIB_URI"
-		msg "* Running git clone"
-		git clone $PBSLIB_URI
+        date +%s >$logfile
+        exit 0
+    else
+        cd ${PBSLIB_PATH%/*}
+        ymsg "* Fetch new $PBSLIB_PATH from $PBSLIB_URI"
+        msg "* Running git clone"
+        git clone $PBSLIB_URI
         if [ "x$PBSLIB_BRANCH" != "x" ]; then
-    		msg "* Running git checkout $PBSLIB_BRANCH"
-	    	cd $PBSLIB_PATH
-	    	git checkout $PBSLIB_BRANCH
+            msg "* Running git checkout $PBSLIB_BRANCH"
+            cd $PBSLIB_PATH
+            git checkout $PBSLIB_BRANCH
         fi
-		date +%s >$logfile
-	fi
-	;;
+        date +%s >$logfile
+    fi
+    ;;
 
 -w|--showpbs)
-	# Show pbs file
-	for i in ${args[@]}; do
-		ybs_show $i pbs
-	done
-	;;
+    # Show pbs file
+    for i in ${args[@]}; do
+        ybs_show $i pbs
+    done
+    ;;
 
 -wr|--whatrequires)
-	msg "* [R] stand for run time depend, [B] for build, [A] for recommoneded, [C] for conflict."
-	for i in ${args[@]}; do
-		 ybs_whatrequires $i
-	done
-	;;
+    msg "* [R] stand for run time depend, [B] for build, [A] for recommoneded, [C] for conflict."
+    for i in ${args[@]}; do
+         ybs_whatrequires $i
+    done
+    ;;
 
 -h|--help|*)
-	ybs_show_usage
-	exit 0
-	;;
+    ybs_show_usage
+    exit 0
+    ;;
 esac
 
 # End of file

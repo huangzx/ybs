@@ -30,6 +30,28 @@ show_usage() {
 EOF
 }
 
+raw_check() {
+    local app="$1"; shift
+    local deps="$@"
+    local dep
+
+    for dep in $deps; do
+        dep="${dep/-dev/}"
+        dep="${dep//(*)}"
+        pbsfile=$(ybs_show "$dep" pbs)    
+        if [ -f "$pbsfile" ];  then
+            atom_parse "$pbsfile"
+            if [ "x$dep" != "x$N" ]; then
+                . "$pbsfile"
+                str_isin "$PROVIDE" "$dep" || echo "$app --> $dep"
+            fi
+        else
+            echo "$app --> $dep"
+        fi
+    done    
+}
+
+#
 case x$1 in
     x*h|x*help)
         show_usage
@@ -69,13 +91,7 @@ echo ----------------------
 ls -1d */* |while read app; do
     pbsfile=$(ybs_show "$app" pbs)
     [ -f "$pbsfile" ] && . "$pbsfile"
-    
-    for dep in $RDEPEND; do
-        dep="${dep/-dev/}"
-        dep="${dep//(*)}"
-        pbsfile=$(ybs_show "$dep" pbs)    
-        [ -f "$pbsfile" ] || echo "$app --> $dep"
-    done
+    raw_check $app $RDEPEND        
 done 
 
 echo
@@ -85,13 +101,7 @@ echo ----------------------
 ls -1d */* |while read app; do
     pbsfile=$(ybs_show "$app" pbs)
     [ -f "$pbsfile" ] && . "$pbsfile"
-
-    for dep in $BDEPEND; do
-        dep="${dep/-dev/}"
-        dep="${dep//(*)}"
-        pbsfile=$(ybs_show "$dep" pbs)
-        [ -f "$pbsfile" ] || echo "$app --> $dep"
-    done
+    raw_check $app $BDEPEND
 done
 
 # End of file

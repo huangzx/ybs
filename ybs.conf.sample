@@ -13,7 +13,7 @@ ARCH=
 CC=gcc
 CXX=g++
 CFLAGS=""
-CXXFLAGS=""
+CXXFLAGS="$CFLAGS "
 
 #
 # MAKEOPTS provides extra options that may be passed to 'make' when a
@@ -56,7 +56,7 @@ WORKING_FIELD="/var/tmp/ybs"
 # git://git.ylmf.com/pbslib.git
 PBSLIB_URI=""
 PBSLIB_PATH="/var/ybs/pbslib"
-# startos-5.x OR startos-6.x
+# startos-5.x
 PBSLIB_BRANCH=""
 
 #
