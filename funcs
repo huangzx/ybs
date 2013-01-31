@@ -56,16 +56,15 @@ wmsg_() { wmsg "$@" | tr -d '\n'; }
 YBS_PATH="/var/ybs"
 
 # Startos release verison and pbslib git uri
-RV=$(lsb_release -r)
 [ "x$PBSLIB_PATH" = "x" ] && PBSLIB_PATH="$YBS_PATH/pbslib"
-
+[ "x$PBSLIB_URI" = "x" ] && PBSLIB_URI="git://github.com/StartOS/pbslib.git"
+RV=$(lsb_release -r)
 RELEASE="${RV%%.*}"
 case "$RELEASE" in
    5)
- [ "x$PBSLIB_URI" = "x" ] && PBSLIB_URI="git://git.ylmf.com/pbslib.git"
  [ "x$PBSLIB_BRANCH" = "x" ] && PBSLIB_BRANCH="startos-5.x" ;;
  6|*)
-  [ "x$PBSLIB_URI" = "x" ] && PBSLIB_URI="git://github.com/StartOS/pbslib.git"
+ [ "x$PBSLIB_BRANCH" = "x" ] && PBSLIB_BRANCH="startos-6.x" ;;
 esac
 
 YBS_SOURCE="$YBS_PATH/sources"
@@ -110,6 +109,9 @@ checktools="md5sum sha1sum sha256sum sha512sum"
 
 # Install ypk after building
 [ "x$AUTO_INSTALL" = "x" ] && AUTO_INSTALL="no"
+
+# Support string of system arch
+ARCHES="i686 x86_64 any"
 
 # Get system arch
 get_arch() {
@@ -369,6 +371,20 @@ warn() {
 }
 
 #
+strip_arch_string() { 
+    local i
+    local s="$1"
+    
+    # FIXME
+    # It is hard-cored here
+    for i in $ARCHES; do
+        s=${s%-${i}}
+    done
+
+    echo "$s"
+}
+
+#
 atom_parse() {
     T=""
     N=""
@@ -426,10 +442,7 @@ atom_parse() {
         atom=foo_$atom
     fi
 
-    #XXX, it is hard-coded here
-    atom=${atom%-i686}
-    atom=${atom%-x86_64}
-    atom=${atom%-any}
+    atom=$(strip_arch_string "$atom")
 
     # cairo(>=1.6) x11-libs/cairo(>=1.6)
     if echo $atom |grep \( |grep -q \); then
@@ -480,15 +493,15 @@ atom_cmp() {
     local v1 v2
     
     string1=${string1#*_}
-    v1=${string1%.[A-Za-z][A-Za-z][A-Za-z]}
-    v1=${v1%-$YARCH}
     v1=$(echo $v1 |tr '[A-Z]' '[a-z]')
+    v1=${string1%.[a-z][a-z][a-z]}
+    v1=$(strip_arch_string "$v1")
 
     string2=${string2#*_}
-    v2=${string2%.%.[A-Za-z][A-Za-z][A-Za-z]}
-    v2=${v2%-$YARCH}
     v2=$(echo $v2 |tr '[A-Z]' '[a-z]')
-    
+    v2=${string2%.[a-z][a-z][a-z]}
+    v2=$(strip_arch_string "$v2")
+ 
     if [ "x$v1" = "x$v2" ] || test $v1 -eq $v2 2>/dev/null;then
         return 0
     fi
@@ -696,8 +709,8 @@ check_and_download_raw() {
     local checkok
     local target="${YBS_SOURCE}/${fname%.git}"
     
-    # uri with suffix of .git
-    if [ "x.${uri##*.}" = "x.git" ]; then
+    # uri with suffix of .git or prefix of git://
+    if [ "x.${uri##*.}" = "x.git" ] || [ "x${uri%%:*}" = "xgit" ]; then
         local name="$N"
         target="${YBS_SOURCE}/$name"
 

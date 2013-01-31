@@ -53,11 +53,13 @@ WORKING_FIELD="/var/tmp/ybs"
 #
 # PBSLIB_PATH - pbs tree
 #
-# StartOS 5.x, defauls to git://git.ylmf.com/pbslib.git
-# StartOS 6.x, defauls to git://github.com:StartOS/pbslib.git
-PBSLIB_URI=""
+# PBSLIB_URI: 
+# defauls to 'git://github.com:StartOS/pbslib.git' 
+# alternative 'git://git.ylmf.com/pbslib.git' 
+# PBSLIB_BRANCH: 'startos-5.x', 'startos-6.x'
+PBSLIB_URI="git@github.com:StartOS/pbslib.git"
 PBSLIB_PATH="/var/ybs/pbslib"
-PBSLIB_BRANCH=""
+PBSLIB_BRANCH="startos-6.x"
 
 #
 # Download tools, curl and wget are available
