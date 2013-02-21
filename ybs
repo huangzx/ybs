@@ -176,7 +176,7 @@ case "${1}" in
     fi
     
     mkdir -p $PBSLIB_PATH
-    die "Create dir $PBSLIB_PATH failed"
+    err_check "Create dir $PBSLIB_PATH failed"
 
     if [ -d $PBSLIB_PATH/.git ]; then
         # Already exist.

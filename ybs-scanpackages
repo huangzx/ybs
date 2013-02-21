@@ -91,12 +91,12 @@ get_info() {
         local sha1=$(sha1sum "$ypk" |awk '{print $1}')
         tar xf "$ypk" pkginfo
         tar xf pkginfo control.xml --to-command='cat' \
-                |sed -e '1d' -e '2d' -e '$d' -e '/<uri>/d' \
+                |sed -e '/PackageInfo/d' -e '/encoding=\"UTF-8\"\?/d'   -e '/<uri>/d' \
                 |sed -e '/\<build_date\>/a\   <size>'"$size"'<\/size>' -e '/\<build_date\>/a\   <sha>'"$sha1"'<\/sha>' \
                 -e '/\<build_date\>/a\   <uri>'"$uri"'<\/uri>'
         rm pkginfo
     else
-        cat $xml |sed -e '1d' -e '2d' -e '$d' -e '/<uri>/d' \
+        cat $xml |sed -e '/PackageInfo/d' -e '/encoding=\"UTF-8\"\?/d' -e '/<uri>/d' \
                  |sed -e '/\<build_date\>/a\   <uri>'"$uri"'<\/uri>'
     fi
 }
