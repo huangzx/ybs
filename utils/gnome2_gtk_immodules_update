@@ -1,0 +1,13 @@
+#!/bin/bash
+#
+#
+
+# Update gtk-immodules
+gnome2_gtk_immodules_update() {
+    if [ -x /usr/bin/update-gtk-immodules ]; then
+        echo "Updating gtk immodules ..."
+	update-gtk-immodules --verbose
+    fi
+}
+
+gnome2_gtk_immodules_update $@

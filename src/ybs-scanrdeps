@@ -1,0 +1,175 @@
+#!/usr/bin/env python
+# -*- coding: utf8 -*-
+#
+# Copyright © 2012 ivali.com
+# Maintainer: Zhongxin Huang <huangzhongxin@ivali.com>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+import os
+import sys
+import sqlite3
+import argparse
+import subprocess 
+
+DEPEND_DB = '/var/ybs/db/depend.db'
+
+
+class ScanRdep(object):
+    '''
+    
+    '''
+    def __init__(self, pkg):
+        self.pkg = pkg
+        p = subprocess.Popen('ypkg -l '+self.pkg, shell=True, stdout=subprocess.PIPE)
+        # p.communicate method return a tuple looks likes:
+        # (stdoutdata, stderrdata)
+        streamdata = p.communicate()[0]
+        if p.returncode != 0:
+            sys.stderr.write("'{}' not found. Be sure it has been installed.".format(pkg))
+            sys.exit(1)
+        filelist_raw = [x for x in streamdata.split('\n')]
+        # 获得所有文件和链接# 
+        filelist = []
+        for line in filelist_raw:
+            line = line.strip()
+            if line.startswith('F|') or line.startswith('S|'):
+                filelist.append(line.split('|')[-1].strip())
+        if not filelist:
+            sys.stderr.write("'{}' contains directory only.".format(pkg))
+            sys.exit(1)
+        self.filelist = filelist
+    
+    
+    def _getbin(self):
+        ''' 获得所有的可执行文件'''
+        binfiles = []
+        for line in self.filelist:
+            file_result = os.popen('file -bi '+'"'+line+'"').readline()
+            if 'x-sharedlib' in file_result or 'x-executable' in file_result:
+                binfiles.append(line)
+        if not binfiles:
+            sys.stderr.write("'{}' contains not any sharedlib or executable files".format(self.pkg))
+            sys.exit(1)
+        self.binfiles = binfiles
+
+    
+    def _getlib(self):
+        ''' 用 ldd 获得需要的所有库文件'''
+        libfiles = []
+        not_found = []
+        for _file in self.binfiles:
+            ldd_result = os.popen('ldd '+_file).readlines()
+            for line in ldd_result:
+                line = line.strip()
+                if 'not found' in line:
+                    # 跳过属于自身的文件
+                    if not [x for x in self.filelist if line.split()[0] in x]:
+                        if line not in not_found:
+                            not_found.append(line)
+                else:
+                    if '=>' in line:
+                        line = line.split()[2]
+                        # 获得绝对路径
+                        line = os.path.realpath(line)
+                        if not line in libfiles:
+                            libfiles.append(line)
+        if not_found:
+            sys.stderr.write('Missing requrired libs:\n')
+            for x in not_found:
+                print x + '\n',
+            sys.exit(1)
+        self.libfiles = libfiles
+
+    
+    def _getrdeps(self):
+        ''' 用 ypkg -S 获得依赖 '''
+        rdeps = []
+        not_owned = []
+        for _file in self.libfiles:
+            ypkg_result = os.popen('ypkg -S --absolute '+_file).readlines()
+            for line in ypkg_result:
+                line = line.strip()
+                # 非空行，ypkg -S 的输出第二行是空行
+                if line:
+                    if 'Searching for' in line:
+                        continue
+                    if 'not owned by' in line:
+                        if line not in not_owned:
+                            not_owned.append(line)
+                    # 获得类似这样的结构：
+                    # glibc_2.17: F, /lib64/libc-2.17.so
+                    # lm_sensors_3.3.3: F, xxxxxx
+                    line = line.split(':')[0]
+                    line = '_'.join(line.split('_')[0:-1])
+                    if not line in rdeps:
+                        rdeps.append(line)
+        if not_owned:
+            sys.stderr.write('Files not owned by an packages:\n')
+            for x in not_owned:
+                print x + '\n',
+            sys.exit(1)
+        # 去掉自身
+        rdeps = [x for x in rdeps if x != self.pkg]
+        print 'All:'
+        for x in rdeps[0:-1]: 
+            print x,
+        print rdeps[-1] + '\n'
+        self.rdeps = rdeps
+
+    
+    def _rdeps_filted(self):
+        ''' 递归依赖 '''
+        pkgs = self.rdeps
+        conn = sqlite3.connect(DEPEND_DB)
+        cur = conn.cursor()
+        # 注意: pkgs 在循环中被修改
+        for num, pkg in enumerate(pkgs[:]):
+            cur.execute("SELECT {} FROM universe WHERE name = '{}'".format('rdep', pkg))
+            rdeps_of_pkg = cur.fetchone()
+            if not rdeps_of_pkg:
+                continue
+            # 获得结果结构:
+            # (u'ca-certificates libssh(>=0.2) openssl zlib rtmpdump',)
+            # 转成 list
+            rdeps_of_pkg = [x.split('(')[0] for x in rdeps_of_pkg[0].split()]
+            # 共同元素
+            coms = set(pkgs) & set(rdeps_of_pkg)
+            # 从原始完整列表里删除共同元素
+            for com in coms:
+                for x in pkgs:
+                    if x == com:
+                        pkgs.remove(com)
+        print 'Filtered:'
+        for x in pkgs:
+            print x,
+        return pkgs
+
+
+if __name__  == '__main__':
+    argvs = sys.argv[1:]
+    if not argvs:
+        argvs = ['-h']
+    desc = 'calculating runtime dependency of package.'
+    parser = argparse.ArgumentParser(description=desc)
+    parser.add_argument('pkg', nargs='*', help='pkg name')
+    args = parser.parse_args(argvs)
+    if args.pkg:
+        for pkg in args.pkg:
+            scanrdep = ScanRdep(pkg)
+            scanrdep._getbin()
+            scanrdep._getlib()
+            scanrdep._getrdeps()
+            scanrdep._rdeps_filted()

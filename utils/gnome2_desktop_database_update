@@ -1,0 +1,12 @@
+#!/bin/bash
+#
+#
+
+gnome2_desktop_database_update() {
+    if [ -x /usr/bin/update-desktop-database ]; then
+        echo "Updating desktop database ..."
+	    update-desktop-database
+    fi
+}
+
+gnome2_desktop_database_update $@

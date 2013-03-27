@@ -1,0 +1,12 @@
+#!/bin/bash
+#
+#
+
+doln(){
+    local end=${!#}
+    mkdir -p "$(dirname $end)"
+    ln -sf $@
+}
+
+doln $@
+

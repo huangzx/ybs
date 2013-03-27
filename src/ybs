@@ -28,11 +28,13 @@ $0
 
 Usage: $0 command [options] pkg1 [pkg2 ...]
 
-ybs (StartOS Build System) is a simple command line for download and build YPK package from source code.
+ybs (StartOS Build System) is a simple command line for download and build YPK 
+package from source code.
 
 Commands:
     -h|--help               Show usage   
-    -s|--search             Search package in ybs tree
+    -s|--search             Search package in pbslib case-insensitive
+                              symbol '$' for endswith, '^' for startswith 
     -d|--download           Download source tartall of package
     -r|--remove             Remove package (same as ypkg -C foo)
     -i|--build              Build package and dependencies
@@ -43,7 +45,7 @@ Commands:
     --info                  Show $0 parameters of /etc/ybs.conf
 
 Options for build:
-    -p|--pretend            Instead of actually build, simply display what to do  
+    -p|--pretend            Instead of actually build, display what to do  
     -F|--force              Force build
     --fetch                 Break after download source tarball
     --unpack                Break after unpack source tarball
@@ -112,18 +114,17 @@ case "${1}" in
     ;;
 
 -s|--search)
-    msg_ "* Searching for "
-    wmsg_ "${args[@]} "
+    msg_ "=> Searching for "
+    msg_ "${args[@]} "
     msg "..."
     for i in ${args[@]}; do
-        ybs_search $i
+        pybs --search $i
     done
     ;;
 
 -d|--download)
-    check_root
-    msg_ "* Source downloading "
-    wmsg_ "${args[@]} "
+    msg_ "=> Source downloading "
+    msg_ "${args[@]} "
     msg "..."
     for i in ${args[@]}; do
         ybs_download $i
@@ -132,7 +133,7 @@ case "${1}" in
 
 -i|--build)
     check_root
-    ymsg "* Calculating dependencies..."
+    msg "=> Calculating dependencies..."
     for i in ${args[@]};do
         ybs_build ${i}
     done
@@ -141,13 +142,13 @@ case "${1}" in
 -is|--build-single) 
     check_root
     # Build single package
-    msg_ "* Installing "
-    wmsg_ "${args[@]} "
+    msg_ "=> Installing "
+    msg_ "${args[@]} "
     msg "..."
     FORCE_INSTALL="yes"
     for i in ${args[@]}; do
         if [ "x$TERM" != "xlinux" ]; then
-            echo -ne "\033]0;ybs working: ${i}\007"; ybs_build_raw $i || exit 1
+            echo -ne "\033]0;ybs: ${i}\007"; ybs_build_raw $i || exit 1
         else
             ybs_build_raw $i || exit 1
         fi
@@ -157,8 +158,8 @@ case "${1}" in
 -r|--remove)
     check_root
     # Remove package
-    msg_ "* Removing "
-    wmsg_ "${args[@]} "
+    msg_ "=> Removing "
+    msg_ "${args[@]} "
     for i in ${args[@]}; do
         ypkg -C $i
     done
@@ -166,55 +167,44 @@ case "${1}" in
 
 --sync) 
     # Sync pbslib via git
-    check_root
-    logfile="/var/log/ybs.log"
-    
-    if [ x"$(cat $logfile 2>/dev/null)" != x ];then
-        echo
-        mmsg "* Last update: $(date -d "1970-01-01 UTC $(cat $logfile) seconds" +%F,%T,%z)"
-        echo
-    fi
-    
     mkdir -p $PBSLIB_PATH
     err_check "Create dir $PBSLIB_PATH failed"
 
     if [ -d $PBSLIB_PATH/.git ]; then
         # Already exist.
         cd $PBSLIB_PATH
-        msg "* Sync $PBSLIB_PATH from $PBSLIB_URI"
-        msg "* Running git pull"
+        msg "=> Sync $PBSLIB_PATH from $PBSLIB_URI"
+        msg "=> Running git pull"
         git pull 
         if [ "x$PBSLIB_BRANCH" != "x" ]; then
-            msg "* Running git checkout"
+            msg "=> Running git checkout"
             git checkout $PBSLIB_BRANCH
         fi
-        date +%s >$logfile
         exit 0
     else
         cd ${PBSLIB_PATH%/*}
-        ymsg "* Fetch new $PBSLIB_PATH from $PBSLIB_URI"
-        msg "* Running git clone"
+        msg "=> Fetch new $PBSLIB_PATH from $PBSLIB_URI"
+        msg "=> Running git clone"
         git clone $PBSLIB_URI
         if [ "x$PBSLIB_BRANCH" != "x" ]; then
-            msg "* Running git checkout $PBSLIB_BRANCH"
+            msg "=> Running git checkout $PBSLIB_BRANCH"
             cd $PBSLIB_PATH
             git checkout $PBSLIB_BRANCH
         fi
-        date +%s >$logfile
     fi
     ;;
 
 -w|--showpbs)
     # Show pbs file
     for i in ${args[@]}; do
-        ybs_show $i pbs
+        pybs --showpbs $i
     done
     ;;
 
 -wr|--whatrequires)
-    msg "* [R] stand for run time depend, [B] for build, [A] for recommoneded, [C] for conflict."
+    msg "=> [R] stands for runtime, [B] for build, [A] for recommoneded, [C] for conflict."
     for i in ${args[@]}; do
-         ybs_whatrequires $i
+         pybs --whatrequires $i
     done
     ;;
 

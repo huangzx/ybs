@@ -1,0 +1,1671 @@
+#   Copyright © 2012 ivali.com
+#   Maintainer: Zhongxin Huang <huangzhongxin@ivali.com>
+#
+#   This program is free software; you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation; either version 2 of the License, or
+#   (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+[ -e /etc/ybs.conf ] && . /etc/ybs.conf
+
+# Msg argv: "$str"
+msg()  { echo "$@"; }
+msg_() { echo "$@" | tr -d '\n'; }
+
+# PATH
+YBS_PATH="${YBS_PATH:=/var/ybs}"
+# Distribute release verison and pbslib git uri
+PBSLIB_PATH="${PBSLIB_PATH:=$YBS_PATH/pbslib}"
+PBSLIB_URI="${PBSLIB_URI:=git://github.com/StartOS/pbslib.git}"
+ret=$(lsb_release -r)
+case "${ret%%.*}" in
+   5) PBSLIB_BRANCH="${PBSLIB_BRANCH:=startos-5.x}" ;;
+   6) PBSLIB_BRANCH="${PBSLIB_BRANCH:=startos-6.x}" ;;
+esac
+YBS_SOURCE="${YBS_SOURCE:=$YBS_PATH/sources}"
+WORKING_FIELD="${WORKING_FIELD:=/var/tmp/ybs}"
+PACKAGE_DB="${PACKAGE_DB:=/var/ypkg/db/package.db}"
+SQLITE="$(which sqlite3)"
+YPK_DEST="${YPK_DEST:=$YBS_PATH/packages}"
+PACK_SUFFIX="${PACK_SUFFIX:=ypk}"
+CPIO="$(which cpio)"
+XZ="$(which xz)"
+checktools="md5sum sha1sum sha256sum sha512sum"
+
+# Strip args
+STRIP_BINARIES="${STRIP_BINARIES:=--strip-all}"
+STRIP_SHARED="${STRIP_SHARED:=--strip-unneeded}"
+STRIP_STATIC="${STRIP_STATIC:=--strip-debug}"
+
+# Upx args
+UPXFLAGS="${UPXFLAGS:=-9}"
+
+# Ccache args
+CCACHE_DIR="${CCACHE_DIR:=$WORKING_FIELD/.ccache}"
+CCACHE_SIZE="${CCACHE_SIZE:=5G}"
+
+# Distcc args
+DISTCC_HOSTS="${DISTCC_HOSTS:=}"
+
+# Make args
+MAKEOPTS="${MAKEOPTS:=-j4}"
+
+# Download tool
+DOWNLOAD_TOOL="${DOWNLOAD_TOOL:=wget}"
+WGET_OPTIONS="${WGET_OPTIONS:=--tries=3 --retry-connrefused --wait=2}"
+CURL_OPTIONS="${CURL_OPTIONS:=-L}"
+
+# Source uri
+SOURCE_URI="${SOURCE_URI:=http://pkg.startos.org/sources}"
+
+# Install ypk after building
+AUTO_INSTALL="${AUTO_INSTALL:=no}"
+
+# Support string of system arch
+ARCHES="i686 x86_64 any"
+
+# Get system arch
+get_arch() {
+    YARCH=""
+    DIST_INFO=($(cat /var/ypkg/modules/kernel))
+    KERNEL_DIST=${DIST_INFO[0]}
+    ARCH_DIST=${DIST_INFO[1]}
+    KERNEL_RUNNING="$(uname -r)"
+    ARCH_RUNNING="$(uname -m)"
+    ARCH="${ARCH:=$ARCH_DIST}"
+    ARCH="${ARCH:=$ARCH_RUNNING}"
+
+    case "$ARCH" in
+        i?86) ARCH=i686 ;;
+        arm*) ARCH=arm ;;
+           *) ARCH="$ARCH" ;;
+    esac
+
+    YARCH="${YARCH:=$ARCH}"
+    [ "x$YARCH" = "xany" ] && YARCH="$ARCH"
+    export ARCH 
+    export YARCH
+    echo $YARCH
+}
+
+get_arch >/dev/null
+
+CC="${CC:=gcc}"
+CXX="${CXX:=g++}"
+LIBDIRSUFFIX=""
+case "$ARCH" in
+    "i686") CFLAGS="${CFLAGS:=-O2 -march=i686 -mtune=i686 -pipe }" ;;    
+    "s390") CFLAGS="${CFLAGS:=-O2 }" ;;
+  "x86_64") 
+            CFLAGS="${CFLAGS:=-O2 -fPIC }"
+            LIBDIRSUFFIX="64"
+            CC="$CC -m64"
+            CXX="$CXX -m64"
+            ;;
+        *)  CFLAGS="${CFLAGS:=-O2 }"   
+esac
+
+CXXFLAGS="${CXXFLAGS:=$CFLAGS }"
+
+for x in CC CXX CFLAGS CXXFLAGS LIBDIRSUFFIX YPK_DEST MAKEOPTS \
+    SOURCE_URI AUTO_INSTALL DOWNLOAD_TOOL CURL_OPTIONS \
+    WGET_OPTIONS FEATURES CCACHE_DIR CCACHE_SIZE \
+    DISTCC_HOSTS STRIP_BINARIES STRIP_SHARED \
+    STRIP_STATIC UPXFLAGS; do
+    export "$x"
+done
+
+DEFAULT_CONFIG="--prefix=/usr
+    --sysconfdir=/etc
+    --libdir=/usr/lib"$LIBDIRSUFFIX"
+    --libexecdir=/usr/libexec
+    --localstatedir=/var
+    --infodir=/usr/share/info
+    --mandir=/usr/share/man
+    --enable-shared "
+PKG_CONFIG_PATH=/usr/lib"$LIBDIRSUFFIX"/pkgconfig
+
+pkgdata="pkgdata"
+pkginfo="pkginfo"
+control="control.xml"
+filelist="filelist"
+
+# Check required app
+check_required_bin() {
+    local ccache
+    if str_isin "$FEATURES" "ccache"; then
+        if ! which ccache >/dev/null 2>/dev/null; then 
+            die "Feature: ccache is enabled in ybs.conf. Please install ccache."
+        fi
+    fi
+    
+    local distcc
+    if str_isin "$FEATURES" "distcc"; then
+        if ! which distcc >/dev/null 2>/dev/null; then
+            die "Feature: distcc is enabled in ybs.conf. Please install distcc."
+        fi
+    fi
+    
+    local upx
+    if str_isin "$FEATURES" "upx"; then
+        if ! which upx >/dev/null 2>/dev/null; then
+            die "Feature: upx is enabled in ybs.conf. Please install upx."
+        fi
+    fi
+
+    local strip
+    if str_isin "$FEATURES" "strip"; then
+        if ! which strip >/dev/null 2>/dev/null; then
+            die "Feature: strip is enabled in ybs.conf. Please install binutils."
+        fi
+    fi
+    
+    local xz
+    if ! which xz >/dev/null 2>/dev/null; then
+        die "xz is required, please install xz-utils."
+    fi
+    
+    local i
+    if ! which $DOWNLOAD_TOOL >/dev/null 2>/dev/null; then
+        die "$DOWNLOAD_TOOL is enabled in ybs.conf. Please install $DOWNLOAD_TOOL"
+    fi
+}
+
+file_is_exist () {
+    [ -f "$1" ] && return 0 || return 1
+}
+
+check_root () {
+    if [ "x$UID" != "x0" ];then
+        msg "You must be root to run this script."
+        msg "Try: sudo $0 $@"
+        exit 1
+    fi
+}
+
+#
+# If $2 in $1 return 0, else return 1
+str_isin() {
+    local string substring i
+
+    string=($1)
+    substring="$2"
+    
+    for i in ${string[@]}; do
+        [ "x$i" = "x$substring" ] && return 0
+    done
+    return 1
+}
+
+err_check() {
+    if [ $? != 0 ]; then
+        msg "$1"
+        exit 1
+    fi
+}
+
+die() {
+    msg "$@"
+    exit 1
+}
+
+warn() {
+    msg "$@"
+}
+
+#
+# strip string of i686, x86_64 and any
+strip_arch_string() { 
+    s="$1"
+    for i in $ARCHES; do
+        s=${s%-${i}}
+    done
+    echo "$s"
+}
+
+#
+# parse path of pbsfile
+# get T for type, N for name, V for version, R for relversion with prefix '-' 
+atom_parse() {
+    T=""
+    N=""
+    V=""
+    R=""
+    PBSDIR=""
+    # /var/ybs/pbslib/net-ftp/lftp/lftp_4.3.3.pbs
+    PBSFILE="$1"
+    # lftp_4.3.3.pbs
+    atom=${PBSFILE##*/}
+    PBSDIR="${PBSFILE%/*.pbs}"
+    # FILESDIR contains patchs and user-defined files 
+    FILESDIR="$PBSDIR"/files/
+
+    if echo "$PBSFILE" |grep -q "$PBSLIB_PATH"; then
+        T=${PBSFILE%/*}
+        T=${T%/*}
+        T=${T##*/}
+    else
+        T='none'
+    fi
+
+    # lftp_4.3.3
+    atom="${atom%.pbs}"
+    
+    #
+    N=${atom%%_[0-9]*}
+    N=${N%%_}
+    VR=${atom#$N}
+    VR=${VR#_}
+    #V=${VR%%-[a-zA-z]*}
+    V=${VR%%-*}
+    R=${VR##$V}
+ 
+    for x in PBSFILE PBSDIR T N V R FILESDIR; do
+        export "$x"
+    done
+}
+
+#
+# Compare version
+# v1 > v2 return 1
+# v1 < v2 return 2
+# v1 = v2 return 0
+atom_cmp() {
+    string1="$1"
+    string2="$2"
+    [ "x$string2" = "x" ] && return 1
+    ret=$(pybs --compare_version $string1 $string2)
+    [ "$ret" = "-1" ] && return 2
+    return $ret
+}
+
+#
+# Download packeage
+do_download () {
+    local uri fname target wget curl
+    
+    uri="$1"
+    fname="$2"
+    target="$YBS_SOURCE/$fname.tmp"
+    wget="wget $WGET_OPTIONS"
+    curl="curl $CURL_OPTIONS"
+    
+    msg "=> Downloading: ${uri}"
+    
+    # uri is file:///foo and foo is file
+    if [ "x${uri%%:*}" = "xfile" ]; then
+        [ -f "${uri##file:/}" ] && cp "${uri##file:/}" "$target" && return 0
+    fi
+    
+    case $DOWNLOAD_TOOL in
+     curl) $curl $uri -o "$target" || return 1
+           grep -q "404 Not Found" "$target" && return 1 || return 0 ;;
+   wget|*)
+           $wget $uri -O "$target" && return 0
+    esac
+    
+    return 1
+}
+
+#
+# Check and download package
+# $1 is uri
+# $2 is local file name
+# $3 is checksum value, md5sum/sha1sum/sha256sum, default is md5sum
+check_and_download_raw() {
+    local uri fname checksum download checkok target name
+    
+    uri="$1"
+    fname="$2"
+    checksum="$3"
+    target="${YBS_SOURCE}/${fname%.git}"
+    
+    # uri with suffix of .git or prefix of git://
+    if [ "x.${uri##*.}" = "x.git" ] || [ "x${uri%%:*}" = "xgit" ]; then
+        name="$N"
+        target="${YBS_SOURCE}/$name"
+
+        msg "=> From: $uri - To: $target"
+        cd ${YBS_SOURCE}
+        
+        if [ ! -d "$name" ];then 
+            rm "$name" 2>/dev/null
+            git clone "${uri}" "$name" && return 0
+        fi
+        
+        if [ -d "$name"/.git ]; then
+            olduri=$(grep "url =" $name/.git/config 2>/dev/null |awk -F= '{print $2}' |tr -d ' ')
+            if [ "x${olduri}" = "x${uri}" ]; then
+                cd "$name" && git pull && return 0
+            else
+                rm -rf "$name"
+                git clone "${uri}" "$name" && return 0
+            fi    
+        fi 
+    fi
+
+    msg "=> From: $uri - To: $target"
+
+    case ${uri%%:*} in
+      svn)
+        cd ${YBS_SOURCE}
+        name="$N"
+        cd "$name" && svn update || svn checkout "${uri}" "$N" 
+        ;;
+
+    http|https|ftp|file|*)    
+        checksum_server="$checksum"
+
+        # url is file:///foo and foo is dir
+        if [ "x${uri%%:*}" = "xfile" ]; then 
+            file=$(readlink -f ${url##file:/})
+            if [ -d "$file" ]; then
+                if cp -a "$file" "${YBS_SOURCE}"; then
+                    msg "Rename: $target"
+                    return 0
+                fi
+            else
+                [ -f "$file" ] || return 1
+            fi
+        fi
+
+        # target is exists and checksum_server is empty or checksum correct
+        if [ -f "$target" ]; then
+            if [ "x$checksum_server" = "x" ]; then
+                msg "$target exists without checksum." 
+                return 0
+            fi
+            
+            for checktool in $checktools; do
+                checksum_local=($($checktool "$target" 2>/dev/null))
+                checksum_local="${checksum_local[0]}"
+                if [ "x$checksum_local" = "x$checksum_server" ]; then
+                    msg "$target exists and $checktool checked correctly." 
+                    return 0
+                fi
+            done
+        fi
+
+        # target is not exists or checksum fail 
+        if [ -f "$target" ] || [ "x$checkok" != "xyes" ]; then
+            rm -f "$target".tmp 2>/dev/null
+
+            if do_download $uri $fname; then
+                download="done"
+            else
+                # Try Startos dist source
+                uri="$SOURCE_URI/${fname}"
+                do_download $uri $fname && download="done" || download="error"
+            fi
+
+            if [ "x$download" = "xdone" ]; then
+                # Check again
+                for checktool in $checktools; do
+                    checksum_local=($($checktool "$target".tmp 2>/dev/null))
+                    checksum_local="${checksum_local[0]}"
+                    if [ "x$checksum_local" = "x$checksum_server" ] || [ "x$checksum_server" = "x" ]; then
+                        msg "Rename: $target"
+                        msg "$checktool: $checksum_local"
+                        checkok="yes"
+                        mv "$target".tmp "$target" 
+                        return 0
+                    else
+                        continue    
+                    fi
+                done
+
+                if [ "x$checkok" != "x$yes" ] ;then
+                    msg ""$target".tmp download successfully but $checktool checked failed."                
+                        return 1
+                fi
+            fi
+        fi
+    esac
+
+    return 1
+}
+
+#
+# $1 - pbsfile with abspath
+ybs_begin_download() {
+    local url pbsfile
+    
+    pbsfile="$1"
+
+    msg "=> $T/${N}_$V$R begin download."
+
+    config=$DEFAULT_CONFIG
+    export PKG_CONFIG_PATH
+
+    . $pbsfile
+    err_check "$pbsfile is invalid! "
+
+    mkdir -p $YBS_SOURCE
+    err_check "Create dir $YBS_SOURCE failed."
+
+    # download all files
+    if [ "x${SRC_URI}" != "x" ]; then
+        local count checksum
+        
+        count=0
+        checksum=""
+
+        # CHECKSUM: $SRC_URI in pbs file has md5sum/sha1sum/sha256sum value one by one.
+        checksum=($CHECKSUM)
+        
+        for url in ${SRC_URI}; do
+            # url localfile checksum
+            check_and_download_raw $url ${url##*/} ${checksum[$count]}
+            err_check "Download $url failed."
+            let count=count+1
+        done
+    fi
+
+    return 0
+}
+
+ybs_download() {
+    local string pbsfile
+    
+    string="$1"
+    pbsfile=$(pybs --showpbs $string) 
+    err_check "$pbsfile"
+    
+    atom_parse $pbsfile
+    ybs_begin_download $pbsfile
+}
+
+
+#
+# Strip unrequested i18n in path $1
+ybs_strip_i18n() {
+    local ipath i18ns name i
+    
+    ipath="$1/usr/share/locale"
+    i18ns=$(ls $ipath 2>/dev/null)
+
+    for i in $i18ns; do
+        name=${i##*/}
+        str_isin "$LANGUAGE" $name 
+        if [ "$?" == "1" ]; then
+            # not in LANGUAGE, remove.
+            rm -rf $ipath/$name
+        fi
+    done
+}
+
+#
+# Strip unrequested i18n in man path.
+#
+ybs_strip_mani18n() {
+    local ipath i18ns name i
+    
+    ipath="$1/usr/share/man"
+    i18ns=$(ls $ipath 2>/dev/null)
+
+    for i in $i18ns; do
+        name=${i##*/}
+
+        # skip man1 -- man9
+        str_isin "$name" "man"
+        if [ "$?" == "1" ]; then
+            continue
+        fi
+
+        str_isin "$LANGUAGE" $name 
+        if [ "$?" == "1" ]; then
+            # not in LANGUAGE, remove.
+            rm -rf $ipath/$name
+        fi
+    done
+}
+
+#
+# Upx for compressing executables files
+#
+ybs_upx_bin () {
+    local dir binary
+    dir="$1"
+    binary
+
+    find $dir -type f -perm -u+w 2>/dev/null | while read binary ; do
+        if [[ $(file -bi "$binary") = *'application/x-executable'* ]]; then
+            if ! upx $UPXFLAGS "$binary" >/dev/null 2>&1; then
+                 [ -f $binary.upx ] && rm -rf $binary.upx
+            fi
+                 fi
+    done
+}
+
+#
+# Removing libtool files...
+#
+ybs_rm_libtool () {
+    local dir 
+    dir="$1"
+    find $dir ! -type d -name "*.la" -exec rm -f -- '{}' \;
+}
+
+#
+# Strip binary in directory $1
+#
+ybs_strip_bin() {
+    [[ -z ${STRIP_SHARED+x} ]] && STRIP_SHARED="-S"
+    [[ -z ${STRIP_STATIC+x} ]] && STRIP_STATIC="-S"
+    
+    local dir binary
+    dir="$1"
+    
+    find $dir -type f -perm -u+w 2>/dev/null | while read binary ; do
+        case "$(file -bi "$binary")" in
+            *application/x-sharedlib*)  # Libraries (.so)
+                strip $STRIP_SHARED "$binary" 2>/dev/null ;;
+            *application/x-archive*)    # Libraries (.a)
+                strip $STRIP_STATIC "$binary" 2>/dev/null ;;
+            *application/x-executable*) # Binaries
+                strip $STRIP_BINARIES "$binary" 2>/dev/null ;;
+        esac
+    done
+}
+
+#
+# Compress man doc and info 
+#
+ybs_gzip_extra() {
+    local dir
+    dir="$1"
+    rm "$dir"/usr/share/info/dir 2>/dev/null
+    #find "$dir"/usr/{,share/}{man,doc,info} -type f -exec gzip -9 '{}' ';' 2>/dev/null
+    find "$dir"/usr/{,share/}{man,doc,info} -type f 2>/dev/null |grep -v html |xargs gzip -9 2>/dev/null
+}
+
+#
+# System Xorg Desktop Utilities Network Games Graphics Video             
+# Audio Office Development Security Science-education Drivers
+# Multimedia Misc Non-free
+#
+ybs_get_category() {
+    local category desktop
+    desktop="$1"
+
+    if [ "x$desktop" != "x" ] && [ -f "$desktop" ]; then
+        egrep -q "(=|;)AudioVideo" "$desktop" && echo Multimedia && return
+        egrep -q "(=|;)Office"     "$desktop" && echo Office && return
+        
+        if egrep -q "(=|;)Network" "$desktop"; then
+            egrep -q "(=|;)InstantMessaging" "$desktop" && echo IM && return
+            echo Network && return
+        fi
+        
+        if egrep -q "(=|;)Education" "$desktop" || egrep -q "(=|;)Science" "$desktop"; then
+            echo Science-education && return
+        fi
+        
+        egrep -q "(=|;)Game" "$desktop" && echo Games && return
+        egrep -q "(=|;)Graphics" "$desktop" && echo Graphics && return
+        egrep -q "(=|;)Development" "$desktop" && echo Development && return
+        
+        if egrep -q "(=|;)Utility" "$desktop" || egrep -q "(=|;)System" "$desktop"; then
+            echo Utilities && return
+        fi
+    fi
+}
+
+find_desktop() {
+    local source_dir desktop
+    source_dir="$1"
+    desktop=""
+    
+    file_is_exist "$source_dir/usr/share/applications/$N-gtk.desktop" && \
+        desktop="$source_dir/usr/share/applications/$N-gtk.desktop"
+    file_is_exist "$source_dir/usr/share/applications/$N-[[:digit:]].desktop" && \
+        desktop="$(ls $source_dir/usr/share/applications/$N-[[:digit:]].desktop)"
+    file_is_exist "$source_dir/usr/share/applications/$N.desktop" && \
+        desktop="$source_dir/usr/share/applications/$N.desktop"
+    file_is_exist "$source_dir/usr/share/applications/kde4/$N.desktop" && \
+        desktop="$source_dir/usr/share/applications/kde4/$N.desktop"
+
+    if [ "x$DESKTOPFILE" != "x" ]; then
+        file_is_exist "$source_dir/$DESKTOPFILE" && \
+            desktop="$source_dir/$DESKTOPFILE"
+        file_is_exist "$source_dir/usr/share/applications/$DESKTOPFILE" && \
+            desktop="$source_dir/usr/share/applications/$DESKTOPFILE"
+    fi
+
+    if [ "x$desktop" != "x" ]; then
+        echo "$desktop"
+        return 0
+    fi
+
+    return 1
+}
+
+find_icon() {
+    local i desktop source_dir icon_name
+    
+    desktop=$1 
+    source_dir=$2
+    icon_name="$(grep ^Icon= $desktop |sed -e 's/Icon=//g')"
+
+    if file_is_exist "$source_dir/$icon_name"; then
+        icon="$source_dir/$icon_name"
+    else
+        file_is_exist "$source_dir/usr/share/icons/hicolor/scalable/apps/$icon_name.svg" && \
+        icon="$source_dir/usr/share/icons/hicolor/scalable/apps/$icon_name.svg"
+        icon_name=${icon_name%.svg}
+        icon_name=${icon_name%.png}
+        icon_name=${icon_name%.xpm}
+        icon_name=${icon_name%.jpg}
+
+        for i in 48x48 32x32 24x24 22x22; do
+            icon="$source_dir/usr/share/icons/hicolor/"$i"/apps/$icon_name.png"
+            file_is_exist "$icon" && break || continue
+        done
+
+    fi
+
+    file_is_exist "$source_dir/usr/share/icons/$icon_name.png" && \
+        icon="$source_dir/usr/share/icons/$icon_name.png"
+    file_is_exist "$source_dir/usr/share/icons/$icon_name.xpm" && \
+        icon="$source_dir/usr/share/icons/$icon_name.xpm"
+    file_is_exist "$source_dir/usr/share/pixmaps/$icon_name.svg" && \
+        icon="$source_dir/usr/share/pixmaps/$icon_name.svg"
+    file_is_exist "$source_dir/usr/share/pixmaps/$icon_name.xpm" && \
+        icon="$source_dir/usr/share/pixmaps/$icon_name.xpm"
+    file_is_exist "$source_dir/usr/share/pixmaps/$icon_name.png" && \
+        icon="$source_dir/usr/share/pixmaps/$icon_name.png"
+    file_is_exist "$source_dir/usr/share/pixmaps/$icon_name" && \
+        icon="$source_dir/usr/share/pixmaps/$icon_name"
+
+    if [ "x$ICONFILE" != "x" ]; then
+        file_is_exist "$source_dir/$ICONFILE" && icon="$source_dir/$ICONFILE"
+        file_is_exist "$source_dir/usr/share/pixmaps/$ICONFILE" && \
+            icon="$source_dir/usr/share/pixmaps/$ICONFILE"
+    fi
+
+    if [ "x$icon" != "x" ] && file_is_exist "$icon"; then
+        echo "$icon"
+        return 0
+    fi
+
+    return 1
+}
+
+#
+# convert: 
+# & -> &amp; 
+# < -> &lt;
+# > -> &gt;
+#
+xml_escape_convert() {
+    echo "$1" |sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
+}
+
+#
+# $1 - PKGDIR
+# $2 - target_pkg
+ybs_mkpkg() {
+    local dir target_pkg target_pkg_dir pkginfo_dir
+    
+    dir="$1"
+    target_pkg="$2"
+    target_pkg_dir="$(dirname $target_pkg)"
+    pkginfo_dir="$WORKDIR"/"${N}_$V$R-pkginfo"
+    
+    mkdir -p "$pkginfo_dir" "$target_pkg_dir"
+
+    # Creat pkgdate
+    fileinfo "$dir" >"$pkginfo_dir"/filelist
+
+    install=$INSTALL
+    if [ "x$install" != "x" ] && file_is_exist "$FILESDIR"/$install; then
+        docp "$FILESDIR"/"$install" "$dir"/var/ypkg/db/"$N"/
+        docp "$FILESDIR"/"$install" "$pkginfo_dir"/
+    fi
+    
+    build_date="$(date +%s)"
+    install_size=($(du "$dir" -sb))
+    install_size=${install_size[0]}
+    
+    # Creat pkginfo
+    name=$N
+    version=$V$R
+    priority=$PRIORITY
+    group=$GROUP
+    rir=$RIR
+    alias=$ALIAS
+    license="$(xml_escape_convert "$LICENSE")"
+    packager="$(xml_escape_convert "$PACKAGER")"
+    homepage="$(xml_escape_convert "$HOMEPAGE")"
+    install="$install"
+    arch="$YARCH"
+    depend=$(xml_escape_convert "$RDEPEND" |xargs |tr " " ",")
+    bdepend=$(xml_escape_convert "$BDEPEND" |xargs |tr " " ",")
+    redepend=$(xml_escape_convert "$RECOMMENDED" |xargs |tr " " ",")
+    conflict=$(xml_escape_convert "$CONFLICT" |xargs |tr " " ",")
+    replace=$(xml_escape_convert "$REPLACE" |xargs |tr " " ",")
+    description=$(xml_escape_convert "$DESCRIPTION")
+
+    cd "$dir"
+    
+    find . |$CPIO --quiet -o -H newc |$XZ -7 >"$WORKDIR"/"$pkgdata"
+    size=($(du "$WORKDIR"/"$pkgdata" -sb))
+    size=${size[0]}
+    
+    local gname gdescription desktop
+    # desktop and icon
+    desktop=$(find_desktop "$dir")
+
+    if [ "x$desktop" != "x" ]; then
+        cp "$desktop" "$pkginfo_dir"/"$N".desktop
+        cp "$desktop" "$target_pkg_dir"/"$N".desktop
+        local icon
+        icon=$(find_icon "$desktop" "$dir")
+        if [ "x$icon" != "x" ]; then
+            tmp="$N"."${icon##*.}"
+            cp "$icon"  "$pkginfo_dir"/"$tmp"
+            cp "$icon"  "$target_pkg_dir"/"$tmp"
+        fi
+    
+        # Find exec
+        grep -q ^Exec= "$desktop" && exec="$(grep ^Exec= "$desktop" |head -n1 |sed 's/^Exec=//g')"
+        grep -q ^TryExec= "$desktop" && tryexec="$(grep ^TryExec= "$desktop" |head -n1 |sed 's/^TryExec=//g')"
+        
+        exec="${exec-$tryexec}"
+        exec=$(xml_escape_convert "$exec")
+        gname="genericname type=\"desktop\""
+        gdescription="description type=\"desktop\""
+    else
+        gname="genericname"
+        gdescription="description"
+    fi
+    
+    category=$(ybs_get_category "$desktop")
+    
+    data_count="1"
+    
+    cat >"$pkginfo_dir"/$control <<OOO
+<?xml version='1.0' encoding='UTF-8'?>
+<PackageInfo>
+ <Package name="$name">
+   <$gname>
+     <keyword lang="en">$name</keyword>
+   </genericname>
+   <category>$category</category>           
+   <arch>$arch</arch>                                        
+   <version>$version</version>                            
+   <priority>$priority</priority>                    
+   <group>$group</group>                    
+   <license>$license</license>
+   <packager>$packager</packager>
+   <homepage>$homepage</homepage>
+   <rir>$rir</rir>
+   <alias>$alias</alias>
+   <install>$install</install>
+OOO
+
+if [ "x$exec" != "x" ]; then
+       cat >>"$pkginfo_dir"/$control <<OOO
+   <exec>$exec</exec>
+OOO
+fi
+
+cat >>"$pkginfo_dir"/$control <<OOO
+   <build_date>$build_date</build_date>    
+   <$gdescription>
+     <keyword lang="en">$description</keyword>
+   </description> 
+   <data_count>$data_count</data_count>
+   <data id="0">                                                     
+     <name>pkgdata</name>                           
+     <format>xz</format> 
+     <size>$size</size>
+     <install_size>$install_size</install_size>        
+     <depend>$depend</depend>              
+     <bdepend>$bdepend</bdepend>
+     <recommended>$redepend</recommended>      
+     <conflict>$conflict</conflict>      
+     <replace>$replace</replace>      
+   </data>                               
+ </Package>
+</PackageInfo> 
+OOO
+    
+
+    cd "$pkginfo_dir"
+    tar cJf "$WORKDIR"/$pkginfo *
+
+    # Creat ypk package
+    cd "$WORKDIR"
+    tar cf $target_pkg $pkgdata $pkginfo
+
+    # update xml, insert size and sha1 value
+    control_target="${target_pkg%.$PACK_SUFFIX}.xml"
+    cp $pkginfo_dir/$control $control_target
+    size=$(du $target_pkg -sb |awk '{print $1}')
+    sha1=$(sha1sum $target_pkg |awk '{print $1}')
+    sed -i -e '/\<build_date\>/a\   <size>'"$size"'<\/size>' \
+          -e '/\<build_date\>/a\   <sha>'"$sha1"'<\/sha>' $control_target
+    
+    # cp extra files
+    cp $pkginfo_dir/filelist ${target_pkg%.$PACK_SUFFIX}.filelist 2>/dev/null
+    cp $PBSDIR/changelog $target_pkg_dir 2>/dev/null
+    docp $buildlog $PBSFILE $FILESDIR $target_pkg_dir/$N 2>/dev/null
+}
+
+#
+# Check /dirs permission
+#
+ybs_check_cleanup () {
+    local i dir
+    
+    dir="$1"
+
+    # These dir(s) in PKGDIR is invalid
+    for i in tmp root proc sys var/run var/lock; do    
+        [ -d $dir/${i} ] && rm -rf $dir/${i}
+    done
+    
+    # These dir(s) permission is important
+    for i in bin boot dev etc home lib media mnt opt sbin usr var; do
+        if [ -d $dir/${i} ];then
+            chown root:root $dir/${i}
+            chmod 755 $dir/${i}
+        fi
+    done
+    
+    # Cleanup files unused or would be created in install script
+    rm $dir/{usr/share/mime/mime.cache,usr/share/applications/mimeinfo.cache} 2>/dev/null
+    chmod 644 $dir/usr/share/applications/*.desktop 2>/dev/null
+    find $dir/usr/share/fonts -type f -name "fonts.dir" -exec rm {} \;  2>/dev/null
+    find $dir/usr/share/fonts -type f -name "fonts.scale" -exec rm {} \; 2>/dev/null
+}
+
+#
+# $1- $PKGDIR
+ybs_pre_mkpkg() {
+    local dir
+
+    dir="$1"
+    
+    # check and clearup after mkinstall
+    ybs_check_cleanup "$dir"
+
+    # clean up pipe files
+    find "$dir" -name "*.pipe" -type p -exec rm {} \;
+
+    if [ "x$LANGUAGE" != "x" ];then
+        # strip i18n 
+        ybs_strip_i18n "$dir"
+        # strip unnessesary i18n in man path.
+        ybs_strip_mani18n "$dir"
+    fi
+    
+    # Remove .la files, default is remove.
+    local libtool
+    libtool="yes"
+    str_isin "$FEATURES" "libtool" && libtool="yes"
+    str_isin "$FEATURES" "nolibtool" && libtool="no"
+    str_isin "$OPTIONS" "libtool" && libtool="yes" 
+    str_isin "$OPTIONS" "nolibtool" && libtool="no" 
+    [ "$libtool" = "yes" ] && ybs_rm_libtool "$dir"
+    
+    # Strip files, default is strip.
+    local strip
+    strip="yes"
+    str_isin "$FEATURES" "strip" && strip="yes"
+    str_isin "$FEATURES" "nostrip" && strip="no"
+    str_isin "$OPTIONS" "strip"  && strip="yes"
+    str_isin "$OPTIONS" "nostrip"  && strip="no"
+    [ "$strip" = "yes" ] && ybs_strip_bin "$dir"
+
+    # Upx executables files, default is not using upx
+    local upx
+    upx="no"
+    str_isin "$FEATURES" "upx" && upx="yes"
+    str_isin "$FEATURES" "noupx" && upx="no"
+    str_isin "$OPTIONS" "upx" && upx="yes"
+    str_isin "$OPTIONS" "noupx" && upx="no"
+    [ "$upx" = "yes" ] && ybs_upx_bin "dir"
+
+    # Compress man doc info
+    ybs_gzip_extra "$dir"
+
+    return 0
+}
+
+#
+# Cp desktop file to "$PKGDIR"/usr/share/applications
+#
+dodesktop() {
+    local dfile picture icon
+    dfile="$1"
+    picture="$2"
+    icon=""
+    
+    file_is_exist "$FILESDIR/${dfile##*/}"   && dfile="$FILESDIR/${dfile##*/}"
+    file_is_exist "$FILESDIR/${picture##*/}" && picture="$FILESDIR/${picture##*/}"
+    
+    if [ x"$dfile" != x ] && file_is_exist "$dfile"; then
+        mkdir -p "$PKGDIR"/usr/share/applications
+        install -m755 "$dfile" "$PKGDIR"/usr/share/applications 
+    fi
+    
+    if [ x"$picture" != x ] && file_is_exist "$picture"; then 
+        docp "$picture"   "$PKGDIR"/usr/share/pixmaps
+    fi
+    
+    dfile="${dfile##*/}"
+    picture="${picture##*/}"
+    icon=$(grep ^Icon= "$PKGDIR"/usr/share/applications/"$dfile" |sed 's/Icon=//g')
+    name=${icon%.*}
+    type=${picture##*.}
+    
+    if [ x"$type" != x ] && [ x"$picture" != x"$name.$type" ]; then 
+        mv "$PKGDIR"/usr/share/pixmaps/"$picture" "$PKGDIR"/usr/share/pixmaps/"$name"."$type" 
+    else
+        return 0
+    fi
+}
+
+#
+# Add unit for systemd
+#
+dounit() {
+    local i file dir
+    
+    file="$@"
+    
+    #FIXME 
+    [ -d /usr/lib/systemd/system ] && dir="$PKGDIR"/usr/lib/systemd/system || dir="$PKGDIR"/lib/systemd/system
+    
+    if [ x"$file" != x ]; then
+        for i in $@; do
+            file_is_exist "$i" && docp "$i" "$dir" || docp "$FILESDIR/$i" "$dir"
+        done
+    fi
+}
+
+#
+# Copy files to /etc/pam.d/
+#
+dopam() {
+    local i file dir
+    
+    file="$@"
+    dir="$PKGDIR"/etc/pam.d/
+
+    if [ x"$file" != x ]; then
+        for i in $@; do
+            file_is_exist "$i" && docp "$i" "$dir" || docp "$FILESDIR/$i" "$dir"
+        done
+    fi
+}
+
+#
+# Cp man to dir
+#
+doman() {
+    local i name num
+
+    for i in $@; do
+        name=${i%.[0-9]}
+        num=${i##$name}
+        num=${num##.}
+        if file_is_exist "$i"; then
+            docp ${i} "$PKGDIR"/usr/share/man/man${num}/
+        else
+            docp "$FILESDIR/${i}" "$PKGDIR"/usr/share/man/man${num}/
+        fi
+    done
+}
+
+dopatch(){
+    local file dir1 dir2 num
+    
+    file=""
+    dir1=""
+    dir2=""
+    num=""
+    
+    while [ "x$1" != "x" ]; do
+        file="$1"
+        file_is_exist "$file" || file="$FILESDIR/$1"
+        file_is_exist "$file" || file="$FILESDIR/patches/$1"
+        
+        if ! file_is_exist "$file"; then
+            msg "\"$1\" not found."
+            exit  1
+        fi
+        
+        dir1="$(grep ^--- "$file" |head -n1 |awk '{print $2}' |awk -F/ '{print $1}' |tr -d '\r')"
+        dir2="$(grep ^+++ "$file" |head -n1 |awk '{print $2}' |awk -F/ '{print $1}' |tr -d '\r')"
+        
+        if ls -d "$dir1" >/dev/null 2>/dev/null || ls -d "$dir2" >/dev/null 2>/dev/null;then
+            num="0"
+        else
+            num="1"
+        fi
+        
+        msg "Patching ${file##*/} ..."
+        patch -p$num -i "$file" 
+        shift
+    done
+}
+
+# Unpack
+dounpack() {
+    local i
+
+    if [ "x$SRC_URI" = "x" ];then
+        for i in tar.bz2 tar.gz bz2 tgz tbz tbz2 rar zip 7z; do
+            file_is_exist "$YBS_SOURCE/$N-$V$R.${i}" && SRC_URI="$YBS_SOURCE/$N-$V$R.${i}"
+        done
+    else
+        file_is_exist "$SRC_URI" && SRC_URI="$SRC_URI"
+        file_is_exist "$YBS_SOURCE/$SRC_URI" && SRC_URI="$YBS_SOURCE/$SRC_URI"
+    fi
+
+    [ "x$SRC_URI" = "x" ] && return 0
+    SRC_URI=($SRC_URI)
+    local fname=${SRC_URI##*/}
+    local tarball="$YBS_SOURCE/$fname"
+    local srcdir="$N-$V$R"
+    local name
+    rm -r "$srcdir" 2>/dev/null
+    
+    case $fname in
+        *.tar.*|*.gz|*.tar|*.tgz|*.tbz2|*.tbz|*.bz2)
+            msg "tar xf $tarball"
+            name=($(tar -tf "$tarball" |awk -F/ '{print $1}' |sort -u))
+
+            if [ "x$name" = "x." ] || [ ${#name[@]} -gt 1 ]; then
+                mkdir "$srcdir"
+                tar xf "$tarball" -C "$srcdir" && return 0
+            fi 
+
+            if [ ${#name[@]} -eq 1 ]; then
+                tar xf "$tarball" 
+                if [ "x$name" != "x$srcdir" ]; then
+                    mv "$name" "$srcdir" && return 0
+                else
+                    return 0
+                fi
+            fi
+            ;;
+
+        *.zip)
+            msg "unzip xf $tarball"
+            name=($(unzip -l "$tarball" |awk '{print $4}' |awk -F/ '{print $1}' |sort -u |sed -e '/^----$/d' -e '/^$/d' -e '/^Name$/d'))
+
+            if [ ${#name[@]} -eq 1 ]; then
+                unzip "$tarball"
+                if [ "x$name" != "x$srcdir" ]; then
+                    mv "$name" "$srcdir" && return 0
+                else
+                    return 0
+                fi
+            else
+                unzip "$tarball" -d "$srcdir" && return 0
+            fi
+            ;;
+
+         *.deb) 
+             msg "ar x $tarball"
+                        name=$(ar t "$tarball" |grep data)
+            mkdir -p "$srcdir" && cd "$srcdir"
+            ar x "$tarball"
+            mkdir -p data 
+            tar xf "$name" -C data && cd ../ && return 0     
+            ;;
+
+         *.rpm) 
+             msg "unpack $tarball" 
+            name=${fname%.rpm}
+            mkdir -p "$srcdir" && cd "$srcdir"
+             rpm2tarbz2 "$tarball"
+            mkdir -p data
+            tar xf $name.tar.bz2 -C data && cd ../ && return 0
+            ;;
+
+        *.7z)   
+            msg "7z x $tarball"
+            name=$(7z l "$tarball" |grep -A2 "Size   Compressed  Name" |tail -n1 |awk '{print $6}')    
+            name=${name%%/*}
+            7z x "$tarball" 
+            if [ "x$name" != "x$srcdir" ]; then
+                mv "$name" "$srcdir" && return 0
+            else
+                return 0
+            fi
+            ;;
+           
+           *.git)
+                name="$N"
+                msg "cp -a ${YBS_SOURCE}/"$name" $PWD/"$srcdir""
+                cp -a ${YBS_SOURCE}/"$name" "$srcdir" && return 0 
+            ;;
+           
+           *.rar) 
+            msg "unrar xf $tarball"
+            unrar x "$tarball" && return 0
+            ;;
+      
+           *)   
+                   if [ -d "$tarball" ]; then
+                msg "cp -a "$tarball" $PWD/"$srcdir""
+                cp -a "$tarball" "$srcdir" && return 0
+            fi
+    esac
+    return 1
+}
+
+# Configure
+doconfig() {
+    local command command1 command2
+    
+    command=""
+    command1=""
+    command2=""
+
+    # waf
+    [ -x waf ] && command="./waf configure $(echo $config |xargs) $@"
+    if [ x"$command" != x ];then
+        msg "=> $command"
+        eval $command && return 0 || command=""
+    fi
+    
+    # generic
+    [ -x configure ] && command="./configure $(echo $config |xargs) $@"
+    [ -x Configure ] && command="./Configure $(echo $config |xargs) $@"
+    if [ x"$command" != x ];then
+        msg "=> $command"
+        eval $command && return 0 || command=""
+    fi
+
+    # autogen
+    if [ -x autogen.sh ];then
+        command="./autogen.sh" 
+        command1=" ./configure $(echo $config |xargs) $@"
+    fi
+    if [ x"$command" != x ];then
+        msg "=> $command; $command1"
+        eval $command
+        eval $command1 && return 0 || command=""
+    fi
+    
+    # perl module
+    file_is_exist Makefile.pl && mv Makefile.pl Makefile.PL
+    file_is_exist Makefile.PL && command="perl Makefile.PL -y PREFIX=/usr $@"
+    
+    if [ x"$command" != x ];then
+        msg "=> $command"
+        if ! eval $command; then
+            command="perl Makefile.PL PREFIX=/usr $@"
+            msg "=> $command"  
+            eval $command && return 0 || command=""
+        else
+            return 0
+        fi
+    fi
+
+    # cmake
+    if file_is_exist CMakeLists.txt; then
+        command="mkdir -p build"
+        command1="cd build"
+        command2="cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=/usr/lib"$LIBDIRSUFFIX" -DLIB_INSTALL_DIR=/usr/lib"$LIBDIRSUFFIX" -DLIB_SUFFIX="$LIBDIRSUFFIX" $@ .." 
+        msg "=> $command; $command1; $command2"
+        eval $command
+        eval $command1
+        eval $command2 && return 0 || command=""
+    fi
+
+    # qmake
+    if ls *.pro >/dev/null 2>/dev/null; then
+        command="qmake $@"
+        if [ x"$command" != x ];then
+            msg "=> $command"
+            eval $command && return 0 || command=""
+        fi
+    fi
+
+    # scons
+    if file_is_exist SConstruct; then
+        command="scons $(echo $config |xargs) $@"
+        if [ x"$command" != x ];then
+            msg "=> $command"
+            eval $command 
+        fi
+    fi    
+}
+
+# Make
+domake() {
+    local command
+    
+    command="make $MAKEOPTS $@"
+    
+    # waf
+    if [ -x waf ];then
+        command="./waf build $MAKEOPTS $@"
+        if [ x"$command" != x ];then
+            msg "=> $command"
+            eval $command && return 0 || command=""
+        fi
+    fi
+    
+    # setup.py
+    if file_is_exist setup.py; then
+        if [ "x$1"  = "xmake" ]; then
+            command="make $MAKEOPTS $@"
+        else
+            command="python setup.py build $@"
+        fi
+    
+        if [ x"$command" != x ];then
+            msg "=> $command"
+            eval $command && return 0 || command=""
+        fi
+    fi
+    
+    # generic
+    if file_is_exist Makefile || file_is_exist GNUmakefile; then
+        command="make $MAKEOPTS $@" 
+    fi
+    
+    # misc
+    file_is_exist makefile.linux && command="make $MAKEOPTS -f makefile.linux $@"
+    file_is_exist Imakefile && command="make $MAKEOPTS $@"
+    file_is_exist SConstruct && return 0
+    
+    if [ x"$command" != x ];then
+        msg "=> $command"
+        eval $command
+    fi
+}
+
+# Make install
+domkinstall() {
+    local command 
+    
+    command="make DESTDIR="$PKGDIR" "$@" install"
+    
+    # waf
+    if [ -x waf ];then
+        command="./waf install --destdir="$PKGDIR" $@"
+        if [ x"$command" != x ];then
+            msg "=> $command"
+            eval $command && return 0 || command=""
+        fi
+    fi
+    
+    # setup.py
+    if file_is_exist setup.py;then
+        if [ "x$1"  = "xmake" ]; then
+            command="make DESTDIR="$PKGDIR" $@ install"        
+        else
+            command="python setup.py install --prefix=/usr --root="$PKGDIR" $@"
+        fi
+        if [ x"$command" != x ];then
+            msg "=> $command"
+            eval $command && return 0 || command=""
+        fi
+    fi
+    
+    # scons    
+    if file_is_exist SConstruct;then
+        if [ x"$@" = x ]; then
+            command="scons --install-sandbox="$PKGDIR" "$@" install"
+        else
+            command="scons "$@" install"
+        fi
+    
+        if [ x"$command" != x ];then
+            msg "=> $command"
+            eval $command && return 0 || command=""
+        fi
+    fi    
+    
+    # generic
+    if file_is_exist Makefile || file_is_exist GNUmakefile; then
+        command="make DESTDIR="$PKGDIR" "$@" install"
+    fi
+    
+    if [ x"$command" != x ];then
+        msg "=> $command"
+        eval $command 
+    fi
+}
+
+# Cp src file to specified dir
+dosrc() {
+    msg "=> Copy source files: /usr/src/"${N}_$V$R""
+    mkdir -p "$PKGDIR"/usr/src/"${N}_$V$R"
+    cp -a "$@" "$PKGDIR"/usr/src/"${N}_$V$R"/
+}
+
+# Cp supported to specified dir
+dosupported() {
+    msg "=> Copy supported file: $1"
+    mkdir -p "$PKGDIR"/usr/src/"${N}_$V$R"
+    install -m755 "$FILESDIR/$1" "$PKGDIR"/usr/src/"${N}_$V$R"/"${N}"_supported
+}
+
+# Cp doc to specified dir
+dodoc() {
+    msg "=> Copy documents: $@"
+    install -m755 -d "$PKGDIR"/usr/share/doc/"$N"/
+    cp -a "$@" "$PKGDIR"/usr/share/doc/"$N"/
+}
+
+perl_cleanup () {
+    msg "=> Delete: *.packlist *.pod files"
+    find "$PKGDIR" -name '.packlist' -delete
+    find "$PKGDIR" -name '*.pod' -delete
+}
+
+#
+# Install package
+#
+
+#
+#fetch  break after download source tarball
+#upack  break after unpack source tarball
+#patch  break after patch source
+#config break after configure    
+#make   break after make a.k.s compile
+#check  break after make check/test
+#mkinstall  break after make install    
+#package    break after make ypk package    
+#
+maybe_break() {
+    local string command
+    
+    string="$1"
+    command="$(echo $@ |sed 's/'"$string"'//')"
+    
+    if echo "$BREAK" | egrep -q "(,|^)$string(,|$)"; then
+        $command
+        exit 1
+    fi
+}
+
+#
+ybs_build() {
+    local pkg 
+    
+    pkg="$1"
+    deps=$(pybs --get_rdeps $pkg)
+    err_check "$deps"
+    
+    for dep in $deps; do
+        if [ "x$TERM" != "xlinux" ]; then
+            echo -ne "\033]0;ybs: ${dep}\007"; ybs_build_raw "${dep}" || die
+        else
+            ybs_build_raw "${dep}" || die
+        fi
+    done
+}
+
+#
+blank_funcs () { 
+    DESCRIPTION=""
+    COMMENTS=""
+    HOMEPAGE=""
+    REPO=""
+    YARCH="$(get_arch)"
+    LICENSE=""
+    PRIORITY=""
+    GROUP=""
+    PACKAGER=""
+    SRC_URI=""
+    CHECKSUM=""
+    RDEPEND=""
+    BDEPEND=""
+    RECOMMENDED=""
+    CONFLICT=""
+    REPLACE=""
+    OPIONAL=""
+    INSTALL=""
+    OPTIONS=""
+    RIR=""
+    ALIAS=""
+    
+    pbs_unpack() { :
+        }    
+    pbs_patch() { :
+        }    
+    pbs_config() { :  
+        }    
+    pbs_build() { :  
+        }    
+    pbs_check() { :  
+        }    
+    pbs_install() { :  
+        }    
+}
+
+#
+ybs_build_raw() {
+    local string pbsfile
+    
+    string="$1"
+ 
+    blank_funcs
+ 
+    pbsfile=$(pybs --showpbs $string) 
+    err_check "$pbsfile"
+    
+    [ "x$FORCE_INSTALL" = "xyes" ] && local force_flag="F"
+    
+    atom_parse $pbsfile
+    
+    install_info=($(pybs --is_installed $string 2>/dev/null))
+    install_version=${install_info[1]} 
+    
+
+    force_flag=""
+    [ "x$FORCE_INSTALL" = "xyes" ] && force_flag="F"
+    
+    # N -- new install
+    # U -- upgrade
+    # D -- downgrade
+    # E -- same version
+    if [ "x$install_version" = "x" ]; then
+        stat="N"
+        msg_ "[$stat$force_flag]"
+        msg " $T/${N}_$V$R "
+    else
+        atom_cmp $install_version $V$R
+        case $? in
+         1) stat="D"
+            msg_ "[$stat$force_flag]"
+            msg " $T/${N}_$install_version ----> $T/${N}_$V$R " ;;
+         2) stat="U"
+            msg_ "[$stat$force_flag]"
+            msg " $T/${N}_$install_version ----> $T/${N}_$V$R " ;;
+         0) stat="E"
+            msg_ "[$stat$force_flag]"
+            msg " $T/${N}_$V$R "
+            [ "x$FORCE_INSTALL" != "xyes" ] && return 0
+       esac
+    fi
+        
+    [ "x$PRETEND" = "xyes" ] && return 0
+    
+    ybs_begin_download $pbsfile || return 1
+
+    maybe_break fetch 
+    
+    #
+    # Download ok, install it.
+    #        
+    WORKDIR="$WORKING_FIELD/$N"
+    [ -d "$WORKDIR" ] && rm -rf "$WORKDIR"
+    mkdir -p $WORKDIR
+    export WORKDIR
+    
+    SRCDIR="$WORKDIR"/"$N-$V$R"
+    export SRCDIR
+    
+    cd "$WORKDIR"
+    
+    msg "=> $T/${N}_$V$R unpack"
+    if type -p pbs_unpack; then
+        pbs_unpack
+        err_check "$T/${N}_$V$R call pbs_unpack failed"
+    fi
+
+    maybe_break unpack pwd
+
+    PKGDIR="$WORKDIR/${N}_$V$R"
+    export PKGDIR
+
+    buildlog="$PWD/${N}_$V$R-$YARCH.buildlog"
+    export buildlog
+    >$buildlog
+
+    patchpipe="$PWD"/patch.pipe
+    patchlog="$PWD"/patch-log
+    configpipe="$PWD"/config.pipe
+    configlog="$PWD"/configure-log
+    makepipe="$PWD"/make.pipe
+    makelog="$PWD"/make-log
+    checkpipe="$PWD"/check.pipe
+    checklog="$PWD"/check-log
+    mkinstallpipe="$PWD"/mkinstall.pipe
+    mkinstalllog="$PWD"/mkinstall-log
+
+    mkdir -p "$SRCDIR"
+    cd "$SRCDIR"
+
+    msg "=> $T/${N}_$V$R patch"
+    if type -p pbs_patch; then
+        [ -p $patchpipe ] || mkfifo $patchpipe
+        tee $patchlog < $patchpipe & 
+        pbs_patch >$patchpipe
+        err_check "$T/${N}_$V$R call pbs_patch failed"
+    fi
+
+    maybe_break patch pwd
+
+    msg "=> $T/${N}_$V$R configure"
+    
+    # use distcc if it is requested
+    local distcc
+    distcc="no"
+    str_isin "$FEATURES" "distcc" && distcc="yes"
+    str_isin "$FEATURES" "nodistcc" && distcc="no"
+    str_isin "$OPTIONS" "distcc" && distcc="yes"
+    str_isin "$OPTIONS" "nodistcc" && distcc="no"
+
+    if [ "$distcc" = "yes" ]; then
+        [[ -d /usr/lib/distcc/bin ]] && export PATH="/usr/lib/distcc/bin:$PATH"
+        export DISTCC_HOSTS
+        msg "distcc is enabled, hosts: $DISTCC_HOSTS"
+    fi
+
+    # use ccache if it is requested
+    local ccache
+    ccache="no"
+    str_isin "$FEATURES" "ccache" && ccache="yes"
+    str_isin "$FEATURES" "noccache" && ccache="no"
+    str_isin "$OPTIONS" "ccache" && ccache="yes"
+    str_isin "$OPTIONS" "noccache" && ccache="no"
+
+    if [ "$ccache" = "yes" ]; then
+        [[ -d /usr/lib/ccache/bin ]] && export PATH="/usr/lib/ccache/bin:$PATH"
+        export CCACHE_DIR
+        ccache -M $CCACHE_SIZE >/dev/null 
+        msg "=> ccache is enabled, ccache_dir: $CCACHE_DIR, ccache_size: $CCACHE_SIZE"
+    fi
+
+    if type -p pbs_config; then
+        [ -p $configpipe ] || mkfifo $configpipe
+        tee $configlog < $configpipe & 
+        pbs_config >$configpipe
+    fi
+    err_check "$T/${N}_$V$R call pbs_config failed"
+
+    maybe_break config pwd
+
+    msg "=> $T/${N}_$V$R compile"
+    if type -p pbs_build; then 
+        [ -p $makepipe ] || mkfifo $makepipe
+        tee $makelog < $makepipe & 
+        pbs_build >$makepipe
+    fi
+    err_check "$T/${N}_$V$R call pbs_build failed"
+
+    maybe_break make pwd
+
+    msg "=> $T/${N}_$V$R make check"
+    if type -p pbs_check; then
+        [ -p $checkpipe ] || mkfifo $checkpipe
+        tee $checklog < $checkpipe & 
+        pbs_check >$checkpipe
+    fi
+    err_check "$T/${N}_$V$R call pbs_check failed"
+
+    maybe_break check pwd
+
+    msg "=> $T/${N}_$V$R make install"
+    if type -p pbs_install; then
+        [ -p $mkinstallpipe ] || mkfifo $mkinstallpipe
+        tee $mkinstalllog < $mkinstallpipe & 
+        pbs_install >$mkinstallpipe
+    fi
+    err_check "$T/${N}_$V$R call pbs_install failed"
+    
+       [ -e $configlog ] && cat $configlog >> $buildlog
+         [ -e $makelog ] && cat $makelog >> $buildlog
+        [ -e $checklog ] && cat $checklog >> $buildlog
+    [ -e $mkinstalllog ] && cat $mkinstalllog >> $buildlog
+
+    maybe_break mkinstall pwd
+
+    if [ -d "$PKGDIR" ]; then
+        # PKGDIR is empty
+        if ! ls "$PKGDIR"/* >/dev/null 2>&1; then
+            die "$PKGDIR is empty. Check make install function."
+        fi
+    fi    
+
+    # make ypk binary package
+    msg "=> $T/${N}_$V$R make package"
+    ybs_pre_mkpkg "$PKGDIR"
+    
+    #
+    subdir="$(echo $N |cut -b1 |tr '[A-Z]' '[a-z]')" 
+    # /var/ybs/packages/testing/y/ypkg2/ypkg2_20130301-x86_64.ypk
+    target="$YPK_DEST/$subdir/$N/${N}_$V$R-$YARCH.$PACK_SUFFIX"
+    ybs_mkpkg "$PKGDIR" "$target"
+    err_check "$T/${N}_$V$R make binary package failed"
+    
+    maybe_break package "echo $target"
+
+    # install to system
+    msg "=> $T/${N}_$V$R install to system"
+
+    if [ "$AUTO_INSTALL" = "yes" ]; then 
+        msg "Install: $target"
+        ypkg "$YPKG_OPT" -I $target
+    else
+        msg "$target"
+    fi
+
+    rm -r $WORKDIR 2>/dev/null
+
+    return 0
+}
+
+# End of file

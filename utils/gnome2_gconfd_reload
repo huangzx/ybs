@@ -1,0 +1,14 @@
+#!/bin/bash
+#
+#
+
+# Restart gconfd-2 if running to reload new gconf settings
+gnome2_gconfd_reload() {
+    if ps acx | grep -q gconfd-2; then
+        echo "Reloading gconfd settings ..."
+	    killall -HUP gconfd-2
+    fi
+}
+
+gnome2_gconfd_reload $@
+

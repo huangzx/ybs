@@ -1,0 +1,134 @@
+#
+# StartOS package build script
+#
+# Copyright 2012 StartOS
+# Distributed under the terms of the GNU General Public License v2
+#
+
+# Short one line description of this package. 
+DESCRIPTION=""
+
+# Detail description of this package.
+COMMENTS=""
+
+# Homepage, not used by Portage directly but handy for developer reference
+HOMEPAGE=""
+
+# 
+YARCH="any"
+
+# license
+LICENSE="GPL"
+
+# priority
+PRIORITY="required"
+
+# reboot is required yes/no
+RIR=""
+
+# alias names for searching
+ALIAS=""
+
+#
+PACKAGER="StartOS Developers"
+
+# Point to any required sources; these will be automatically downloaded by ypkg. 
+# $N = package name, such as autoconf, x-org
+# $V = package version, such as 2.6.10
+#SRC_URI="http://foo.bar.com/$N-$V.tar.bz2"
+#SRC_URI="http://foo.bar.com/$N.deb"
+#SRC_URI="http://foo.bar.com/$N.rpm"
+#SRC_URI="git://foo.bar.com/$N.git"
+#SRC_URI="git://foo.bar.com/$N"
+#if $N-$V.tar.bz2 is exist in $YBS_SOURCE, you can type: 
+#SRC_URI="" or
+#SRC_URI="$N-$V.tar.bz2" or
+#SRC_URI="/tmp/$N-$V.tar.bz2"
+SRC_URI=""
+
+#check value: md5sum/sha1sum/sha256sum, default is md5sum
+CHECKSUM=""
+
+# Dependencies 
+RDEPEND=""
+BDEPEND=""
+RECOMMENDED=""
+CONFLICT=""
+OPTIONAL="a: support a 
+          b: support b"
+REPLACE=""
+
+# OPTIONS
+OPTIONS="nostrip/strip upx/noupx nolibtool/libtool distcc/nodistcc ccache/noccache"
+
+#
+INSTALL="$N.install"
+
+# User notes, some important tips.
+NOTES=""
+
+# specify desktop file
+#DESKTOPFILE="glchess.desktop" or "/opt/test/test.desktop"
+#ICONFILE="test.png"   or "/opt/test/test.png"
+
+#unpack
+pbs_unpack() {
+    #unpard file from $YBS_SOURCE to current directory.
+    dounpack
+}
+
+#patch
+pbs_patch() {
+    #dopatch $FILESDIR/patches/*.patch 
+    #XX.patch should be found under $FILESDIR or $FILESDIR/patches/
+    dopatch XX.patch
+}
+
+#config
+pbs_config() {
+    #default is :
+    #config+=" --prefix=/usr
+    #          --sysconfdir=/etc
+    #          --localstatedir=/var
+    #             --infodir=/usr/share/info
+    #          --mandir=/usr/share/man
+    #              --disable-static
+    #          --enable-shared "
+    config+=""
+    #./configure $config
+    doconfig
+}
+
+#build
+pbs_build() {
+    #make "$MAKEOPTS"
+    domake
+}
+
+#check
+pbs_check() {
+    make check
+}
+
+#install
+pbs_install() {
+    #install everything to PKGDIR
+    #make DESTDIR="PKGDIR" install
+    domkinstall
+    #doinit "$N"
+    #dounit "N".service
+    #dodesktop "*.desktop" "*.png"
+    #dodoc AUTHORS ChangeLog COPYING INSTALL NEWS README 
+    #docp "$FILESDIR/XXXX" "dirname"
+    #domv "$FILESDIR/XXXX" "dirname"
+    #docp_rename "$1" "$2"
+    #domv_rename "$1" "$2"
+    #doln "$1 "$2"
+    #doman a.1 b.2 c.3
+    #*****************
+    #when SRC_URI is deb or rpm package
+    #docp data/*  "PKGDIR"
+    #dosrc *
+    #dosupported
+}
+

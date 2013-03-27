@@ -1,0 +1,84 @@
+#!/usr/bin/env python
+# -*- coding: utf8 -*-
+#
+#   Copyright © 2012 ivali.com
+#   Maintainer: Zhongxin Huang <huangzhongxin@ivali.com>
+#
+#   This program is free software; you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation; either version 2 of the License, or
+#   (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+import sys
+import os
+import ybsutils
+import argparse
+
+__version__ = '0.1'
+
+def check_conflict(inlist):
+    '''
+
+    '''
+    filelists = inlist
+    # [(name, [files]), (name2, [files])]
+    files_db = []
+    for filelist in filelists:
+        name, version = ybsutils.get_name_version(filelist)
+        record = []
+        with open(filelist, 'r') as f:
+            for line in f.readlines():
+                line = line.strip()
+                if line.startswith('F') or line.startswith('S'):
+                    record.append(line.split(',')[1])
+        files_db.append((name, record))            
+    
+    for num, elem in enumerate(files_db):
+        meta = set(elem[1])
+        _range = files_db[num+1:]
+        if _range:
+            for elem_range in _range:
+                ret = meta & set(elem_range[1])
+                if ret:
+                    meta_name = elem[0]
+                    elem_range_name = elem_range[0]
+                    print "'{}' in both '{}' '{}'".format(' '.join([x for x in ret]), \
+                      meta_name, elem_range_name)
+
+
+if __name__ == '__main__':
+    ybsutils.signal_int()
+    argvs = sys.argv[1:]
+    if not argvs:
+        argvs = ['-h']
+    desc = 'Checking for conflict packages (which contains common files) in ypk_dir.'
+    parser = argparse.ArgumentParser(description=desc)
+    parser.add_argument('-v', '--version', action='store_true',
+                        help='show version')
+    parser.add_argument('ypk_dir', nargs = '*', 
+                        help='path to ypk_dir')
+    args = parser.parse_args(argvs)
+    if args.version:
+        print __version__
+    if args.ypk_dir:
+        dirs = args.ypk_dir
+        print "Checking for conflicts packages in {}".format(dirs)
+        for _dir in dirs:
+            if os.path.isdir(os.path.realpath(_dir)):
+                filelists = ybsutils.files_in_dir(_dir, '.filelist', 'version')
+                if not filelists:
+                    sys.stderr.write("filelist not found in '{}'.\nRun 'ypk-scanpackages {}' and retry.".format(_dir, _dir))
+                    sys.exit(1)
+                check_conflict(filelists)
+            else:
+                sys.stderr.write("'{}' is not a dirctory.".format(_dir))
+		sys.exit(1)

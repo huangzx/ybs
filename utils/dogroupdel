@@ -1,0 +1,13 @@
+#!/bin/bash
+#
+#
+
+dogroupdel() {
+    local end=${!#}
+    if getent group "$end" >/dev/null; then
+        echo "Deleting: group $end"
+        groupdel "$@"
+    fi
+}
+
+dogroupdel $@

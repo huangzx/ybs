@@ -1,0 +1,58 @@
+. /usr/lib/ybs/funcs
+
+#
+# args: $N $V
+pre_install() {
+    dogroupadd -r "apache"
+    douseradd -c "Apache Server" -d "/dev/null" -s "/bin/false" -r -N "apache"
+}
+
+#
+# args: $N $V
+post_install() {
+    ykms install $1 $2
+    gnome2_install_schema "$1"
+    mate_install_schema "$1"
+    gnome2_install_defaut_gconf "$1 $2 $3
+    gnome2_rarian_sk_update
+    gnome2_desktop_database_update
+    gnome2_icon_cache_update /usr/share/icons/titans|titans  $default is /usr/share/icons/hicolor
+    glib_compile_schemas
+    gnome2_gconfd_reload
+    gnome2_gtk_immodules_update
+    gnome2_mime_database_update
+    gnome2_gdk_pixbuf_loaders_update
+    dofont /usr/share/fonts/truetype/ttf-dejavu
+    doinstall_info wget.info.gz 
+    dolibtool_finish /usr/share/xxxx
+}
+
+#
+# args: $N $V
+pre_remove() {
+    gnome2_uninstall_schema
+    mate_uninstall_schema
+    gnome2_uninstall_mine
+    mate_uninstall_mine
+    doremove_info wget.info.gz
+}
+
+#
+# args: $N $V
+post_remove() {
+    ykms remove $1 $2
+    douserdel -r "apache"
+    dogroupdel "apache"
+}
+
+#
+# args: $N $V $V_installed
+post_upgrade() {
+    :
+}
+
+#
+# args: $N $V $V_installed
+post_downgrade() {
+    :
+}

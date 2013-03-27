@@ -1,0 +1,12 @@
+#!/bin/bash
+#
+#
+
+doremove_catalog() {
+    local bin=$(which install-catalog)
+    if [ -x $bin ]; then
+        $bin --remove $@
+    fi
+}
+
+doremove_catalog

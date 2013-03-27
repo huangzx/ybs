@@ -1,0 +1,13 @@
+#!/bin/bash
+#
+#
+
+# Update mime database
+gnome2_mime_database_update() {
+    if [ -x /usr/bin/update-mime-database ]; then
+        update-mime-database /usr/share/mime/
+    fi
+}
+
+gnome2_mime_database_update $@
+

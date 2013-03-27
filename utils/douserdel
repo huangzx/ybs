@@ -1,0 +1,13 @@
+#!/bin/bash
+#
+
+douserdel() {
+    local end=${!#}
+    if getent passwd "$end" >/dev/null; then
+        echo "Deleting: user $end"
+        userdel "$@"
+    fi
+}
+
+douserdel $@
+

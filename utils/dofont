@@ -1,0 +1,19 @@
+#!/bin/bash
+#
+#
+
+dofont() {
+    local i
+    for i in $@; do
+        echo "mkfontscale $i"
+	    mkfontscale "$i"
+	    echo "mkfontdir $i"
+	    mkfontdir  "$i"
+	    echo "fc-cache $i"
+	    fc-cache -f "$i"
+    done
+    return 0
+}
+
+dofont $@
+

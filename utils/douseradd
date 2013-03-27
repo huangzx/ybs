@@ -1,0 +1,13 @@
+#!/bin/bash
+#
+#
+
+douseradd() {
+    local end=${!#}
+    if ! getent passwd "$end" >/dev/null; then
+        echo "Creating: user $end"
+        useradd "$@"
+    fi
+}
+
+douseradd $@

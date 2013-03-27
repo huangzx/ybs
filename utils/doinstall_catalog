@@ -1,0 +1,12 @@
+#!/bin/bash
+#
+#
+
+doinstall_catalog() {
+    local bin=$(which install-catalog)
+    if [ -x $bin ]; then
+        $bin --add $@
+    fi
+}
+
+doinstall_catalog $@

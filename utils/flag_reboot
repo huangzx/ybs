@@ -1,0 +1,12 @@
+#!/bin/bash
+#
+#
+
+# Reboot flag
+flag_reboot() {
+    local flag="/run/ypkg/reboot"
+    mkdir -p /run/ypkg
+    touch "$flag"
+}
+
+flag_reboot

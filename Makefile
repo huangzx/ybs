@@ -2,29 +2,22 @@ CC=gcc
 CFLAGS=-O2
 DESTDIR=
 prefix=/usr
-BIN=ybs
 BINDIR=${DESTDIR}${prefix}/bin
-LIBDIR=${DESTDIR}${prefix}/lib/${BIN}
-DATADIR=${DESTDIR}${prefix}/share/${BIN}
-PKGDIR=${DESTDIR}/var/ypkg/packages
-DBDIR=${DESTDIR}/var/ypkg/db
+SBINDIR=${DESTDIR}${prefix}/sbin
+LIBDIR=${DESTDIR}${prefix}/lib/ybs
+DATADIR=${DESTDIR}${prefix}/share/ybs
+PYTHONSITE=${DESTDIR}/$(shell python -c 'import site; print site.getsitepackages()[0]')
 
-all: fileinfo
-	@echo "Done"
+make:
+    
 
-fileinfo: FORCE
-	make -C fileinfo
+install: 
+	install -d -m755 ${BINDIR} ${SBINDIR} ${LIBDIR} ${DATADIR} ${PYTHONSITE} 
+	install -m755 src/{fileinfo,pybs,ybs,ybs-deps-check,ybs-diff-check,ybs-scanrdeps,ypk-conflict-check,ypk-scanpackages} ${BINDIR}
+	install -m755 utils/* ${SBINDIR}
+	install -m644 src/ybsutils.py ${PYTHONSITE}
+	cp src/funcs ${LIBDIR}
+	cp samples/* ${DATADIR}
 
-install: fileinfo
-	install -d -m755 ${BINDIR} ${LIBDIR} ${DATADIR} ${PBSDIR} ${SRCDIR} ${PKGDIR} ${DBDIR}
-	install -m755 fileinfo/fileinfo ybs ykms ybs-scanpackages ybs-scandeps ${BINDIR}
-	cp funcs ${LIBDIR}
-	cp ybs.conf.sample ${DATADIR}
-	@echo "Done"
-
-clean: FORCE
-	make -C fileinfo clean
-	@echo "Done"
-
-FORCE:
-
+clean:
+	@echo 'do nothing'

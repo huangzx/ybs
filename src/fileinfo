@@ -1,0 +1,98 @@
+#!/usr/bin/env python
+# -*- coding: utf8 -*-
+
+#   fileinfo -- get infomation of files and directories
+#
+#   Copyright © 2012 ivali.com
+#   Maintainer: Zhongxin Huang <huangzhongxin@ivali.com>
+#
+#   This program is free software; you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation; either version 2 of the License, or
+#   (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+import sys
+import os
+import ybsutils
+import argparse
+
+__version__ = '0.1'
+
+
+def get_info(indir):
+    '''Show info of files and directories.
+
+    Args:
+      indir: path-to-directory
+
+    '''
+    fcount = dcount = scount = diskusagecount = filesizecount = 0
+    colls = []
+    for root, dirs, files in os.walk(indir):
+        for _d in dirs[:]:
+            colls.append(os.path.join(root, _d))
+        for _f in files[:]:
+            colls.append(os.path.join(root, _f))
+    for x in colls:
+        name = x.replace(indir, '')
+        if os.path.islink(x):
+            lst = os.lstat(x)
+            size = lst.st_size
+            mode = oct(lst.st_mode & 0o777)
+            uid = lst.st_uid
+            gid = lst.st_gid
+            mtime = int(lst.st_mtime)
+            dest = os.path.realpath(x).replace(indir, '')
+            print(('S,{},{},{},{},{},{},{}'.format(name, size, mode, uid, gid, mtime, dest)))
+            scount += 1
+            diskusagecount += lst.st_blocks
+        else:
+            fdst = os.stat(x)
+            size = fdst.st_size
+            mode = oct(fdst.st_mode & 0o777)
+            uid = fdst.st_uid
+            gid = fdst.st_gid
+            mtime = int(fdst.st_mtime)
+            diskusagecount += fdst.st_blocks
+            if os.path.isdir(x):
+                print(('D,{},{},{},{},{},{}'.format(name, size, mode, uid, gid, mtime)))
+                dcount += 1
+            else:
+                md5sum = ybsutils.get_md5sum(x)
+                print(('F,{},{},{},{},{},{},{}'.format(name, size, mode, uid, gid, mtime, md5sum)))
+                fcount += 1
+                filesizecount += size
+    print(('I,{},{},{},{},{}'.format(fcount, dcount, scount, diskusagecount/2,
+                                    (filesizecount-1)/1024+1)))
+
+
+if __name__ == '__main__':
+    argvs = sys.argv[1:]
+    if not argvs:
+        argvs = ['-h']
+    desc = 'Show information of files in directory.'
+    parser = argparse.ArgumentParser(description=desc)
+    parser.add_argument('-v', '--version', action='store_true',
+                        dest='v', help='show version')
+    parser.add_argument('path_dir', nargs='*', help='path to directory')
+    args = parser.parse_args(argvs)
+    if args.v:
+        print(__version__)
+    if args.path_dir:
+        dirs = args.path_dir
+        for _dir in dirs:
+            _dir = os.path.realpath(_dir)
+            if os.path.isdir(_dir):
+                get_info(_dir)
+            else:
+                sys.stderr.write("'{}' is not a directory.\n".format(_dir))
+                sys.exit(1)

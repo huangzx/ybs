@@ -1,0 +1,12 @@
+#!/bin/bash
+#
+
+dogroupadd() {
+    local end=${!#}
+    if ! getent group "$end" >/dev/null; then
+        echo "Creating: group $end"
+        groupadd "$@"
+    fi
+}
+
+dogroupadd $@

@@ -1,0 +1,13 @@
+#!/bin/bash
+#
+#
+
+# Update gdk pixbuf loaders
+gnome2_gdk_pixbuf_loaders_update() {
+    if [ -d /etc/gtk-2.0 ] && [ -x /usr/bin/update-gdk-pixbuf-loaders ]; then
+        echo "Updating gdk pixbuf loaders ..."
+	    update-gdk-pixbuf-loaders
+    fi
+}
+
+gnome2_gdk_pixbuf_loaders_update $@

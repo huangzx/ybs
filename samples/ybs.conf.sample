@@ -13,7 +13,7 @@ ARCH=
 CC=gcc
 CXX=g++
 CFLAGS=""
-CXXFLAGS="$CFLAGS "
+CXXFLAGS=""
 
 #
 # MAKEOPTS provides extra options that may be passed to 'make' when a
@@ -23,14 +23,9 @@ CXXFLAGS="$CFLAGS "
 MAKEOPTS="-j6"
 
 #
-# stable OR testing
-#
-ACCEPT_REPO="stable"
-
-#
 # Put your specific languages here, which are not in this list would be removed.
-# LANGUAGE="en zh_CN zh_TW zh_HK ..."
-# 
+# For example: LANGUAGE="en zh_CN zh_TW zh_HK"
+# Rmove nothing in defaults 
 LANGUAGE=""
 
 #
@@ -85,8 +80,6 @@ WGET_OPTIONS="--tries=3 --retry-connrefused --wait=2"
 # Remove *.la files
 #   strip/notrip, default: strip
 # Strip executable、sharedlib (.so)、staticlib (.a) and binary files 
-#   dev/nodev, defualt: nodev
-# Split development files, such as .h
 #
 FEATURES="ccache"
 CCACHE_DIR="/var/tmp/ybs/.ccache"
