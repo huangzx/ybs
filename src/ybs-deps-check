@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 # -*- coding: utf8 -*-
 #
 #   Copyright © 2012 ivali.com
@@ -23,7 +23,7 @@ import os
 import ybsutils
 import argparse
 
-__version__ = '0.1'
+VERSION = '0.1'
 PBSLIB_PATH = '/var/ybs/pbslib'
 
 
@@ -59,15 +59,14 @@ class CheckPbsfile(object):
                 flags = ('>=', '<=', '=', '>', '<')
                 for flag in flags:
                     if flag in dep_version_raw:
-                        dep_version = dep_version_raw.split(flag)[1]
+                        depVersion = dep_version_raw.split(flag)[1]
                         break
                 if not dep_name in PBSLIB_DICT:
-                    print '{} {} {} --> {}'.format(mark, self.name, 
-                                                   self.version, dep_name)
+                    print('{} {} {} --> {}'.format(mark, self.name, self.version, dep_name))
                 else:
                     result = 1
                     for ver in PBSLIB_DICT[dep_name]:
-                        ret = ybsutils.compare_version(ver, dep_version)
+                        ret = ybsutils.compare_version(ver, depVersion)
                         if flag == '>=':
                             if ret == 1 or ret == 0:
                                 result = 0
@@ -89,13 +88,10 @@ class CheckPbsfile(object):
                                 result = 0
                                 break
                     if result:        
-                        print '{} {} {} --> {}'.format(mark, self.name, 
-                                                       self.version, 
-                                                       dep_name+' '+dep_version_raw)   
+                        print('{} {} {} --> {}'.format(mark, self.name, self.version, dep_name + ' ' + dep_version_raw)) 
             else:
                 if not dep in PBSLIB_DICT:
-                    print '{} {} {} --> {}'.format(mark, self.name, 
-                                                   self.version, dep)
+                    print('{} {} {} --> {}'.format(mark, self.name, self.version, dep))
 
 if __name__ == '__main__':
     ybsutils.signal_int()
@@ -114,29 +110,29 @@ if __name__ == '__main__':
                         help='path to pbs_file')
     args = parser.parse_args(argvs)
     if args.version:
-        print __version__
-    print "Parsing pbslib from '{}'...\n".format(PBSLIB_PATH)
+        print(VERSION)
+    print("Parsing pbslib from '{}'...\n".format(PBSLIB_PATH))
     PBSLIB_DICT = ybsutils.parse_pbslib(PBSLIB_PATH)
     if args.d:
-        _dir = ' '.join(args.d)
-        print "Checking for missing dependencies '{}'...".format(_dir)
-        print "'[R]' stands for run-time, '[B]' for build-time, '[A]' for recommended.\n"
-        if os.path.isdir(os.path.realpath(_dir)):
-            for _file in ybsutils.files_in_dir(_dir, 'pbs'):
-                checkpbsfile = CheckPbsfile(_file)
+        dir_ = ' '.join(args.d)
+        print("Checking for missing dependencies '{}'...".format(dir_))
+        print("'[R]' stands for run-time, '[B]' for build-time, '[A]' for recommended.\n")
+        if os.path.isdir(os.path.realpath(dir_)):
+            for file_ in ybsutils.files_in_dir(dir_, 'pbs'):
+                checkpbsfile = CheckPbsfile(file_)
                 checkpbsfile.check_depends()
         else:
-            sys.stderr.write("'{}' is not a directory.".format(_dir))
+            sys.stderr.write("'{}' is not a directory.".format(dir_))
             sys.exit(1)
     if args.f:
-        _file = ' '.join(args.f)
-        print "Checking for missing dependencies '{}'...".format(_file)
-        print "'[R]' stands for run-time, '[B]' for build-time, '[A]' for recommended.\n"
-        if os.path.isfile(os.path.realpath(_file)):
-            checkpbsfile = CheckPbsfile(_file)
+        file_ = ' '.join(args.f)
+        print("Checking for missing dependencies '{}'...".format(file_))
+        print("'[R]' stands for run-time, '[B]' for build-time, '[A]' for recommended.\n")
+        if os.path.isfile(os.path.realpath(file_)):
+            checkpbsfile = CheckPbsfile(file_)
             checkpbsfile.check_depends()
         else:
-            sys.stderr.write("'{}' is not a file.".format(_file))
+            sys.stderr.write("'{}' is not a file.".format(file_))
             sys.exit(1) 
     
     #print 'Checking for circular Dependencies...\n'

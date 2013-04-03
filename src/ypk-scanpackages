@@ -1,6 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 # -*- coding: utf8 -*-
-#   ybs-scanpackages -- create Packages index files  
+#   ybs-scanpackages -- create Packages index files
 #
 #   Copyright © 2012 ivali.com
 #   Maintainer: Zhongxin Huang <huangzhongxin@ivali.com>
@@ -26,25 +26,32 @@ import xml.etree.ElementTree as ET
 import ybsutils
 import argparse
 
-__version__ = '0.1'
+VERSION = '0.1'
 
 
-def find_ypk(indir):
+def find_ypk(indir, arch):
     '''find all the ypk in given directory.
 
     Args:
        indir: A string of path to directory
-    
+       arch: A string, specify ypk arch
+
     Returns:
        A list of ypkfile with newest version
-    
+
     '''
     ypks_raw = ybsutils.files_in_dir(indir, '.ypk')
     ypks_raw.sort()
     if not ypks_raw:
         sys.stdout.write("No ypk package found in '{}'.\n".format(indir))
-        sys.exit()
-    print('* YPK package binary-dir: {}'.format(indir))    	    
+        sys.exit(1)
+    
+    ypks_arch = ybsutils.files_in_dir(indir, arch + '.ypk', 'version')
+    if not ypks_arch:
+        sys.stdout.write("No '{}' ypk package found in '{}'.\n".format(arch, indir))
+        sys.exit(1)
+    
+    print('* YPK package binary-dir: {}'.format(indir))
     filelist = os.path.join(indir, 'filelist.txt')
     filelist_new = ypks_raw
     if not os.path.isfile(filelist):
@@ -52,8 +59,8 @@ def find_ypk(indir):
     else:
         with open(filelist, 'r') as f:
             filelist_old = f.readlines()
-    file_remove = []            
-    file_add = []            
+    file_remove = []
+    file_add = []
     for x in filelist_old:
         if os.path.join(indir, x.strip()) not in filelist_new:
             file_remove.append(x.strip())
@@ -64,6 +71,7 @@ def find_ypk(indir):
         print('- {}'.format(x))
     for x in file_add:
         print('+ {}'.format(x))
+    
     noes = ('n', 'no', 'nop', 'nope')
     choice = raw_input('Do you want to continue? [Y/n]').lower()
     if choice in noes:
@@ -71,8 +79,10 @@ def find_ypk(indir):
     with open(filelist, 'w') as f:
         for line in filelist_new:
             f.write(line.replace(indir + '/', '') + '\n')
-    ypks = ybsutils.files_in_dir(indir, '.ypk', 'version')
-    return ypks
+    
+    ypks_any = ybsutils.files_in_dir(indir, 'any' + '.ypk', 'version')
+    ypks_all = ypks_arch + ypks_any
+    return ypks_all
 
 
 def merge_info(indir, indexdir, inlist, repo='stable'):
@@ -81,16 +91,16 @@ def merge_info(indir, indexdir, inlist, repo='stable'):
     Args:
       indir: A string of path to ypk package directory
       inlist: A list of ypks
-      repo: A string of repo  
+      repo: A string of repo
 
-    ''' 
+    '''
     def _write_xml(tree, outpath):
         ''' write xml to file '''
         tree.write(outpath, encoding="utf-8", xml_declaration=True)
     indexdir = indexdir
     index = os.path.join(indexdir, 'update.xml')
     indexfile = open(index, 'w')
-    indexfile.writelines(("<?xml version='1.0' encoding='UTF-8'?>\n", 
+    indexfile.writelines(("<?xml version='1.0' encoding='UTF-8'?>\n",
                           '<PackageInfo>\n'))
     for ypk in inlist:
         print('found {}'.format(ypk))
@@ -154,8 +164,8 @@ def merge_info(indir, indexdir, inlist, repo='stable'):
                 if '<?xml' in strline or '<PackageInfo' in strline or '</PackageInfo' in strline:
                     continue
                 indexfile.write(line)
-    indexfile.write('</PackageInfo>')                    
-    indexfile.close()     
+    indexfile.write('</PackageInfo>')
+    indexfile.close()
     os.chdir(indexdir)
     update_file = repo + '.tar.xz'
     with open('updates.list', 'a') as update_list:
@@ -163,8 +173,7 @@ def merge_info(indir, indexdir, inlist, repo='stable'):
         os.system(cmd)
         os.rename('update.xml', update_file.replace('tar.xz', 'xml'))
         sha1sum = ybsutils.get_sha1sum(update_file)
-        update_list.write(update_file + ' ' + str(int(os.path.getmtime(update_file))) \
-                          + ' ' + sha1sum + '\n')
+        update_list.write(update_file + ' ' + str(int(os.path.getmtime(update_file))) + ' ' + sha1sum + '\n')
 
 
 def get_repo(indir):
@@ -179,9 +188,9 @@ def get_repo(indir):
 
     '''
     result = []
-    _file = os.path.join(indir, 'repos')
-    if os.path.isfile(_file):
-        with open(_file, 'r') as f:
+    file_ = os.path.join(indir, 'repos.txt')
+    if os.path.isfile(file_):
+        with open(file_, 'r') as f:
             for line in f:
                 line = line.strip()
                 if not len(line) or line.startswith('#'):
@@ -189,37 +198,56 @@ def get_repo(indir):
                 repo_dir = os.path.join(indir, line)
                 if os.path.isdir(repo_dir):
                     result.append((repo_dir, line))
-    return result 
-               
+    return result
 
-if __name__ == "__main__":
+
+def main():
+    '''
+
+    '''
     argvs = sys.argv[1:]
     if not argvs:
         argvs = ['-h']
+
     desc = (
         "Sorts through a tree of 'ypk' binary packages "
-	"and creates index files, used by yget."
+        "and creates index files, used by yget."
     )
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('-v', '--version', action='store_true',
                         dest='v', help='show version')
-    parser.add_argument('ypk_dir', nargs='*', help="path to ypk_dir")  
+    parser.add_argument('-a', '--arch', nargs=1,
+                        metavar='arch', default=['x86_64'],
+                        dest='a', help='specify arch, available: i686, x86_64')
+    parser.add_argument('ypk_dir', nargs='*', help="path to ypk_dir")
     args = parser.parse_args(argvs)
+
     if args.v:
-        print __version__
+        print(VERSION)
+
+    arch = args.a[0]
+    
     if args.ypk_dir:
         dirs = args.ypk_dir
-        for _dir in dirs:
-            _dir = os.path.realpath(_dir)
-            if not os.path.isdir(_dir):
-	            sys.stderr.write("'{}' is not a directory.\n".format(_dir))
-	            sys.exit(1)
-            indexdir = os.path.join(_dir, 'updates')
-            if os.path.isdir(indexdir): shutil.rmtree(indexdir)
+        for dir_ in dirs:
+            dir_ = os.path.realpath(dir_)
+            if not os.path.isdir(dir_):
+                sys.stderr.write("'{}' is not a directory.\n".format(dir_))
+                sys.exit(1)
+            # TODO
+            # Generate index of specified arch
+            # indexdir = os.path.join(dir_, 'updates' + '-' + arch)
+            indexdir = os.path.join(dir_, 'updates')
+            if os.path.isdir(indexdir):
+                shutil.rmtree(indexdir)
             os.mkdir(indexdir)
-            repo_dir = get_repo(_dir)
+            repo_dir = get_repo(dir_)
             if repo_dir:
                 for rd in repo_dir:
-                    merge_info(_dir, indexdir, find_ypk(rd[0]), rd[1])
+                    merge_info(dir_, indexdir, find_ypk(rd[0], arch), rd[1])
             else:
-                merge_info(_dir, indexdir, find_ypk(_dir))
+                merge_info(dir_, indexdir, find_ypk(dir_, arch))
+
+
+if __name__ == "__main__":
+    main()

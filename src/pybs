@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-# -*- coding: utf8 -*- 
+#!/usr/bin/env python2
+# -*- coding: utf8 -*-
 #
 
 import os
@@ -8,7 +8,7 @@ import ybsutils
 import sqlite3
 import argparse
 
-__version__ = '0.1'
+VERSION = '0.1'
 
 PBSLIB_PATH = '/var/ybs/pbslib'
 DEPEND_DB = '/var/ybs/db/depend.db'
@@ -16,30 +16,43 @@ DEPEND_DB = '/var/ybs/db/depend.db'
 
 def ybs_is_installed(name):
     '''
+    
+    Args:
+      name: A string
+
+    Returns:
+      result: A tuple
 
     '''
     result = ybsutils.is_installed(name)
     if result is None:
-        sys.stderr.write("'{}' not found in '{}'. Be sure it is installed.\n".format(name, PACKAGE_DB))
+        sys.stderr.write("'{}' not found. Be sure it is installed.\n".format(name))
         return ()
     else:
         return result
 
 
-def ybs_showpbs(name):
-    ''' 
-    
+def ybs_showpbs(name, pbslib):
     '''
-    if not name in PBSLIB_DB:
+    
+    Args:
+     name: A string
+     pbslib: A dict
+    
+    Returns:
+     A string 
+
+    '''
+    if not name in pbslib:
         sys.stderr.write("'{}' not found in {}.\n".format(name, PBSLIB_PATH))
         sys.exit(1)
     else:
-        return ybsutils.file_in_dir(PBSLIB_PATH, name + '_' + PBSLIB_DB[name][-1] + '.pbs')
+        return ybsutils.file_in_dir(PBSLIB_PATH, name + '_' + pbslib[name][-1] + '.pbs')
 
 
-def ybs_search(name):
-    ''' 
-    
+def ybs_search(name, pbslib):
+    '''
+
     '''
     import time
     
@@ -52,7 +65,7 @@ def ybs_search(name):
     if name.startswith('^'):
         prefix_match = True
         name = name.lstrip('^')
-    for pkgname in PBSLIB_DB:
+    for pkgname in pbslib:
         pkgname_lower = pkgname.lower()
         if name in pkgname_lower:
             if suffix_match:
@@ -61,7 +74,7 @@ def ybs_search(name):
             if prefix_match:
                 if not pkgname_lower.startswith(name):
                     continue
-            version = PBSLIB_DB[pkgname][-1]
+            version = pbslib[pkgname][-1]
             info = ybsutils.is_installed(pkgname)
             flag = '[]'
             install_version = 'None'
@@ -69,13 +82,16 @@ def ybs_search(name):
             if info:
                 install_version = info[1]
                 ret = ybsutils.compare_version(str(version), str(install_version))
-                if ret == 1: flag = '[U]'
-                if ret == -1: flag = '[D]'
-                if ret == 0: flag = '[I]'
+                if ret == 1:
+                    flag = '[U]'
+                if ret == -1:
+                    flag = '[D]'
+                if ret == 0:
+                    flag = '[I]'
                 install_time = info[-1]
                 install_time = time.localtime(install_time)
                 install_time = time.strftime("%Y-%m-%d %H:%M:%S", install_time)
-            pbspath = ybs_showpbs(pkgname)
+            pbspath = ybs_showpbs(pkgname, pbslib)
             pbsfile = ybsutils.PbsFile()
             pbsfile.parse(pbspath)
             category = pbspath.split('/')[4]
@@ -84,14 +100,15 @@ def ybs_search(name):
       Available: {}
       Homepage: {}
       Description: {}
-                  '''.format(flag, category, pkgname, install_version, \
-                             install_time, ', '.join(PBSLIB_DB[pkgname]), \
-                             (' '.join(pbsfile.get('HOMEPAGE'))), \
+                  '''.format(flag, category, pkgname, install_version,
+                             install_time, ', '.join(pbslib[pkgname]),
+                             (' '.join(pbsfile.get('HOMEPAGE'))),
                              (' '.join(pbsfile.get('DESCRIPTION'))))
 
 
 def ybs_whatrequires(dep):
     '''
+
     '''
     conn = sqlite3.connect(DEPEND_DB)
     cur = conn.cursor()
@@ -99,12 +116,12 @@ def ybs_whatrequires(dep):
     pkgs = cur.fetchall()
     # pkgs: A list looks like [(u'lxrandr', u'1.2'), (u'lxmenu-data', u'1,3',)]
     for pkg in pkgs:
-        for _type in ('rdep','[R]'), ('bdep', '[B]'), ('redep', '[A]'), ('cdep', '[C]'):
+        for _type in ('rdep', '[R]'), ('bdep', '[B]'), ('redep', '[A]'), ('cdep', '[C]'):
             _type, flag = _type
             cur.execute("SELECT {} FROM universe WHERE name = '{}';".format(_type, pkg[0]))
             deps = cur.fetchone()
             # deps: A tuple looks like (u'gtk2(>=1.27) menu-cache startup-notification',)
-            deps = [ x.split('(')[0] for x in deps[0].split()]
+            deps = [x.split('(')[0] for x in deps[0].split()]
             if dep in deps:
                 print('{} {}'.format(flag, pkg[0]+'_'+pkg[1]))
     conn.close()
@@ -112,55 +129,70 @@ def ybs_whatrequires(dep):
 
 def ybs_updatedb(dbfile):
     '''
+
     '''
     if os.path.exists(dbfile):
         os.remove(dbfile)
     ybs_initdb(dbfile)
 
 
+def get_deps_from_file(infile):
+    '''
+
+    '''
+    pbsfile = ybsutils.PbsFile()
+    pbsfile.parse(infile)
+    name, version = pbsfile.name, pbsfile.version + pbsfile.relversion
+    rdep = ' '.join(pbsfile.get('RDEPEND'))
+    bdep = ' '.join(pbsfile.get('BDEPEND'))
+    redep = ' '.join(pbsfile.get('RECOMMENDED'))
+    cdep = ' '.join(pbsfile.get('CONFLICT'))
+    return (name, version, rdep, bdep, redep, cdep)
+
+
 def ybs_initdb(dbfile):
-    ''' 
-    
+    '''
+
     '''
     import StringIO
+    import multiprocessing
+
     if os.path.exists(dbfile):
         return 0
-    _dir = os.path.dirname(dbfile)    
-    if not os.path.isdir(_dir):
-        os.mkdir(_dir)
-    # write into stderr    
+    dir_ = os.path.dirname(dbfile)
+    if not os.path.isdir(dir_):
+        os.mkdir(dir_)
+    # Write into stderr
     sys.stderr.write("Parsing dependency tree of '{}' to '{}'...\n".format(PBSLIB_PATH, dbfile))
     # Initialis sqlite db
     conn = sqlite3.connect(':memory:')
     cur = conn.cursor()
     cur.execute("CREATE TABLE IF NOT EXISTS universe (name TEXT, version TEXT, \
       rdep TEXT, bdep TEXT, redep TEXT, cdep TEXT);")
-    # Insert values(the max verison) into db
+    # 多进程从大量文件读取依赖
+    pool = multiprocessing.Pool(processes=4)
     files = ybsutils.files_in_dir(PBSLIB_PATH, '.pbs', 'version')
-    pbsfile = ybsutils.PbsFile()
-    for f in files:
-        pbsfile.parse(f)
-        name, version = pbsfile.name, pbsfile.version + pbsfile.relversion
-        rdep = ' '.join(pbsfile.get('RDEPEND'))
-        bdep = ' '.join(pbsfile.get('BDEPEND'))
-        redep = ' '.join(pbsfile.get('RECOMMENDED'))
-        cdep = ' '.join(pbsfile.get('CONFLICT'))
-        cur.execute('INSERT INTO universe (name, version, rdep, bdep, redep, \
-          cdep) VALUES (?, ?, ?, ?, ?, ?)', (name, version, rdep, bdep, redep, cdep))
+    result = pool.map(get_deps_from_file, files)
+    pool.close()
+    pool.join()
+    # 执行数据库命令
+    for res in result:
+        cur.execute('INSERT INTO universe (name, version, rdep, bdep, redep, cdep) VALUES (?, ?, ?, ?, ?, ?)', res)
     # 将内存数据库写到文件
     str_buffer = StringIO.StringIO()
     for line in conn.iterdump():
         str_buffer.write('{}\n'.format(line))
     cur.close()
+    # 写入数据库    
     conn_file = sqlite3.connect(dbfile)
     cur_file = conn_file.cursor()
     cur_file.executescript(str_buffer.getvalue())
     cur_file.close()
 
 
-def ybs_compareversion(s1, s2):
-    ''' 
-    
+def ybs_compare_version(s1, s2):
+    '''
+
     '''
     v1 = ybsutils.get_name_version(s1)[1]
     v2 = ybsutils.get_name_version(s2)[1]
@@ -175,41 +207,45 @@ def ybs_get_allrdeps(pkg):
         result = []
         for pkg in inlist:
             cur.execute("SELECT {} FROM universe WHERE name = '{}'".format('rdep', pkg))
-            rdeps_of_pkg = cur.fetchone()
-            if not rdeps_of_pkg:
+            pkg_rdep = cur.fetchone()
+            if not pkg_rdep:
                 sys.stderr.write("'{}' not found in {}, run 'pybs --update_db' and retry.\n".format(pkg, DEPEND_DB))
                 sys.exit(1)
             # 获得结果结构:
             # (u'ca-certificates libssh(>=0.2) openssl zlib rtmpdump',)
-            rdeps_of_pkg = [x.split('(')[0] for x in rdeps_of_pkg[0].split()]
-            #result.extend(rdeps_of_pkg)
-            for x in rdeps_of_pkg:
+            pkg_rdep = [x.split('(')[0] for x in pkg_rdep[0].split()]
+            #result.extend(pkg_rdep)
+            for x in pkg_rdep:
                 if x not in result:
                     result.append(x)
         return result
     conn = sqlite3.connect(DEPEND_DB)
     cur = conn.cursor()
-    record = [pkg] 
+    record = [pkg]
     while True:
         pre = len(record)
         for x in _do_get(record):
             if x not in record:
                 record.append(x)
-        if len(record) == pre: break
+        if len(record) == pre:
+            break
     return reversed(record)
 
 
-if __name__ == '__main__':
+def main():
+    '''
+
+    '''
     ybsutils.signal_int()
     argvs = sys.argv[1:]
     if not argvs:
         argvs = ['-h']
     parser = argparse.ArgumentParser(description='ybs (StartOS Build System) backend.')
-    parser.add_argument('-v', '--version', action='store_true', 
+    parser.add_argument('-v', '--version', action='store_true',
                         dest='v', help='show version')
-    parser.add_argument('-s', '--search', nargs='*', metavar='pkg', 
+    parser.add_argument('-s', '--search', nargs='*', metavar='pkg',
                         dest='s', help='search pbs_file in pbs_dir')
-    parser.add_argument('-w', '--showpbs', nargs = '*', metavar='pkg',
+    parser.add_argument('-w', '--showpbs', nargs='*', metavar='pkg',
                         dest='w', help='show avaliable pbs_file in pbs_dir')
     parser.add_argument('-i', '--is_installed', nargs='*', metavar='pkg',
                         dest='i', help='show information of pkg installed')
@@ -219,30 +255,39 @@ if __name__ == '__main__':
                         dest='wr', help='show what require given package')
     parser.add_argument('-u', '--update_db', action='store_true',
                         dest='u', help='update dependency database')
-    parser.add_argument('-cv', '--compare_version', nargs=2, metavar='ver', 
+    parser.add_argument('-cv', '--compare_version', nargs=2, metavar='ver',
                         dest='cv', help='comprare two version strings')
-    args = parser.parse_args(argvs)                    
-    if args.v: print __version__
-    if args.u: ybs_updatedb(DEPEND_DB)
+    args = parser.parse_args(argvs)
+    if args.v:
+        print VERSION
+    if args.u:
+        ybs_updatedb(DEPEND_DB)
     if args.cv:
         x, y = args.cv
-        print ybs_compareversion(x, y)
+        print ybs_compare_version(x, y)
     if args.w:
-        PBSLIB_DB = ybsutils.parse_pbslib(PBSLIB_PATH)
-        for i in args.w: print ybs_showpbs(i)
+        pbslib_map = ybsutils.parse_pbslib(PBSLIB_PATH)
+        for i in args.w:
+            print ybs_showpbs(i, pbslib_map)
     if args.s:
-        PBSLIB_DB = ybsutils.parse_pbslib(PBSLIB_PATH)
+        pbslib_map = ybsutils.parse_pbslib(PBSLIB_PATH)
         for i in args.s:
-            ybs_search(i)
+            ybs_search(i, pbslib_map)
     if args.i:
         for i in args.i:
-            for x in ybs_is_installed(i): print x,
+            for x in ybs_is_installed(i):
+                print x,
     if args.g:
         ybs_initdb(DEPEND_DB)
         for i in args.g:
-            for x in ybs_get_allrdeps(i): print x,
+            for x in ybs_get_allrdeps(i):
+                print x,
     if args.wr:
         ybs_initdb(DEPEND_DB)
         for i in args.wr:
             print('{} is related with:\n'.format(i))
             ybs_whatrequires(i)
+
+
+if __name__ == '__main__':
+    main()

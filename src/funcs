@@ -1658,7 +1658,15 @@ ybs_build_raw() {
 
     if [ "$AUTO_INSTALL" = "yes" ]; then 
         msg "Install: $target"
-        ypkg "$YPKG_OPT" -I $target
+        while true; do
+            ypkg "$YPKG_OPT" -I $target
+            # exit code means:
+            # 5 - database is locked. waiting...
+            case x"$?" in
+             x5) sleep 2 ;;
+              *) break
+            esac
+        done
     else
         msg "$target"
     fi

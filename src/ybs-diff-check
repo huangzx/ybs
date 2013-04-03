@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 # -*- coding: utf8 -*-
 #
 #   Copyright © 2012 ivali.com
@@ -22,32 +22,35 @@ import sys
 import ybsutils
 import argparse
 
-__version__ = '0.1'
+VERSION = '0.1'
 
 
-def check_diff(ypk_dir):
-    ''' 
-    
+def check_diff(ypkdir, pbsdir):
     '''
-    ypks = ybsutils.files_in_dir(ypk_dir, '.ypk', 'version')
+
+    '''
+    print("Parsing pbslib from '{}'\n".format(pbsdir))
+    pbsdir_map = ybsutils.parse_pbslib(pbsdir)
+    
+    ypks = ybsutils.files_in_dir(ypkdir, '.ypk', 'version')
     ypkfile = ybsutils.PbsFile()
     for ypk in ypks:
         ypkfile.parse(ypk)
         name, version = ypkfile.name, ypkfile.version + ypkfile.relversion
-        if not name in PBSLIB_DICT:
-            print '{} {} found, but not in pbslib'.format(name, version)
+        if not name in pbsdir_map:
+            print('{} {} found, but not in pbslib'.format(name, version))
         else:
-            if not version in PBSLIB_DICT[name]:
-                print '{} {} found, but not in versions: {}'.format(name, 
-                                                      version, 
-                                                      ' '.join(PBSLIB_DICT[name]))
+            if not version in pbsdir_map[name]:
+                print('{} {} found, but not in versions: {}'.format(name, version, ' '.join(pbsdir_map[name])))
 
 
-if __name__ == '__main__':
+def main():
     ybsutils.signal_int()
     argvs = sys.argv[1:]
+    
     if not argvs:
         argvs = ['-h']
+    # Handel arguments
     desc = 'Checking for differences between pbs_dir and ypk_dir.'
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('-v', '--version', action='store_true',
@@ -57,19 +60,25 @@ if __name__ == '__main__':
     parser.add_argument('-y', '--ypk_dir', nargs=1, dest='y', required=True,
                         metavar='ypk_dir', help='path to ypk_dir')
     args = parser.parse_args(argvs)
-    if args.version: print __version__
+    
+    if args.version:
+        print(VERSION)
     if args.p and args.y:
         pbsdir = ' '.join(args.p)
         ypkdir = ' '.join(args.y)
-    print "Parsing pbslib from '{}'...\n".format(pbsdir)
-    pbsfiles = ybsutils.files_in_dir(pbsdir, '.pbs')
-    if not pbsfiles:
+    
+    # Check these dir is valid
+    if not ybsutils.files_in_dir(pbsdir, '.pbs'):
         sys.stderr.write("'.pbs' files not found in '{}'.".format(pbsdir))
         sys.exit(1)
-    PBSLIB_DICT = ybsutils.parse_pbslib(pbsdir)
-    ypkfiles = ybsutils.files_in_dir(ypkdir, '.ypk')
-    if not ypkfiles:
-        sys.stderr.write("'.ypk' files not found in '{}'.".format(pbsdir))
+    if not ybsutils.files_in_dir(ypkdir, '.ypk'):
+        sys.stderr.write("'.ypk' files not found in '{}'.".format(ypkdir))
         sys.exit(1)
-    print "Checking for differences between '{}' and '{}'\n".format(pbsdir, ypkdir) 
-    check_diff(ypkdir)
+    
+    
+    print("Checking for differences between '{}' and '{}'\n".format(pbsdir, ypkdir))
+    check_diff(ypkdir, pbsdir)
+
+
+if __name__ == '__main__':
+    main()

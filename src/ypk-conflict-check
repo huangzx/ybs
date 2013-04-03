@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 # -*- coding: utf8 -*-
 #
 #   Copyright © 2012 ivali.com
@@ -23,7 +23,7 @@ import os
 import ybsutils
 import argparse
 
-__version__ = '0.1'
+VERSION = '0.1'
 
 def check_conflict(inlist):
     '''
@@ -31,7 +31,7 @@ def check_conflict(inlist):
     '''
     filelists = inlist
     # [(name, [files]), (name2, [files])]
-    files_db = []
+    files_list = []
     for filelist in filelists:
         name, version = ybsutils.get_name_version(filelist)
         record = []
@@ -40,45 +40,51 @@ def check_conflict(inlist):
                 line = line.strip()
                 if line.startswith('F') or line.startswith('S'):
                     record.append(line.split(',')[1])
-        files_db.append((name, record))            
+        files_list.append((name, record))            
     
-    for num, elem in enumerate(files_db):
+    for num, elem in enumerate(files_list):
         meta = set(elem[1])
-        _range = files_db[num+1:]
+        _range = files_list[num+1:]
         if _range:
             for elem_range in _range:
                 ret = meta & set(elem_range[1])
                 if ret:
                     meta_name = elem[0]
                     elem_range_name = elem_range[0]
-                    print "'{}' in both '{}' '{}'".format(' '.join([x for x in ret]), \
-                      meta_name, elem_range_name)
+                    print("'{}' in both '{}' '{}'".format(' '.join([x for x in ret]), meta_name, elem_range_name))
 
 
-if __name__ == '__main__':
+def main():
     ybsutils.signal_int()
     argvs = sys.argv[1:]
     if not argvs:
         argvs = ['-h']
-    desc = 'Checking for conflict packages (which contains common files) in ypk_dir.'
+    # Handle arguments
+    desc = 'Checking for conflict packages (contain common files) in ypk_dir.'
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('-v', '--version', action='store_true',
                         help='show version')
     parser.add_argument('ypk_dir', nargs = '*', 
                         help='path to ypk_dir')
     args = parser.parse_args(argvs)
+    
     if args.version:
-        print __version__
+        print(VERSION)
+    
     if args.ypk_dir:
         dirs = args.ypk_dir
-        print "Checking for conflicts packages in {}".format(dirs)
-        for _dir in dirs:
-            if os.path.isdir(os.path.realpath(_dir)):
-                filelists = ybsutils.files_in_dir(_dir, '.filelist', 'version')
+        print("Checking for conflicts packages in {}".format(dirs))
+        for dir_ in dirs:
+            if os.path.isdir(os.path.realpath(dir_)):
+                filelists = ybsutils.files_in_dir(dir_, '.filelist', 'version')
                 if not filelists:
-                    sys.stderr.write("filelist not found in '{}'.\nRun 'ypk-scanpackages {}' and retry.".format(_dir, _dir))
+                    sys.stderr.write("filelist not found in '{}'.\nRun 'ypk-scanpackages {}' then retry.\n".format(dir_, dir_))
                     sys.exit(1)
                 check_conflict(filelists)
             else:
-                sys.stderr.write("'{}' is not a dirctory.".format(_dir))
-		sys.exit(1)
+                sys.stderr.write("'{}' is not a dirctory.".format(dir_))
+                sys.exit(1)
+
+
+if __name__ == '__main__':
+    main()

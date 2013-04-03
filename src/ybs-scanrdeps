@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 # -*- coding: utf8 -*-
 #
 # Copyright © 2012 ivali.com
@@ -36,11 +36,11 @@ class ScanRdep(object):
         p = subprocess.Popen('ypkg -l '+self.pkg, shell=True, stdout=subprocess.PIPE)
         # p.communicate method return a tuple looks likes:
         # (stdoutdata, stderrdata)
-        streamdata = p.communicate()[0]
+        stream_data = p.communicate()[0]
         if p.returncode != 0:
             sys.stderr.write("'{}' not found. Be sure it has been installed.".format(pkg))
             sys.exit(1)
-        filelist_raw = [x for x in streamdata.split('\n')]
+        filelist_raw = [x for x in stream_data.split('\n')]
         # 获得所有文件和链接# 
         filelist = []
         for line in filelist_raw:
@@ -70,8 +70,8 @@ class ScanRdep(object):
         ''' 用 ldd 获得需要的所有库文件'''
         libfiles = []
         not_found = []
-        for _file in self.binfiles:
-            ldd_result = os.popen('ldd '+_file).readlines()
+        for file_ in self.binfiles:
+            ldd_result = os.popen('ldd '+file_).readlines()
             for line in ldd_result:
                 line = line.strip()
                 if 'not found' in line:
@@ -89,7 +89,7 @@ class ScanRdep(object):
         if not_found:
             sys.stderr.write('Missing requrired libs:\n')
             for x in not_found:
-                print x + '\n',
+                print(x + '\n'),
             sys.exit(1)
         self.libfiles = libfiles
 
@@ -98,8 +98,8 @@ class ScanRdep(object):
         ''' 用 ypkg -S 获得依赖 '''
         rdeps = []
         not_owned = []
-        for _file in self.libfiles:
-            ypkg_result = os.popen('ypkg -S --absolute '+_file).readlines()
+        for file_ in self.libfiles:
+            ypkg_result = os.popen('ypkg -S --absolute '+file_).readlines()
             for line in ypkg_result:
                 line = line.strip()
                 # 非空行，ypkg -S 的输出第二行是空行
@@ -119,14 +119,14 @@ class ScanRdep(object):
         if not_owned:
             sys.stderr.write('Files not owned by an packages:\n')
             for x in not_owned:
-                print x + '\n',
+                print(x + '\n'),
             sys.exit(1)
         # 去掉自身
         rdeps = [x for x in rdeps if x != self.pkg]
-        print 'All:'
+        print('All:')
         for x in rdeps[0:-1]: 
-            print x,
-        print rdeps[-1] + '\n'
+            print(x),
+        print(rdeps[-1] + '\n')
         self.rdeps = rdeps
 
     
@@ -138,23 +138,23 @@ class ScanRdep(object):
         # 注意: pkgs 在循环中被修改
         for num, pkg in enumerate(pkgs[:]):
             cur.execute("SELECT {} FROM universe WHERE name = '{}'".format('rdep', pkg))
-            rdeps_of_pkg = cur.fetchone()
-            if not rdeps_of_pkg:
+            pkg_rdeps = cur.fetchone()
+            if not pkg_rdeps:
                 continue
             # 获得结果结构:
             # (u'ca-certificates libssh(>=0.2) openssl zlib rtmpdump',)
             # 转成 list
-            rdeps_of_pkg = [x.split('(')[0] for x in rdeps_of_pkg[0].split()]
+            pkg_rdeps = [x.split('(')[0] for x in pkg_rdeps[0].split()]
             # 共同元素
-            coms = set(pkgs) & set(rdeps_of_pkg)
+            coms = set(pkgs) & set(pkg_rdeps)
             # 从原始完整列表里删除共同元素
             for com in coms:
                 for x in pkgs:
                     if x == com:
                         pkgs.remove(com)
-        print 'Filtered:'
+        print('Filtered:')
         for x in pkgs:
-            print x,
+            print(x),
         return pkgs
 
 

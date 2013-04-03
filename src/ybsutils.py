@@ -86,23 +86,23 @@ def compare_version(v1, v2):
     # splite major and rel version
     v1 = v1.lower()
     v2 = v2.lower()
-    major_v1 = v1.split('-')[0]
-    rel_v1 = v1.split('-')[1:]
-    major_v2 = v2.split('-')[0]
-    rel_v2 = v2.split('-')[1:]
+    v1_major = v1.split('-')[0]
+    v1_rel = v1.split('-')[1:]
+    v2_major = v2.split('-')[0]
+    v2_rel = v2.split('-')[1:]
     # first, compare major version
-    major_v1 += '.0'
-    major_v2 += '.0'
+    v1_major += '.0'
+    v2_major += '.0'
     # be sure compare two version with same length
-    length_major_v1 = len(major_v1.split('.'))
-    length_major_v2 = len(major_v2.split('.'))
-    more = length_major_v1 - length_major_v2
+    v1_major_len = len(v1_major.split('.'))
+    v2_major_len = len(v2_major.split('.'))
+    more = v1_major_len - v2_major_len
     if more > 0:
-        major_v2 += '.0' * abs(more)
+        v2_major += '.0' * abs(more)
     else:
-        major_v1 += '.0' * abs(more)
+        v1_major += '.0' * abs(more)
     _cmp = lambda x, y: LooseVersion(x).__cmp__(y)
-    ret = _cmp(major_v1, major_v2)
+    ret = _cmp(v1_major, v2_major)
     if ret != 0:
         return ret
     # second, compare rel version
@@ -114,22 +114,22 @@ def compare_version(v1, v2):
         inlist = [x.replace('rc', 'c') for x in inlist]
         return inlist
 
-    rel_v1 = _replacement(rel_v1)
-    rel_v2 = _replacement(rel_v2)
+    v1_rel = _replacement(v1_rel)
+    v2_rel = _replacement(v2_rel)
     # be sure compare two version with same length
-    length_rel_v1 = len(rel_v1)
-    length_rel_v2 = len(rel_v2)
-    more = length_rel_v1 - length_rel_v2
+    v1_rel_len = len(v1_rel)
+    v2_rel_len = len(v2_rel)
+    more = v1_rel_len - v2_rel_len
     absmore = abs(more)
     if more > 0:
         while absmore > 0:
-            rel_v2.append('r0')
+            v2_rel.append('r0')
             absmore -= 1
     else:
         while absmore > 0:
-            rel_v1.append('r0')
+            v1_rel.append('r0')
             absmore -= 1
-    for x, y in zip(rel_v1, rel_v2):
+    for x, y in zip(v1_rel, v2_rel):
         ret = _cmp(x, y)
         if ret != 0:
             return ret

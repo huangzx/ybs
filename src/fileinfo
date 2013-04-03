@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 # -*- coding: utf8 -*-
 
 #   fileinfo -- get infomation of files and directories
@@ -25,7 +25,7 @@ import os
 import ybsutils
 import argparse
 
-__version__ = '0.1'
+VERSION = '0.1'
 
 
 def get_info(indir):
@@ -35,13 +35,13 @@ def get_info(indir):
       indir: path-to-directory
 
     '''
-    fcount = dcount = scount = diskusagecount = filesizecount = 0
+    fcount = dcount = scount = disk_usage_count = file_size_count = 0
     colls = []
     for root, dirs, files in os.walk(indir):
-        for _d in dirs[:]:
-            colls.append(os.path.join(root, _d))
-        for _f in files[:]:
-            colls.append(os.path.join(root, _f))
+        for dir_ in dirs[:]:
+            colls.append(os.path.join(root, dir_))
+        for file_ in files[:]:
+            colls.append(os.path.join(root, file_))
     for x in colls:
         name = x.replace(indir, '')
         if os.path.islink(x):
@@ -54,7 +54,7 @@ def get_info(indir):
             dest = os.path.realpath(x).replace(indir, '')
             print(('S,{},{},{},{},{},{},{}'.format(name, size, mode, uid, gid, mtime, dest)))
             scount += 1
-            diskusagecount += lst.st_blocks
+            disk_usage_count += lst.st_blocks
         else:
             fdst = os.stat(x)
             size = fdst.st_size
@@ -62,7 +62,7 @@ def get_info(indir):
             uid = fdst.st_uid
             gid = fdst.st_gid
             mtime = int(fdst.st_mtime)
-            diskusagecount += fdst.st_blocks
+            disk_usage_count += fdst.st_blocks
             if os.path.isdir(x):
                 print(('D,{},{},{},{},{},{}'.format(name, size, mode, uid, gid, mtime)))
                 dcount += 1
@@ -70,9 +70,9 @@ def get_info(indir):
                 md5sum = ybsutils.get_md5sum(x)
                 print(('F,{},{},{},{},{},{},{}'.format(name, size, mode, uid, gid, mtime, md5sum)))
                 fcount += 1
-                filesizecount += size
-    print(('I,{},{},{},{},{}'.format(fcount, dcount, scount, diskusagecount/2,
-                                    (filesizecount-1)/1024+1)))
+                file_size_count += size
+    print(('I,{},{},{},{},{}'.format(fcount, dcount, scount, disk_usage_count/2,
+                                    (file_size_count-1)/1024+1)))
 
 
 if __name__ == '__main__':
@@ -86,13 +86,13 @@ if __name__ == '__main__':
     parser.add_argument('path_dir', nargs='*', help='path to directory')
     args = parser.parse_args(argvs)
     if args.v:
-        print(__version__)
+        print(VERSION)
     if args.path_dir:
         dirs = args.path_dir
-        for _dir in dirs:
-            _dir = os.path.realpath(_dir)
-            if os.path.isdir(_dir):
-                get_info(_dir)
+        for dir_ in dirs:
+            dir_ = os.path.realpath(dir_)
+            if os.path.isdir(dir_):
+                get_info(dir_)
             else:
-                sys.stderr.write("'{}' is not a directory.\n".format(_dir))
+                sys.stderr.write("'{}' is not a directory.\n".format(dir_))
                 sys.exit(1)
