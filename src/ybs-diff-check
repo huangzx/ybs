@@ -22,8 +22,6 @@ import sys
 import ybsutils
 import argparse
 
-VERSION = '0.1'
-
 
 def check_diff(ypkdir, pbsdir):
     '''
@@ -47,22 +45,18 @@ def check_diff(ypkdir, pbsdir):
 def main():
     ybsutils.signal_int()
     argvs = sys.argv[1:]
-    
     if not argvs:
         argvs = ['-h']
+    
     # Handel arguments
     desc = 'Checking for differences between pbs_dir and ypk_dir.'
     parser = argparse.ArgumentParser(description=desc)
-    parser.add_argument('-v', '--version', action='store_true',
-                        help='Show version')
     parser.add_argument('-p', '--pbs_dir', nargs=1, dest='p', required=True,
                         metavar='pbs_dir', help='path to pbs_dir')
     parser.add_argument('-y', '--ypk_dir', nargs=1, dest='y', required=True,
                         metavar='ypk_dir', help='path to ypk_dir')
     args = parser.parse_args(argvs)
     
-    if args.version:
-        print(VERSION)
     if args.p and args.y:
         pbsdir = ' '.join(args.p)
         ypkdir = ' '.join(args.y)
@@ -71,10 +65,10 @@ def main():
     if not ybsutils.files_in_dir(pbsdir, '.pbs'):
         sys.stderr.write("'.pbs' files not found in '{}'.".format(pbsdir))
         sys.exit(1)
+    
     if not ybsutils.files_in_dir(ypkdir, '.ypk'):
         sys.stderr.write("'.ypk' files not found in '{}'.".format(ypkdir))
         sys.exit(1)
-    
     
     print("Checking for differences between '{}' and '{}'\n".format(pbsdir, ypkdir))
     check_diff(ypkdir, pbsdir)

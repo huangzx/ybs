@@ -70,15 +70,15 @@ WGET_OPTIONS="--tries=3 --retry-connrefused --wait=2"
 
 #
 # Features are: 
-#   ccache/noccache, default: noccache
+#   ccache/noccache, defaults to noccache
 # Caching pre-processor to C/C++ compilers, which often results in a 5 to 10 times speedup in common compilations. 
 #   distcc/nodistcc, default: nodistcc
 # A program to distribute builds of C, C++, Objective C or Objective C++ code across several machines on a network. 
-#   upx/noupx, default: noupx  
+#   upx/noupx, defaults to noupx  
 # Executable file compression and decompression utility 
 #   libtool/nolibtool, default: libtool
 # Remove *.la files
-#   strip/notrip, default: strip
+#   strip/notrip, defaults to strip
 # Strip executable、sharedlib (.so)、staticlib (.a) and binary files 
 #
 FEATURES="ccache"
@@ -92,4 +92,3 @@ STRIP_SHARED="--strip-unneeded"
 STRIP_STATIC="--strip-debug"
 
 UPXFLAGS="-9"
-

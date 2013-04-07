@@ -23,9 +23,6 @@ import os
 import ybsutils
 import argparse
 
-VERSION = '0.1'
-PBSLIB_PATH = '/var/ybs/pbslib'
-
 
 class CheckPbsfile(object):
     '''
@@ -98,6 +95,7 @@ if __name__ == '__main__':
     argvs = sys.argv[1:]
     if not argvs:
         argvs = ['-h']
+    
     desc = 'Checking for missing dependecies of pbs_dir or pbs_file'
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('-v', '--version', action='store_true',
@@ -109,10 +107,14 @@ if __name__ == '__main__':
                         metavar='pbs_file', dest='f',  
                         help='path to pbs_file')
     args = parser.parse_args(argvs)
+    
     if args.version:
-        print(VERSION)
-    print("Parsing pbslib from '{}'...\n".format(PBSLIB_PATH))
-    PBSLIB_DICT = ybsutils.parse_pbslib(PBSLIB_PATH)
+        print(ybsutils.__version__)
+        sys.exit()
+    
+    print("Parsing pbslib from '{}'...\n".format(ybsutils.__pbslib_path__))
+    PBSLIB_DICT = ybsutils.parse_pbslib(ybsutils.__pbslib_path__)
+    
     if args.d:
         dir_ = ' '.join(args.d)
         print("Checking for missing dependencies '{}'...".format(dir_))
@@ -124,6 +126,7 @@ if __name__ == '__main__':
         else:
             sys.stderr.write("'{}' is not a directory.".format(dir_))
             sys.exit(1)
+    
     if args.f:
         file_ = ' '.join(args.f)
         print("Checking for missing dependencies '{}'...".format(file_))

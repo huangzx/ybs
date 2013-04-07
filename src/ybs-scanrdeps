@@ -23,8 +23,7 @@ import sys
 import sqlite3
 import argparse
 import subprocess 
-
-DEPEND_DB = '/var/ybs/db/depend.db'
+import ybsutils
 
 
 class ScanRdep(object):
@@ -133,7 +132,7 @@ class ScanRdep(object):
     def _rdeps_filted(self):
         ''' 递归依赖 '''
         pkgs = self.rdeps
-        conn = sqlite3.connect(DEPEND_DB)
+        conn = sqlite3.connect(ybsutils.__depend_db__)
         cur = conn.cursor()
         # 注意: pkgs 在循环中被修改
         for num, pkg in enumerate(pkgs[:]):
@@ -158,14 +157,22 @@ class ScanRdep(object):
         return pkgs
 
 
-if __name__  == '__main__':
+def main():
     argvs = sys.argv[1:]
     if not argvs:
         argvs = ['-h']
+    
     desc = 'calculating runtime dependency of package.'
     parser = argparse.ArgumentParser(description=desc)
+    parser.add_argument('-v', '--version', action='store_true',
+                        dest='v', help='show version')
     parser.add_argument('pkg', nargs='*', help='pkg name')
     args = parser.parse_args(argvs)
+    
+    if args.v:
+        print(ybsutils.__version__)
+        sys.exit()
+
     if args.pkg:
         for pkg in args.pkg:
             scanrdep = ScanRdep(pkg)
@@ -173,3 +180,7 @@ if __name__  == '__main__':
             scanrdep._getlib()
             scanrdep._getrdeps()
             scanrdep._rdeps_filted()
+
+
+if __name__  == '__main__':
+    main()

@@ -23,7 +23,6 @@ import os
 import ybsutils
 import argparse
 
-VERSION = '0.1'
 
 def check_conflict(inlist):
     '''
@@ -59,6 +58,7 @@ def main():
     argvs = sys.argv[1:]
     if not argvs:
         argvs = ['-h']
+    
     # Handle arguments
     desc = 'Checking for conflict packages (contain common files) in ypk_dir.'
     parser = argparse.ArgumentParser(description=desc)
@@ -69,11 +69,13 @@ def main():
     args = parser.parse_args(argvs)
     
     if args.version:
-        print(VERSION)
-    
+        print(ybsutils.__version__)
+        sys.exit()
+
     if args.ypk_dir:
         dirs = args.ypk_dir
         print("Checking for conflicts packages in {}".format(dirs))
+        
         for dir_ in dirs:
             if os.path.isdir(os.path.realpath(dir_)):
                 filelists = ybsutils.files_in_dir(dir_, '.filelist', 'version')

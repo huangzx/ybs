@@ -25,8 +25,6 @@ import os
 import ybsutils
 import argparse
 
-VERSION = '0.1'
-
 
 def get_info(indir):
     '''Show info of files and directories.
@@ -79,14 +77,18 @@ if __name__ == '__main__':
     argvs = sys.argv[1:]
     if not argvs:
         argvs = ['-h']
+    
     desc = 'Show information of files in directory.'
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('-v', '--version', action='store_true',
                         dest='v', help='show version')
     parser.add_argument('path_dir', nargs='*', help='path to directory')
     args = parser.parse_args(argvs)
+    
     if args.v:
-        print(VERSION)
+        print(ybsutils.__version__)
+        sys.exit()
+
     if args.path_dir:
         dirs = args.path_dir
         for dir_ in dirs:

@@ -26,8 +26,6 @@ import xml.etree.ElementTree as ET
 import ybsutils
 import argparse
 
-VERSION = '0.1'
-
 
 def find_ypk(indir, arch):
     '''find all the ypk in given directory.
@@ -223,7 +221,8 @@ def main():
     args = parser.parse_args(argvs)
 
     if args.v:
-        print(VERSION)
+        print(ybsutils.__version__)
+        sys.exit()
 
     arch = args.a[0]
     

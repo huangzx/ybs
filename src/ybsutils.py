@@ -23,6 +23,11 @@ import os
 import signal
 import sqlite3
 
+__version__ = '0.1'
+__package_db__ = '/var/ypkg/db/package.db'
+__depend_db__ = '/var/ybs/db/depend.db'
+__pbslib_path__ = '/var/ybs/pbslib'
+
 
 def signal_int():
     ''' signal SIGINT handler
@@ -44,8 +49,7 @@ def is_installed(name):
         (u'firefox', u'19.0', u'stable', 1361523561)
 
     '''
-    world = '/var/ypkg/db/package.db'
-    conn = sqlite3.connect(world)
+    conn = sqlite3.connect(__package_db__)
     cursor = conn.cursor()
     cursor.execute("SELECT name, version, repo, install_time FROM \
                 world Where name='{}'".format(name))
