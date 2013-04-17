@@ -1,7 +1,6 @@
 
 * 2012-02-06 Zhongxin Huang <huangzhongxin@ivali.com> - 2.0.0
--  Fixed dependencies
--  Rebuilt for xxxx
--  Added missing buildrequires
--  Initial build
-
+- Fixed dependencies
+- Rebuilt for 
+- Added missing buildrequires
+- Initial build

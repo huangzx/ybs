@@ -1,44 +1,29 @@
 #!/usr/bin/env python2
 # -*- coding: utf8 -*-
-
-#   fileinfo -- get infomation of files and directories
 #
-#   Copyright © 2012 ivali.com
-#   Maintainer: Zhongxin Huang <huangzhongxin@ivali.com>
-#
-#   This program is free software; you can redistribute it and/or modify
-#   it under the terms of the GNU General Public License as published by
-#   the Free Software Foundation; either version 2 of the License, or
-#   (at your option) any later version.
-#
-#   This program is distributed in the hope that it will be useful,
-#   but WITHOUT ANY WARRANTY; without even the implied warranty of
-#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#   GNU General Public License for more details.
-#
-#   You should have received a copy of the GNU General Public License
-#   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright © 2013 ivali.com
+# Author: Zhongxin Huang <zhongxin.huang@gmail.com>
 #
 
 import sys
 import os
-import ybsutils
+from ybs import ybsutils
 import argparse
 
 
 def get_info(indir):
-    '''Show info of files and directories.
+    ''' Show attribution of files and directories under given directory.
 
     Args:
-      indir: path-to-directory
+      indir: string, path to directory
 
     '''
     fcount = dcount = scount = disk_usage_count = file_size_count = 0
     colls = []
     for root, dirs, files in os.walk(indir):
-        for dir_ in dirs[:]:
+        for dir_ in dirs:
             colls.append(os.path.join(root, dir_))
-        for file_ in files[:]:
+        for file_ in files:
             colls.append(os.path.join(root, file_))
     for x in colls:
         name = x.replace(indir, '')
@@ -73,28 +58,31 @@ def get_info(indir):
                                     (file_size_count-1)/1024+1)))
 
 
-if __name__ == '__main__':
+def main():
     argvs = sys.argv[1:]
     if not argvs:
         argvs = ['-h']
-    
-    desc = 'Show information of files in directory.'
+
+    desc = 'Show attribution of files and directories under given directory.'
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('-v', '--version', action='store_true',
-                        dest='v', help='show version')
-    parser.add_argument('path_dir', nargs='*', help='path to directory')
+                        dest='v', help='show version and exit')
+    parser.add_argument('dir', nargs='*', help='path to directory')
     args = parser.parse_args(argvs)
-    
+
     if args.v:
         print(ybsutils.__version__)
         sys.exit()
 
-    if args.path_dir:
-        dirs = args.path_dir
-        for dir_ in dirs:
+    if args.dir:
+        for dir_ in args.dir:
             dir_ = os.path.realpath(dir_)
             if os.path.isdir(dir_):
                 get_info(dir_)
             else:
                 sys.stderr.write("'{}' is not a directory.\n".format(dir_))
-                sys.exit(1)
+                continue
+
+
+if __name__ == '__main__':
+    main()

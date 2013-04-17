@@ -1,0 +1,146 @@
+#!/usr/bin/env python2
+# -*- coding: utf8 -*-
+#
+# Copyright © 2013 ivali.com
+# Author: Zhongxin Huang <zhongxin.huang@gmail.com>
+#
+
+import sys
+import os
+from ybs import ybsutils
+import argparse
+import pybs
+import multiprocessing
+
+IS_VERBOSE = False
+PBSLIB_MAP = {}
+PROCESSES_NUM = 4
+
+
+def is_match_arch(ypk):
+    '''
+    Args:
+      ypk: string, path to ypkfile
+
+    '''
+    g = ybsutils.GetNameVersion()
+    pbsfile = ybsutils.PbsFile()
+    if IS_VERBOSE:
+        print('Found: {}'.format(ypk))
+    g.parse(ypk)
+    ypk_name = g.name
+    ypk_arch = g.arch
+    pbsfile.parse(pybs.ybs_showpbs(ypk_name, PBSLIB_MAP))
+    pbs_arch = ' '.join(pbsfile.get('YARCH'))
+    if ypk_arch == 'any':
+        if pbs_arch != 'any':
+            print("'{}' mismatch arch, '{}' in pbslib.".format(ypk, pbs_arch))
+    else:
+        if pbs_arch == 'any':
+            print("'{}' mismatch arch, '{}' in pbslib.".format(ypk, pbs_arch))
+
+
+class CheckConflict(object):
+    ''' checking for conflicts in ypkdir
+
+    '''
+    def __init__(self, indir):
+        '''
+        Args:
+          indir: string, path to ypkdir
+
+        '''
+        self.indir = indir
+
+    def conflict_file(self):
+        ''' ypkfiles contains common files
+
+        '''
+        filelists = ybsutils.files_in_dir(self.indir, '.filelist', filte='version')
+        if not filelists:
+            sys.stderr.write("filelist not found in '{}', run 'ypk-scanpackages {}' then retry.\n".format(self.indir, self.indir))
+            sys.exit(1)
+        # [(name, [files]), (name2, [files])]
+        files_list = []
+        for filelist in filelists:
+            if IS_VERBOSE:
+                print('Found: {}'.format(filelist))
+            g = ybsutils.GetNameVersion()
+            g.parse(filelist)
+            name, version = g.name, g.version
+            record = []
+            with open(filelist, 'r') as f:
+                for line in f.readlines():
+                    line = line.strip()
+                    if line.startswith('F') or line.startswith('S'):
+                        record.append(line.split(',')[1])
+            files_list.append((name, record))
+
+        for num, elem in enumerate(files_list):
+            meta = set(elem[1])
+            _range = files_list[num+1:]
+            if _range:
+                for elem_range in _range:
+                    ret = meta & set(elem_range[1])
+                    if ret:
+                        meta_name = elem[0]
+                        elem_range_name = elem_range[0]
+                        print("'{}' in both '{}' '{}'".format(' '.join([x for x in ret]), meta_name, elem_range_name))
+
+    def conflict_arch(self):
+        ''' muti arches string exist
+
+        For example:
+          mysql_5.5.29-i686.ypk, mysql_5.5.29-any.ypk
+
+        '''
+        ypks = ybsutils.files_in_dir(self.indir, '.ypk')
+        if not ypks:
+            sys.stderr.write("ypkfile not found in '{}'.\n".format(self.indir))
+            sys.exit(1)
+        pool = multiprocessing.Pool(PROCESSES_NUM)
+        pool.map(is_match_arch, ypks)
+        pool.close()
+        pool.join()
+
+
+def main():
+    ybsutils.signal_int()
+    argvs = sys.argv[1:]
+    if not argvs:
+        argvs = ['-h']
+
+    desc = 'Checking for conflicts in ypk package directory.'
+    parser = argparse.ArgumentParser(description=desc)
+    parser.add_argument('-V', '--version', action='store_true', dest='V', help='show version and exit')
+    parser.add_argument('-v', '--verbose', action='store_true', dest='v', help='enable verbose mode')
+    parser.add_argument('ypkdir', nargs='*', help='path to ypkdir directory')
+    args = parser.parse_args(argvs)
+
+    if args.V:
+        print(ybsutils.__version__)
+        sys.exit()
+
+    if args.v:
+        global IS_VERBOSE
+        IS_VERBOSE = True
+
+    if args.ypkdir:
+        global PBSLIB_MAP
+        PBSLIB_MAP = ybsutils.parse_pbslib(ybsutils.__pbslib_path__)
+        dirs = args.ypkdir
+
+        print("Checking for conflict ypkfiles in '{}'".format(' '.join(dirs)))
+        for dir_ in dirs:
+            dir_ = os.path.realpath(dir_)
+            if os.path.isdir(dir_):
+                cc = CheckConflict(dir_)
+                cc.conflict_file()
+                cc.conflict_arch()
+            else:
+                sys.stderr.write("'{}' is not a dirctory.".format(dir_))
+                continue
+
+
+if __name__ == '__main__':
+    main()

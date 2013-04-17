@@ -1,55 +1,44 @@
 #!/usr/bin/env python2
 # -*- coding: utf8 -*-
-#   ybs-scanpackages -- create Packages index files
 #
-#   Copyright © 2012 ivali.com
-#   Maintainer: Zhongxin Huang <huangzhongxin@ivali.com>
-#
-#   This program is free software; you can redistribute it and/or modify
-#   it under the terms of the GNU General Public License as published by
-#   the Free Software Foundation; either version 2 of the License, or
-#   (at your option) any later version.
-#
-#   This program is distributed in the hope that it will be useful,
-#   but WITHOUT ANY WARRANTY; without even the implied warranty of
-#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#   GNU General Public License for more details.
-#
-#   You should have received a copy of the GNU General Public License
-#   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright © 2013 ivali.com
+# Author: Zhongxin Huang <zhongxin.huang@gmail.com>
 #
 
 import sys
 import os
 import shutil
 import xml.etree.ElementTree as ET
-import ybsutils
+from ybs import ybsutils
 import argparse
+
+IS_VERBOSE = False
+YES_TO_ALL = False
 
 
 def find_ypk(indir, arch):
-    '''find all the ypk in given directory.
+    ''' find all the ypkfile in given directory.
 
     Args:
-       indir: A string of path to directory
-       arch: A string, specify ypk arch
+       indir: string, path to ypkfile directory
+       arch: string, specify ypkfile arch
 
     Returns:
-       A list of ypkfile with newest version
+       list, contains ypkfile with newest version items
 
     '''
     ypks_raw = ybsutils.files_in_dir(indir, '.ypk')
     ypks_raw.sort()
     if not ypks_raw:
-        sys.stdout.write("No ypk package found in '{}'.\n".format(indir))
+        sys.stdout.write("No ypkfile found in '{}'.\n".format(indir))
         sys.exit(1)
-    
-    ypks_arch = ybsutils.files_in_dir(indir, arch + '.ypk', 'version')
+
+    ypks_arch = ybsutils.files_in_dir(indir, arch + '.ypk', filte='version')
     if not ypks_arch:
-        sys.stdout.write("No '{}' ypk package found in '{}'.\n".format(arch, indir))
+        sys.stdout.write("No '{}' ypkfile found in '{}'.\n".format(arch, indir))
         sys.exit(1)
-    
-    print('* YPK package binary-dir: {}'.format(indir))
+
+    print('* ypkfile binary-dir: {}'.format(indir))
     filelist = os.path.join(indir, 'filelist.txt')
     filelist_new = ypks_raw
     if not os.path.isfile(filelist):
@@ -69,27 +58,28 @@ def find_ypk(indir, arch):
         print('- {}'.format(x))
     for x in file_add:
         print('+ {}'.format(x))
-    
-    noes = ('n', 'no', 'nop', 'nope')
-    choice = raw_input('Do you want to continue? [Y/n]').lower()
-    if choice in noes:
-        sys.exit()
+
+    if not YES_TO_ALL:
+        noes = ('n', 'no', 'nop', 'nope')
+        choice = raw_input('Do you want to continue? [Y/n]').lower()
+        if choice in noes:
+            sys.exit()
     with open(filelist, 'w') as f:
         for line in filelist_new:
             f.write(line.replace(indir + '/', '') + '\n')
-    
-    ypks_any = ybsutils.files_in_dir(indir, 'any' + '.ypk', 'version')
+
+    ypks_any = ybsutils.files_in_dir(indir, 'any' + '.ypk', filte='version')
     ypks_all = ypks_arch + ypks_any
     return ypks_all
 
 
 def merge_info(indir, indexdir, inlist, repo='stable'):
-    ''' Merge info of ypks into index file
+    ''' Merge information of ypkfile into index file
 
     Args:
-      indir: A string of path to ypk package directory
-      inlist: A list of ypks
-      repo: A string of repo
+      indir: string, path to ypkdir
+      inlist: list, ypkfile string items
+      repo: string, repo
 
     '''
     def _write_xml(tree, outpath):
@@ -101,7 +91,8 @@ def merge_info(indir, indexdir, inlist, repo='stable'):
     indexfile.writelines(("<?xml version='1.0' encoding='UTF-8'?>\n",
                           '<PackageInfo>\n'))
     for ypk in inlist:
-        print('found {}'.format(ypk))
+        if IS_VERBOSE:
+            print('Found {}'.format(ypk))
         xml_raw = ypk.replace('.ypk', '.xml')
         if not os.path.isfile(xml_raw):
             cmd = 'tar xf ' + ypk + ' pkginfo'
@@ -172,17 +163,17 @@ def merge_info(indir, indexdir, inlist, repo='stable'):
         os.rename('update.xml', update_file.replace('tar.xz', 'xml'))
         sha1sum = ybsutils.get_sha1sum(update_file)
         update_list.write(update_file + ' ' + str(int(os.path.getmtime(update_file))) + ' ' + sha1sum + '\n')
+    print('Generation complete')
 
 
 def get_repo(indir):
     '''
-
     Args:
-      indir: A string of path to directory
+      indir: string, path to directory
 
     Returns:
-      A list of path. For example:
-      ['/var/ybs/packages/stable', '/var/ybs/packages/testing']
+      list of paths. For example:
+        ['/var/ybs/packages/stable', '/var/ybs/packages/testing']
 
     '''
     result = []
@@ -200,9 +191,6 @@ def get_repo(indir):
 
 
 def main():
-    '''
-
-    '''
     argvs = sys.argv[1:]
     if not argvs:
         argvs = ['-h']
@@ -212,31 +200,42 @@ def main():
         "and creates index files, used by yget."
     )
     parser = argparse.ArgumentParser(description=desc)
-    parser.add_argument('-v', '--version', action='store_true',
-                        dest='v', help='show version')
+    parser.add_argument('-V', '--version', action='store_true',
+                        dest='V', help='show version')
+    parser.add_argument('-v', '--verbose', action='store_true',
+                        dest='v', help='enable verbose mode')
+    parser.add_argument('-y', '--yes', action='store_true',
+                        dest='y', help='assume yes to all queries')
     parser.add_argument('-a', '--arch', nargs=1,
-                        metavar='arch', default=['x86_64'],
+                        metavar='arch', default=[ybsutils.__arch__],
                         dest='a', help='specify arch, available: i686, x86_64')
-    parser.add_argument('ypk_dir', nargs='*', help="path to ypk_dir")
+    parser.add_argument('ypkdir', nargs='*', help="path to ypkdir")
     args = parser.parse_args(argvs)
 
-    if args.v:
+    if args.V:
         print(ybsutils.__version__)
         sys.exit()
 
+    if args.v:
+        global IS_VERBOSE
+        IS_VERBOSE = True
+
+    if args.y:
+        global YES_TO_ALL
+        YES_TO_ALL = True
+
     arch = args.a[0]
-    
-    if args.ypk_dir:
-        dirs = args.ypk_dir
+
+    if args.ypkdir:
+        dirs = args.ypkdir
         for dir_ in dirs:
             dir_ = os.path.realpath(dir_)
             if not os.path.isdir(dir_):
                 sys.stderr.write("'{}' is not a directory.\n".format(dir_))
                 sys.exit(1)
-            # TODO
-            # Generate index of specified arch
-            # indexdir = os.path.join(dir_, 'updates' + '-' + arch)
-            indexdir = os.path.join(dir_, 'updates')
+            # Generate index by specified arch
+            indexdir = os.path.join(dir_, 'updates' + '-' + arch)
+            #indexdir = os.path.join(dir_, 'updates')
             if os.path.isdir(indexdir):
                 shutil.rmtree(indexdir)
             os.mkdir(indexdir)

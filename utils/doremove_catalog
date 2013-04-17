@@ -9,4 +9,4 @@ doremove_catalog() {
     fi
 }
 
-doremove_catalog
+doremove_catalog $@

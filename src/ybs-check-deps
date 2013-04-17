@@ -1,0 +1,176 @@
+#!/usr/bin/env python2
+# -*- coding: utf8 -*-
+#
+# Copyright © 2013 ivali.com
+# Author: Zhongxin Huang <zhongxin.huang@gmail.com>
+#
+
+import sys
+import os
+from ybs import ybsutils
+import argparse
+import subprocess
+
+IS_VERBOSE = False
+
+
+class CheckPbsfile(object):
+    ''' check missing and circular dependency of pbsfile
+
+    '''
+    def __init__(self, infile, pbslib_map):
+        '''
+        Args:
+          infile: string, path to pbsfile
+          pbslib_map: dict, map of pbslib
+
+        '''
+        self.pbsfile = ybsutils.PbsFile()
+        self.pbsfile.parse(infile)
+        self.name, self.version = self.pbsfile.name, self.pbsfile.version
+        self.pbslib_map = pbslib_map
+
+    def check_depend(self):
+        ''' bound of multi-checking
+
+        '''
+        self.check_run_depend()
+        self.check_build_depend()
+        self.check_recommended_depend()
+        self.check_circular_depend()
+
+    def check_circular_depend(self):
+        ''' checking for circular dependency
+
+        '''
+        pkg = self.name
+        cmd = 'spcct -C "pybs --get_rdeps" -c '
+        p = subprocess.Popen(cmd+pkg, shell=True, stdout=subprocess.PIPE)
+        # p.communicate method return a tuple looks likes:
+        # (stdoutdata, stderrdata)
+        stream_data = p.communicate()[0]
+        #if p.returncode != 0:
+        #    sys.stderr.write("'{}' not found in database".format(pkg))
+        #    sys.exit(1)
+        if stream_data:
+            print(stream_data)
+
+    def check_run_depend(self, mark='[R]'):
+        ''' checking for missing run-time dependency '''
+        self.do_check(self.pbsfile.get('RDEPEND'), mark)
+
+    def check_build_depend(self, mark='[B]'):
+        ''' checking for missing build-time dependency '''
+        self.do_check(self.pbsfile.get('BDEPEND'), mark)
+
+    def check_recommended_depend(self, mark='[A]'):
+        ''' checking for missing recommended dependency '''
+        self.do_check(self.pbsfile.get('RECOMMENDED'), mark)
+
+    def do_check(self, depends, mark):
+        '''
+        Args:
+          depends: list
+          mark: string
+
+        '''
+        for dep in depends:
+            if '(' in dep:
+                dep = dep.rstrip(')')
+                dep_name, dep_version_raw = dep.split('(')
+                flags = ('>=', '<=', '=', '>', '<')
+                for flag in flags:
+                    if flag in dep_version_raw:
+                        depVersion = dep_version_raw.split(flag)[1]
+                        break
+                if not dep_name in self.pbslib_map:
+                    print('{} {} {} -> {}'.format(mark, self.name, self.version, dep_name))
+                else:
+                    result = 1
+                    for ver in self.pbslib_map[dep_name]:
+                        ret = ybsutils.compare_version(ver, depVersion)
+                        if flag == '>=':
+                            if ret == 1 or ret == 0:
+                                result = 0
+                                break
+                        if flag == '<=':
+                            if ret == -1 or ret == 0:
+                                result = 0
+                                break
+                        if flag == '=':
+                            if ret == 0:
+                                result = 0
+                                break
+                        if flag == '>':
+                            if ret == 1:
+                                result = 0
+                                break
+                        if flag == '<':
+                            if ret == -1:
+                                result = 0
+                                break
+                    if result:
+                        print('{} {} {} -> {}'.format(mark, self.name, self.version, dep_name + ' ' + dep_version_raw))
+            else:
+                if not dep in self.pbslib_map:
+                    print('{} {} {} -> {}'.format(mark, self.name, self.version, dep))
+
+
+def main():
+    ybsutils.signal_int()
+    argvs = sys.argv[1:]
+    if not argvs:
+        argvs = ['-h']
+
+    desc = 'Checking for missing and circular dependecies of pbsdir or pbsfile.'
+    parser = argparse.ArgumentParser(description=desc)
+    parser.add_argument('-V', '--version', action='store_true',
+                        dest='V', help='show version and exit')
+    parser.add_argument('-v', '--verbose', action='store_true',
+                        dest='v', help='enable verbose mode')
+    parser.add_argument('path', nargs='*', help='path to pbsdir or pbsfile')
+    args = parser.parse_args(argvs)
+
+    if args.V:
+        print(ybsutils.__version__)
+        sys.exit()
+
+    if args.v:
+        global IS_VERBOSE
+        IS_VERBOSE = True
+
+    print("Parsing pbslib from '{}'...".format(ybsutils.__pbslib_path__))
+    pbslib_map = ybsutils.parse_pbslib(ybsutils.__pbslib_path__)
+
+    print('Checking for missing and circular dependencies...')
+    print("'[R]' stands for run-time, '[B]' for build-time, '[A]' for recommended.\n")
+
+    if args.path:
+        pathes = set(args.path)
+        for path in pathes:
+            path = os.path.realpath(path)
+            if os.path.isdir(path):
+                files = ybsutils.files_in_dir(path, 'pbs')
+                if not files:
+                    sys.stderr.write("No pbsfile found in directory '{}'.\n".format(path))
+                    continue
+                for file_ in files:
+                    if not ybsutils.is_pbsfile(file_):
+                        sys.stderr.write("'{}' is a invalid pbsfile.\n".format(file_))
+                        continue
+                    if IS_VERBOSE:
+                        print('Found: {}'.format(file_))
+                    checkpbsfile = CheckPbsfile(file_, pbslib_map)
+                    checkpbsfile.check_depend()
+            elif os.path.isfile(path):
+                    if not ybsutils.is_pbsfile(path):
+                        sys.stderr.write("'{}' is a invalid pbsfile.\n".format(path))
+                        continue
+                    checkpbsfile = CheckPbsfile(path, pbslib_map)
+                    checkpbsfile.check_depend()
+            else:
+                sys.stderr.write("'{}' not found.\n".format(path))
+
+
+if __name__ == '__main__':
+    main()

@@ -4,9 +4,9 @@
 
 doln(){
     local end=${!#}
+    [ -h "$end" ] && rm "$end"
     mkdir -p "$(dirname $end)"
     ln -sf $@
 }
 
 doln $@
-

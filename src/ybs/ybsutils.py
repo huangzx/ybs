@@ -1,36 +1,27 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 # -*- coding: utf8 -*-
-
-#   Copyright © 2012 ivali.com
-#   Maintainer: Zhongxin Huang <huangzhongxin@ivali.com>
 #
-#   This program is free software; you can redistribute it and/or modify
-#   it under the terms of the GNU General Public License as published by
-#   the Free Software Foundation; either version 2 of the License, or
-#   (at your option) any later version.
-#
-#   This program is distributed in the hope that it will be useful,
-#   but WITHOUT ANY WARRANTY; without even the implied warranty of
-#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#   GNU General Public License for more details.
-#
-#   You should have received a copy of the GNU General Public License
-#   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright © 2013 ivali.com
+# Author: Zhongxin Huang <zhongxin.huang@gmail.com>
 #
 
 import sys
 import os
 import signal
 import sqlite3
+import subprocess
+from distutils.version import LooseVersion
+from hashlib import sha1, md5
 
 __version__ = '0.1'
 __package_db__ = '/var/ypkg/db/package.db'
 __depend_db__ = '/var/ybs/db/depend.db'
-__pbslib_path__ = '/var/ybs/pbslib'
+__ybs_conf__ = '/etc/ybs.conf'
 
 
 def signal_int():
     ''' signal SIGINT handler
+
     '''
     def _signal_handler():
         sys.stderr.write('You pressed Ctrl+C!')
@@ -38,11 +29,26 @@ def signal_int():
     signal.signal(signal.SIGINT, _signal_handler)
 
 
+def is_pbsfile(infile):
+    ''' check whether infile is a valid pbsfile or not
+
+    Args:
+      infile: string, path to file
+
+    '''
+    infile = os.path.basename(infile)
+    if not infile.endswith('.pbs'):
+        return False
+    if '_' not in infile:
+        return False
+    return True
+
+
 def is_installed(name):
     '''
     Args:
       name: A string of pkgname
-    
+
     Returns:
       None or tuple, format is: (u'name', u'version', u'repo', install_time)
       For example:
@@ -50,17 +56,18 @@ def is_installed(name):
 
     '''
     conn = sqlite3.connect(__package_db__)
-    cursor = conn.cursor()
-    cursor.execute("SELECT name, version, repo, install_time FROM \
+    cur = conn.cursor()
+    cur.execute("SELECT name, version, repo, install_time FROM \
                 world Where name='{}'".format(name))
-    # Use fetchone here, because package's name is just only one. 
-    result = cursor.fetchone()
+    # Use fetchone here, because package's name is just only one.
+    result = cur.fetchone()
+    cur.close()
     conn.close()
     return result
 
 
 def compare_version(v1, v2):
-    '''version compare
+    ''' version compare
 
     Args:
       v1, v2: Two strings of version, for example:
@@ -80,24 +87,22 @@ def compare_version(v1, v2):
       v2 is greater then v2, return 1
 
     To use:
-      >>>import ybsutils
+      >>>from ybs import ybsutils
       >>>ybsutils.compare_version('2,0', '3.0')
       -1
 
     '''
-    from distutils.version import LooseVersion
-
-    # splite major and rel version
-    v1 = v1.lower()
-    v2 = v2.lower()
+    # Splite major and rel version
+    v1 = str(v1.lower())
+    v2 = str(v2.lower())
     v1_major = v1.split('-')[0]
     v1_rel = v1.split('-')[1:]
     v2_major = v2.split('-')[0]
     v2_rel = v2.split('-')[1:]
-    # first, compare major version
+    # First, compare major version
     v1_major += '.0'
     v2_major += '.0'
-    # be sure compare two version with same length
+    # Be sure compare two version with same length
     v1_major_len = len(v1_major.split('.'))
     v2_major_len = len(v2_major.split('.'))
     more = v1_major_len - v2_major_len
@@ -109,8 +114,9 @@ def compare_version(v1, v2):
     ret = _cmp(v1_major, v2_major)
     if ret != 0:
         return ret
-    # second, compare rel version
-    # note that, rel version is a list
+    # Second, compare rel version
+    # Note:
+    # rel version is a list
 
     def _replacement(inlist):
         inlist = [x.replace('alpha', 'a') for x in inlist]
@@ -120,7 +126,7 @@ def compare_version(v1, v2):
 
     v1_rel = _replacement(v1_rel)
     v2_rel = _replacement(v2_rel)
-    # be sure compare two version with same length
+    # Be sure compare two version with same length
     v1_rel_len = len(v1_rel)
     v2_rel_len = len(v2_rel)
     more = v1_rel_len - v2_rel_len
@@ -140,71 +146,107 @@ def compare_version(v1, v2):
     return 0
 
 
-def get_name_version(infile, fm='class'):
-    '''get name and version from ypk-file
+class GetNameVersion(object):
+    ''' get name, version and arch from pbs-likes file
 
     Args:
-      infile: The path to ypk-file, format is: name_version-relversion-arch.pbs
-        For examples:
+      infile: path to file, format examples are:
         mysql_5.5.29-x86_64.ypk
         mysql_5.5.29-i686.ypk
         mysql_5.5.29-any.ypk
         mysql_5.5.29.pbs
         mysql_5.5.29.xml
         mysql_5.5.29.ypk
+        mysql_5.5.29-any.filelist
+       Note:
+         '_' in version is invalid
 
-      fm: format of return value: class or raw
-        class: ['name', 'version']
-        raw: ['name', 'version', 'relversion']
+    Attributes:
+      path: string, abspath to file
+      infile: string, file name
+      arch: string, arch
+      name: string, name
+      version_major: string, version_major
+      version_rel: string, version_rel
+      version: string, version contains major and rel
 
-    Returns:
-        A list with two items, see above.
- 
+    Methods:
+      parse(self, infile)
+        infile: string, path to file
+
     To use:
-      >>>import ybsutils
-      >>>ybsutils.get_name_version('mysql_5.5.29.pbs')
-      ['mysql', '5.5.29']
-      >>>ybsutils.get_name_version('mysql_5.5.29-rc1.pbs', fm='raw')
-      ['mysql', '5.5.29', '-rc1']
+      >>>from ybs import ybsutils
+      >>>foo = ybsutils.GetNameVersion()
+      >>>foo.parse('/var/ybs/pkgs/./my_sql_5.5.29-1-rc1-x86_64.ypk')
+      >>>foo.path
+      '/var/ybs/pkgs/my_sql_5.5.29-1-rc1-x86_64.ypk'
+      >>>foo.infile
+      'my_sql_5.5.29-1-rc1-x86_64.ypk'
+      >>>foo.arch
+      'x86_64'
+      >>>foo.name
+      'my_sql'
+      >>>foo.version_major
+      '5.5.29'
+      >>>foo.version
+      '5.5.29-1-rc1'
+      >>>foo.version_rel
+      '1-rc1'
 
     '''
-    infile = os.path.basename(infile)
-    arches = ('-i686', '-x86_64', '-any')
-    suffixes = ('.pbs', '.ypk', '.xml', '.filelist')
-    for i in suffixes + arches:
-        infile = (lambda x: infile.replace(x, ''))(i)
-    infile = infile.split('_')
-    name, version = '_'.join(infile[0:-1]), infile[-1]
-    if fm == 'class':
-        return [name, version]
-    elif fm == 'raw':
-        if '-' in version:
-            version = version.split('-')
-            version, relversion = version[0], '-' + '-'.join(version[1:])
-            return [name, version, relversion]
-        else:
-            return [name, version, '']
+    def __init__(self):
+        pass
+
+    def __dir__(self):
+        return ['path', 'infile', 'name', 'arch', 'version_major', 'version_rel', 'version']
+
+    def parse(self, infile):
+        self.path = os.path.abspath(infile)
+        self.infile = os.path.basename(infile)
+
+        infile = os.path.splitext(self.infile)[0]
+        ret = infile.split('-')
+        arches = ('i686', 'x86_64', 'any')
+        arch = ''
+        for x in arches:
+            if x == ret[-1]:
+                arch = x
+                break
+        if arch:
+            infile = '-'.join(infile.split('-')[0:-1])
+
+        infile = infile.split('_')
+        name = '_'.join(infile[0:-1])
+        version = infile[-1]
+        version_major = version.split('-')[0]
+        version_rel = '-'.join(version.split('-')[1:])
+
+        self.arch = arch
+        self.name = name
+        self.version_major = version_major
+        self.version_rel = version_rel
+        self.version = version_major + version_rel
+        if version_rel:
+            self.version = version_major + '-' + version_rel
 
 
 def get_checksum(infile, tool):
-    '''get checksum of file
+    ''' get checksum of file
 
     Args:
-      infile: The path to file
-      tool: Two common checksum tools: md5, sha1
+      infile: string, path to file
+      tool: string, md5 or sha1
 
     Return:
-      A string of checksum value
-    
+      string of checksum value
+
     To use:
-      >>>import ybsutils
+      >>>from ybs import ybsutils
       >>>ybsutils.get_checksum('/tmp/test','sha1')
       'da39a3ee5e6b4b0d3255bfef95601890afd80709'
       >>>ybsutils.get_checksum('/tmp/test','md5')
       'd41d8cd98f00b204e9800998ecf8427e'
     '''
-    from hashlib import sha1, md5
-    
     try:
         with open(infile, 'rb') as fd:
             if tool == 'sha1':
@@ -220,58 +262,58 @@ def get_checksum(infile, tool):
 
 
 def get_sha1sum(infile):
-    '''get sha1sum of file
- 
+    ''' get sha1sum of file
+
     Arg:
-      infile: A string of path to file
-    
+      infile: string, path to file
+
     Return:
-      A string of sha1sum value
-    
+      string of sha1sum value
+
     To use:
-      >>>import ybsutils
+      >>>from ybs import ybsutils
       >>>ybsutils.get_sha1sum('/tmp/test')
       'da39a3ee5e6b4b0d3255bfef95601890afd80709'
-    
+
     '''
-    
+
     return get_checksum(infile, 'sha1')
 
 
 def get_md5sum(infile):
-    '''get md5sum of file
-    
+    ''' get md5sum of file
+
     Arg:
-      infile: A string of path to file
-    
+      infile: string, path to file
+
     Return:
-      A string of md5sum value
-    
+      string of md5sum value
+
     To use:
-      >>>import ybsutils
+      >>>from ybs import ybsutils
       >>>ybsutils.get_md5sum('/tmp/test')
       'd41d8cd98f00b204e9800998ecf8427e'
-    
+
     '''
     return get_checksum(infile, 'md5')
 
 
 def files_in_dir(indir, suffix, filte=None):
-    '''find all the files with suffix in directory.
+    ''' find all the files with suffix in directory.
 
     Args:
-      indir: A string of path to directory
-      suffix: The suffix of file
-      filte: Show the max version of file
-    
+      indir: string, path to directory
+      suffix: the suffix of file
+      filte: show the max version of file
+
     Return:
       A list of absolute path to files
 
     To use:
-      >>>import ybsutils
+      >>>from ybs import ybsutils
       >>>ybsutils.files_in_dir('/tmp/test', '.ypk')
       ['/tmp/test/HTML-Parser_3.69-x86_64.ypk', '/tmp/test/HTTP-Cookies_6.01-any.ypk']
-    
+
     '''
     result = []
     for root, dirs, files in os.walk(indir):
@@ -286,30 +328,30 @@ def files_in_dir(indir, suffix, filte=None):
         record = {}
         for f in result:
             pbsfile.parse(f)
-            name, version = pbsfile.name, pbsfile.version + pbsfile.relversion
+            name, version = pbsfile.name, pbsfile.version
             if name in record:
                 if compare_version(version, record[name]) != 1:
                     continue
             result_filter[name] = f
             record[name] = version
-        return [x for x in result_filter.viewvalues()]        
-           
+        return [x for x in result_filter.viewvalues()]
+
 
 def file_in_dir(indir, filename):
-    '''find single file specified in dir 
-    
+    ''' find single file specified in directory
+
     Args:
-      indir: A string of path to directory
-      filename: A string of filename
-    
+      indir: string, path to directory
+      filename: string, filename
+
     Return:
-      A list of abspath to files
-    
+      list of abspath to files
+
     To use:
-      >>>import ybsutils
+      >>>from ybs import ybsutils
       >>>ybsutils.file_in_dir('/tmp/test, 'HTML-Parser_3.69-x86_64.ypk')
       ['/var/ybs/packages/h/HTML-Parser/HTML-Parser_3.69-x86_64.ypk']
-    
+
     '''
     for root, dirs, files in os.walk(indir):
         for f in files:
@@ -318,52 +360,50 @@ def file_in_dir(indir, filename):
 
 
 def parse_pbslib(indir, suffix='.pbs'):
-    '''find all the pbs-files in given directory
+    ''' find all the pbsfile in given directory
 
     Arg:
-      indir: A string of path to directory
-    
+      indir: string, path to directory
+
     Return:
-      A dict mapping keys to pbs-name, values to version.
-      
-      A sorted list of versions.
+      dict mapping, keys are package names, value are versions
 
     To use:
-      >>>import ybsutils
+      >>>from ybs import ybsutils
       >>>ybsutils.parse_pbslib('/var/ybs/pbslib')
       {'gtk-vnc': ['0.5.1-rc1','0.5.1','0.5.2'], 'epdfview': ['0.1.7']}
-   '''
+
+    '''
     pbsfiles = {}
-    
     for f in files_in_dir(indir, suffix):
         pbsfile = PbsFile()
         pbsfile.parse(f)
-        name, version = pbsfile.name, pbsfile.version + pbsfile.relversion
+        name, version = pbsfile.name, pbsfile.version
         if name in pbsfiles:
             pbsfiles[name].append(version)
         else:
             pbsfiles[name] = [version]
-    #return pbsfiles
+    # Return pbsfiles
     for item in pbsfiles:
         item_versions = pbsfiles[item]
         pbsfiles[item] = sorted_version(item_versions)
-    
     return pbsfiles
 
 
 def minimum_version(inlist):
     ''' find minimum value in list of versions
-    
+
     Arg:
-      A list of versions
+      list of versions
 
     Return:
-      A string of mininum version
+      string of mininum version
 
     To use:
-      >>>import ybsutils
+      >>>from ybs import ybsutils
       >>>ybsutils.minimum_version(['1', '3', '2', '1-rc1'])
       '1-rc1'
+
     '''
     result = inlist[0]
     for i in inlist:
@@ -374,18 +414,19 @@ def minimum_version(inlist):
 
 
 def sorted_version(inlist):
-    ''' sorted version 
-    
+    ''' sorted version
+
     Arg:
-      A list of version
-    
+      list of version
+
     Return:
-      A list of sorted version
+      list of sorted version
 
     To use:
-      >>>import ybsutils
+      >>>from ybs import ybsutils
       >>>ybsutils.sorted_version(['1', '1-rc1', '1-r1'])
       ['1-rc1', '1', '1-r1']
+
     '''
     result = []
     length = len(inlist)
@@ -396,28 +437,28 @@ def sorted_version(inlist):
             ret = minimum_version(inlist)
             result.append(ret)
             inlist.remove(ret)
-    return result     
+    return result
 
 
 class PbsFile(object):
-    '''pbsfile class
-    
+    ''' pbsfile class
+
     Attributes:
-      path: A string of path to pbsfile
-      basename: A string of name of pbsfile
-      dirname: A string of dirname of pbsfile
-      name: A string of name of package with pbsfile
-      version: A string of version of package with pbsfile
-      relversion: A string of version of package with pbsfile
-    
+      path: string, path to pbsfile
+      basename: string, name of pbsfile
+      dirname: string, dirname of pbsfile
+      name: string, name of package
+      version: string, main version of package
+      version_rel: string, rel version of package
+
     Methods:
-      parse: Parse a pbsfile
-      get: Get value of pbsfile
-    
+      parse: parse pbsfile
+      get: get value of pbsfile
+
     To Use:
-      >>>import ybsutils
+      >>>from ybs import ybsutils
       >>>pbsfile = ybsutils.PbsFile()
-      >>>pbsfile.parse('/var/ybs/pbslib/sys-apps/ypkg2/ypkg2_20130217.pbs')
+      >>>pbsfile.parse('/var/ybs/pbslib/sys-apps/ypkg2/ypkg2_20130217-rc1.pbs')
       >>>pbsfile.path
       '/var/ybs/pbslib/sys-apps/ypkg2/ypkg2_20130217.pbs'
       >>>pbsfile.basename
@@ -427,27 +468,36 @@ class PbsFile(object):
       >>>pbsfile.name
       'ypkg2'
       >>>pbsfile.version
+      '20130217-rc1'
+      >>>pbsfile.version_major
       '20130217'
+      >>>pbsfile.version_rel
+      '-rc1'
       >>>pbsfile.get('RDEPEND')
       ['libarchive(>=3.0.4)', 'curl', 'pcre', 'sqlite', 'rtmpdump', 'nettle']
       >>>pbsfile.get('LICENSE')
       ['GPL,LGPL']
+
     '''
     def __init__(self):
         pass
-    
+
     def __dir__(self):
-        return ['path', 'basename', 'dirname', 'name', 'version', 'relversion']
+        return ['path', 'basename', 'dirname', 'name', 'version', 'version_major', 'version_rel']
 
     def parse(self, infile):
         self.path = infile
         self.basename = os.path.basename(infile)
         self.dirname = os.path.dirname(infile)
-        self.name, self.version, self.relversion = get_name_version(infile, 'raw')
+        g = GetNameVersion()
+        g.parse(infile)
+        self.name = g.name
+        self.version_major = g.version_major
+        self.version_rel = g.version_rel
+        self.version = g.version
 
     def get(self, item):
-        import subprocess
-        cmd = ['dosource', self.path, self.name, self.version, self.relversion]
+        cmd = ['dosource', self.path, self.name, self.version_major, self.version_rel]
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
         for line in proc.stdout:
             line = line.strip()
@@ -457,23 +507,47 @@ class PbsFile(object):
 
 
 class YbsConf(object):
-    ''' '''
+    ''' ybs config class
+
+    Attributes:
+      path: string, path to ybs config file
+
+    Methods:
+      parse: parse ybs config file
+      get: get value of ybs config file
+
+    To Use:
+      >>>from ybs import ybsutils
+      >>>ybsconf = ybsutils.YbsConf()
+      >>>ybsconf.parse('/etc/ybs.conf')
+      >>>ybsconf.path
+      '/etc/ybs.conf'
+      >>>ybsconf.get('ARCH')
+      'x86_64'
+
+    '''
     def __init__(self):
         pass
 
-    def parse(self, infile):
+    def parse(self, infile=__ybs_conf__):
         self.path = infile
 
     def get(self, item):
         with open(self.path, 'r') as f:
             for line in f.readlines():
                 line = line.strip()
-                if not len(line) or line.startswith('#'):
+                if not line or line.startswith('#'):
                     continue
                 if '#' in line:
                     line = line[0:line.index('#')]
-                length = len(item)
-                key = line[0:length]
+                (key, _, value) = line.partition("=")
                 if item == key:
-                    value = line[len(key)+1:]
                     return value.strip('"')
+            return None
+
+
+ybsconf = YbsConf()
+ybsconf.parse(__ybs_conf__)
+
+__pbslib_path__ = ybsconf.get('PBSLIB_PATH')
+__arch__ = ybsconf.get('ARCH')

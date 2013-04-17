@@ -1,18 +1,19 @@
-#   Copyright © 2012 ivali.com
-#   Maintainer: Zhongxin Huang <huangzhongxin@ivali.com>
 #
-#   This program is free software; you can redistribute it and/or modify
-#   it under the terms of the GNU General Public License as published by
-#   the Free Software Foundation; either version 2 of the License, or
-#   (at your option) any later version.
+#  Copyright © 2013 ivali.com
+#  Maintainer: Zhongxin Huang <huangzhongxin@ivali.com>
 #
-#   This program is distributed in the hope that it will be useful,
-#   but WITHOUT ANY WARRANTY; without even the implied warranty of
-#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#   GNU General Public License for more details.
+#  This program is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation; either version 2 of the License, or
+#  (at your option) any later version.
 #
-#   You should have received a copy of the GNU General Public License
-#   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
 [ -e /etc/ybs.conf ] && . /etc/ybs.conf
@@ -155,6 +156,13 @@ check_required_bin() {
         fi
     fi
     
+    local icecc
+    if str_isin "$FEATURES" "icecc"; then
+        if ! which icecc >/dev/null 2>/dev/null; then
+            die "Feature: icecc is enabled in ybs.conf. Please install icecream."
+        fi
+    fi
+    
     local upx
     if str_isin "$FEATURES" "upx"; then
         if ! which upx >/dev/null 2>/dev/null; then
@@ -220,16 +228,6 @@ die() {
 
 warn() {
     msg "$@"
-}
-
-#
-# strip string of i686, x86_64 and any
-strip_arch_string() { 
-    s="$1"
-    for i in $ARCHES; do
-        s=${s%-${i}}
-    done
-    echo "$s"
 }
 
 #
@@ -1399,24 +1397,7 @@ maybe_break() {
     fi
 }
 
-#
-ybs_build() {
-    local pkg 
-    
-    pkg="$1"
-    deps=$(pybs --get_rdeps $pkg)
-    err_check "$deps"
-    
-    for dep in $deps; do
-        if [ "x$TERM" != "xlinux" ]; then
-            echo -ne "\033]0;ybs: ${dep}\007"; ybs_build_raw "${dep}" || die
-        else
-            ybs_build_raw "${dep}" || die
-        fi
-    done
-}
 
-#
 blank_funcs () { 
     DESCRIPTION=""
     COMMENTS=""
@@ -1454,56 +1435,56 @@ blank_funcs () {
         }    
 }
 
-#
+
+ybs_build() {
+    local pkg tmpfile
+    pkg="$1"
+    tmpfile='$(mktemp)'
+    
+    extra_args=''
+    [ "x$FORCE_INSTALL" = "xyes" ] && extra_args+=" --force "
+    [ "x$IS_VERBOSE" = "xyes" ] && extra_args+=" --verbose "
+    
+    pybs --pretend $pkg $extra_args >$tmpfile
+    cat $tmpfile
+    if [ "x$IS_VERBOSE" = "xyes" ]; then
+        bdeps=$(cat $tmpfile |grep -vw '[E]' |awk '{print $2}')
+    else
+        bdeps=$(cat $tmpfile |awk '{print $2}')
+    fi
+    rm $tmpfile
+
+    if [ "x$YES_TO_ALL" != "xyes" ]; then
+        if [ "x$bdeps" != "x" ]; then
+            read -p "Do you want to conitnue? [Y/n]" ans
+            case $ans in
+              n|no|NO|No|Noop|noop) return 
+            esac
+        fi
+    fi
+
+    for dep in $bdeps; do
+        if [ "x$TERM" != "xlinux" ]; then
+            echo -ne "\033]0;ybs: ${dep}\007"; ybs_build_raw "${dep}" || die
+        else
+            ybs_build_raw "${dep}" || die
+        fi
+    done
+}
+
+
 ybs_build_raw() {
     local string pbsfile
-    
     string="$1"
- 
     blank_funcs
- 
+    
     pbsfile=$(pybs --showpbs $string) 
     err_check "$pbsfile"
     
-    [ "x$FORCE_INSTALL" = "xyes" ] && local force_flag="F"
-    
     atom_parse $pbsfile
     
-    install_info=($(pybs --is_installed $string 2>/dev/null))
-    install_version=${install_info[1]} 
-    
-
-    force_flag=""
-    [ "x$FORCE_INSTALL" = "xyes" ] && force_flag="F"
-    
-    # N -- new install
-    # U -- upgrade
-    # D -- downgrade
-    # E -- same version
-    if [ "x$install_version" = "x" ]; then
-        stat="N"
-        msg_ "[$stat$force_flag]"
-        msg " $T/${N}_$V$R "
-    else
-        atom_cmp $install_version $V$R
-        case $? in
-         1) stat="D"
-            msg_ "[$stat$force_flag]"
-            msg " $T/${N}_$install_version ----> $T/${N}_$V$R " ;;
-         2) stat="U"
-            msg_ "[$stat$force_flag]"
-            msg " $T/${N}_$install_version ----> $T/${N}_$V$R " ;;
-         0) stat="E"
-            msg_ "[$stat$force_flag]"
-            msg " $T/${N}_$V$R "
-            [ "x$FORCE_INSTALL" != "xyes" ] && return 0
-       esac
-    fi
-        
-    [ "x$PRETEND" = "xyes" ] && return 0
-    
     ybs_begin_download $pbsfile || return 1
-
+    
     maybe_break fetch 
     
     #
@@ -1567,11 +1548,24 @@ ybs_build_raw() {
     str_isin "$FEATURES" "nodistcc" && distcc="no"
     str_isin "$OPTIONS" "distcc" && distcc="yes"
     str_isin "$OPTIONS" "nodistcc" && distcc="no"
-
     if [ "$distcc" = "yes" ]; then
-        [[ -d /usr/lib/distcc/bin ]] && export PATH="/usr/lib/distcc/bin:$PATH"
+        [ -d /usr/lib/distcc/bin ] && export PATH="/usr/lib/distcc/bin:$PATH"
         export DISTCC_HOSTS
         msg "distcc is enabled, hosts: $DISTCC_HOSTS"
+    fi
+    
+    # use icecc if it is requested
+    local icecc
+    icecc="no"
+    str_isin "$FEATURES" "icecc" && icecc="yes"
+    str_isin "$FEATURES" "noicecc" && icecc="no"
+    str_isin "$OPTIONS" "icecc" && icecc="yes"
+    str_isin "$OPTIONS" "noicecc" && icecc="no"
+    if [ "$icecc" = "yes" ]; then
+        [ -d /usr/libexec/icecc/bin ] && export PATH="/usr/libexec/icecc/bin:$PATH"
+        msg "icecc is enabled, please run 'icecc-scheduler -d' on server machine"
+        # Run icecc daemon
+        iceccd -d
     fi
 
     # use ccache if it is requested
@@ -1581,12 +1575,11 @@ ybs_build_raw() {
     str_isin "$FEATURES" "noccache" && ccache="no"
     str_isin "$OPTIONS" "ccache" && ccache="yes"
     str_isin "$OPTIONS" "noccache" && ccache="no"
-
     if [ "$ccache" = "yes" ]; then
         [[ -d /usr/lib/ccache/bin ]] && export PATH="/usr/lib/ccache/bin:$PATH"
         export CCACHE_DIR
-        ccache -M $CCACHE_SIZE >/dev/null 
         msg "=> ccache is enabled, ccache_dir: $CCACHE_DIR, ccache_size: $CCACHE_SIZE"
+        ccache -M $CCACHE_SIZE
     fi
 
     if type -p pbs_config; then
@@ -1630,6 +1623,9 @@ ybs_build_raw() {
          [ -e $makelog ] && cat $makelog >> $buildlog
         [ -e $checklog ] && cat $checklog >> $buildlog
     [ -e $mkinstalllog ] && cat $mkinstalllog >> $buildlog
+
+    # Kill the icecc daemon
+    pkill iceccd
 
     maybe_break mkinstall pwd
 
@@ -1675,5 +1671,3 @@ ybs_build_raw() {
 
     return 0
 }
-
-# End of file

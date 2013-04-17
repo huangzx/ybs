@@ -6,18 +6,18 @@ BINDIR=${DESTDIR}${prefix}/bin
 SBINDIR=${DESTDIR}${prefix}/sbin
 LIBDIR=${DESTDIR}${prefix}/lib/ybs
 DATADIR=${DESTDIR}${prefix}/share/ybs
-PYTHONSITE=${DESTDIR}/$(shell python -c 'import site; print site.getsitepackages()[0]')
+PYTHONSITE=${DESTDIR}/$(shell python -c 'import site; print site.getsitepackages()[0]')/ybs/
 
 make:
     
-
 install: 
 	install -d -m755 ${BINDIR} ${SBINDIR} ${LIBDIR} ${DATADIR} ${PYTHONSITE} 
-	install -m755 src/{fileinfo,pybs,ybs,ybs-deps-check,ybs-diff-check,ybs-scanrdeps,ypk-conflict-check,ypk-scanpackages} ${BINDIR}
+	install -m644 src/sh/funcs ${LIBDIR}
+	install -m755 src/sh/ybs ${BINDIR}
+	install -m755 src/{fileinfo,pybs,ybs-*,ypk-*} ${BINDIR}
+	install -m644 src/ybs/*.py ${PYTHONSITE}
 	install -m755 utils/* ${SBINDIR}
-	install -m644 src/ybsutils.py ${PYTHONSITE}
-	cp src/funcs ${LIBDIR}
-	cp samples/* ${DATADIR}
+	install -m644 samples/* ${DATADIR}
 
 clean:
 	@echo 'do nothing'

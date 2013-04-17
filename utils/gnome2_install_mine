@@ -4,13 +4,13 @@
 
 gnome2_install_mine() {
     local mines="$@"
+    
     if [ x"$mines" != x ] && [ -x /usr/bin/xdg-mime ];then
         for mine in $mines; do
-	    echo "Installing: $mine"
-	    xdg-mime install --mode system "$mine"  >/dev/null
+	        echo "Installing: $mine"
+	        xdg-mime install --mode system "$mine" 2>/dev/null
         done
     fi
 }
 
 gnome2_install_mine $@
-

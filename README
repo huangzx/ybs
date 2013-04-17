@@ -2,28 +2,39 @@
 
 Usage: /usr/bin/ybs command [options] pkg1 [pkg2 ...]
 
-ybs (StartOS Build System) is a simple command line for download and build YPK package from source code.
+ybs (StartOS Build System) is a simple command line for download and build YPK 
+package from source code.
 
 Commands:
     -h|--help               Show usage   
-    -s|--search             Search package in ybs tree
+    -s|--search             Search package in pbslib case-insensitive
+                              symbol '$' for endswith, '^' for startswith 
     -d|--download           Download source tartall of package
     -r|--remove             Remove package (same as ypkg -C foo)
     -i|--build              Build package and dependencies
-    -is|--build-single      Build single package without checking dependencies
+   -is|--build-single       Build single package without checking dependency
     -w|--showpbs            Show avaliable pbsfile of package 
-    -wr|--whatrequires      Show which packages require specify package
+   -wr|--whatrequires       Show which packages require specify package
+    -l|--list               List all availabe packages
+    -L|--list_installed     List all installed packages
+   -gr|--get_rdeps          Show run-time dependency of package
+   -gb|--get_bdeps          Show build-time dependency of package
     --sync [path]           Sync pbslib via git to /var/ybs/pbslib
     --info                  Show /usr/bin/ybs parameters of /etc/ybs.conf
 
 Options for build:
-    -p|--pretend            Instead of actually build, simply display what to do  
-    -F|--force              Force build
+    -F|--force              Force build, although it is already installed
+    -y|--yes                Assume Yes to all queries
+    -v|--verbose            Enable verbose mode
     --fetch                 Break after download source tarball
     --unpack                Break after unpack source tarball
     --patch                 Break after patch source
-    --config                Break after configure	
+    --config                Break after configure    
     --make                  Break after make a.k.s compile
     --check                 Break after make check/test
     --mkinstall             Break after make install    
     --package               Break after make ypk package    
+
+Options for search:
+    -I|--installed          Only matches the installed packages
+    -N|--uninstalled        Only matches the uninstalled packages

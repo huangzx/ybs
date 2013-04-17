@@ -1,6 +1,5 @@
 #!/bin/bash
 #
-#
 
 dofont() {
     local i
@@ -16,4 +15,3 @@ dofont() {
 }
 
 dofont $@
-

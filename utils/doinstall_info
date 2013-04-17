@@ -13,4 +13,3 @@ doinstall_info () {
 }
 
 doinstall_info $@
-

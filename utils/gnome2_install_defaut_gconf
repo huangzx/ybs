@@ -3,24 +3,22 @@
 #
 
 gnome2_install_defaut_gconf() {
-    #type
+    # Type
     local t=$1
-    #name
+    # Name
     local n=$2
-    #value
+    # Value
     local v=$3
+    
     echo "Setting: \"$n\" \"$v\""
     if [ -x /usr/bin/gconftool-2 ]; then
         configfile=$(gconftool-2 --get-default-source)
         if [ "x$t" = "xlist" ];then
-	    gconftool-2 --direct --config-source="$configfile" --type list \
-	      --set "$n" --list-type string "$v"
+	        gconftool-2 --direct --config-source="$configfile" --type list --set "$n" --list-type string "$v"
 	else
-	    gconftool-2 --direct --config-source="$configfile" --type "$t" \
-	      --set "$n" "$v"
+	        gconftool-2 --direct --config-source="$configfile" --type "$t" --set "$n" "$v"
         fi
     fi
 }
 
 gnome2_install_defaut_gconf $@
-

@@ -30,13 +30,10 @@ class PackageReport(object):
     '''
     def __init__(self, ypkdir, dbfile):
         ''' '''
-        #
-        # 测试目录下时候有 ypk 包
         self.ypks_in_dir = ybsutils.files_in_dir(ypkdir, '.ypk', 'version')
         if not self.ypks_in_dir:
             print ":( No ypk package found in '{}'".format(ypkdir)
             sys.exit(1)
-        #
         # 连接数据库
         self.conn = sqlite3.connect(dbfile)
         self.cur = self.conn.cursor()
@@ -56,7 +53,6 @@ class PackageReport(object):
                 
     def _deadline(self):
         ''' '''
-        #
         # 查找加入时间超过期限的 ypk 包
         self.cur.execute("SELECT path, intime from testing;")
         ypks = self.cur.fetchall()
@@ -80,7 +76,6 @@ class PackageReport(object):
     
     def _news(self):
         ''' '''
-        #
         # 查找过去 1 天, 新加入 testing 目录的 ypk 包
         self.cur.execute("SELECT path, intime from testing;")
         ypks = self.cur.fetchall()
@@ -100,7 +95,6 @@ class PackageReport(object):
 
     def _close(self):
         ''' '''
-        #
         # 写入并断开数据库连接
         self.conn.commit()
         self.conn.close()

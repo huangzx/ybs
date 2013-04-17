@@ -1,21 +1,8 @@
 #!/usr/bin/env python2
 # -*- coding: utf8 -*-
 #
-# Copyright © 2012 ivali.com
-# Maintainer: Zhongxin Huang <huangzhongxin@ivali.com>
-#
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright © 2013 ivali.com
+# Author: Zhongxin Huang <zhongxin.huang@gmail.com>
 #
 
 import os
@@ -23,24 +10,32 @@ import sys
 import sqlite3
 import argparse
 import subprocess 
-import ybsutils
+from ybs import ybsutils
 
 
 class ScanRdep(object):
-    '''
+    ''' calculating run-time dependency of package. 
     
     '''
     def __init__(self, pkg):
+        ''' 
+        
+        Args:
+          pkg: string, name of package
+        
+        '''
         self.pkg = pkg
         p = subprocess.Popen('ypkg -l '+self.pkg, shell=True, stdout=subprocess.PIPE)
         # p.communicate method return a tuple looks likes:
         # (stdoutdata, stderrdata)
         stream_data = p.communicate()[0]
+        # TODO
+        # 如果是数据库锁则等待
         if p.returncode != 0:
-            sys.stderr.write("'{}' not found. Be sure it has been installed.".format(pkg))
+            sys.stderr.write("'{}' not installed or database is locked".format(pkg))
             sys.exit(1)
         filelist_raw = [x for x in stream_data.split('\n')]
-        # 获得所有文件和链接# 
+        # 获得所有文件和链接 
         filelist = []
         for line in filelist_raw:
             line = line.strip()
@@ -53,7 +48,9 @@ class ScanRdep(object):
     
     
     def _getbin(self):
-        ''' 获得所有的可执行文件'''
+        ''' 获得所有的可执行文件
+        
+        '''
         binfiles = []
         for line in self.filelist:
             file_result = os.popen('file -bi '+'"'+line+'"').readline()
@@ -66,7 +63,9 @@ class ScanRdep(object):
 
     
     def _getlib(self):
-        ''' 用 ldd 获得需要的所有库文件'''
+        ''' 用 ldd 获得需要的所有库文件
+        
+        '''
         libfiles = []
         not_found = []
         for file_ in self.binfiles:
@@ -90,11 +89,16 @@ class ScanRdep(object):
             for x in not_found:
                 print(x + '\n'),
             sys.exit(1)
+        if not libfiles:
+            sys.stderr.write("'{}' ldd occur failure".format(self.pkg))
+            sys.exit(1)
         self.libfiles = libfiles
 
     
     def _getrdeps(self):
-        ''' 用 ypkg -S 获得依赖 '''
+        ''' 用 ypkg -S 获得依赖 
+        
+        '''
         rdeps = []
         not_owned = []
         for file_ in self.libfiles:
@@ -121,7 +125,10 @@ class ScanRdep(object):
                 print(x + '\n'),
             sys.exit(1)
         # 去掉自身
-        rdeps = [x for x in rdeps if x != self.pkg]
+        rdeps = [x for x in rdeps[:] if x != self.pkg]
+        if not rdeps:
+            sys.stderr.write("'{}' needs no other packages but itself".format(self.pkg))
+            sys.exit()
         print('All:')
         for x in rdeps[0:-1]: 
             print(x),
@@ -130,7 +137,9 @@ class ScanRdep(object):
 
     
     def _rdeps_filted(self):
-        ''' 递归依赖 '''
+        ''' 递归依赖 
+        
+        '''
         pkgs = self.rdeps
         conn = sqlite3.connect(ybsutils.__depend_db__)
         cur = conn.cursor()
@@ -162,7 +171,7 @@ def main():
     if not argvs:
         argvs = ['-h']
     
-    desc = 'calculating runtime dependency of package.'
+    desc = 'calculating run-time dependency of package.'
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('-v', '--version', action='store_true',
                         dest='v', help='show version')

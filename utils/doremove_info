@@ -3,9 +3,11 @@
 #
 
 doremove_info () {
-    echo "remove info: $@"
+    local i infodir
+    infodir='/usr/share/info'
     [ -x /usr/bin/install-info ] || return 0
-    local i infodir=/usr/share/info
+
+    echo "Remove info: $@"
     for i in $@; do
         install-info --delete "$infodir"/"$i" $infodir/dir 2>/dev/null
     done

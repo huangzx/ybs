@@ -1,23 +1,20 @@
 #!/bin/bash
 #
-#   ybs -- StartOS Build System
-# 
-#   Copyright © 2012 ivali.com
-#   Maintainer: Zhongxin Huang <huangzhongxin@ivali.com>>
+#  Copyright © 2013 ivali.com
+#  Maintainer: Zhongxin Huang <huangzhongxin@ivali.com>>
 #
-#   This program is free software; you can redistribute it and/or modify
-#   it under the terms of the GNU General Public License as published by
-#   the Free Software Foundation; either version 2 of the License, or
-#   (at your option) any later version.
+#  This program is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation; either version 2 of the License, or
+#  (at your option) any later version.
 #
-#   This program is distributed in the hope that it will be useful,
-#   but WITHOUT ANY WARRANTY; without even the implied warranty of
-#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#   GNU General Public License for more details.
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
 #
-#   You should have received a copy of the GNU General Public License
-#   along with this program.  If not, see <http://www.gnu.org/licenses/>.
-#
+#  You should have received a copy of the GNU General Public License
+#  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
 . /usr/lib/ybs/funcs
@@ -28,7 +25,7 @@ $0
 
 Usage: $0 command [options] pkg1 [pkg2 ...]
 
-ybs (StartOS Build System) is a simple command line for download and build YPK 
+ybs (StartOS Build System) is a simple command line for download and build ypk 
 package from source code.
 
 Commands:
@@ -38,15 +35,20 @@ Commands:
     -d|--download           Download source tartall of package
     -r|--remove             Remove package (same as ypkg -C foo)
     -i|--build              Build package and dependencies
-    -is|--build-single      Build single package without checking dependencies
+   -is|--build-single       Build single package without checking dependency
     -w|--showpbs            Show avaliable pbsfile of package 
-    -wr|--whatrequires      Show which packages require specify package
+   -wr|--whatrequires       Show which packages require specify package
+    -l|--list               List all availabe packages
+    -L|--list_installed     List all installed packages
+   -gr|--get_rdeps          Show run-time dependency of package
+   -gb|--get_bdeps          Show build-time dependency of package
     --sync [path]           Sync pbslib via git to $PBSLIB_PATH
     --info                  Show $0 parameters of /etc/ybs.conf
 
 Options for build:
-    -p|--pretend            Instead of actually build, display what to do  
-    -F|--force              Force build
+    -F|--force              Force build, although it is already installed
+    -y|--yes                Assume Yes to all queries
+    -v|--verbose            Enable verbose mode
     --fetch                 Break after download source tarball
     --unpack                Break after unpack source tarball
     --patch                 Break after patch source
@@ -55,6 +57,10 @@ Options for build:
     --check                 Break after make check/test
     --mkinstall             Break after make install    
     --package               Break after make ypk package    
+
+Options for search:
+    -I|--installed          Only matches the installed packages
+    -N|--uninstalled        Only matches the uninstalled packages
 EOF
 }
 
@@ -78,8 +84,11 @@ done
 
 for i in ${argvs[@]}; do
     case ${i} in
-      -p|--pretend) PRETEND="yes"       ;;
+      -I|--installed) INSTALLED_ONLY="yes" ;;
+      -N|--uninstalled) UNINSTALLED_ONLY="yes" ;;
       -F|--force)   FORCE_INSTALL="yes" ;;
+      -y|--yes)     YES_TO_ALL="yes"    ;;
+      -v|--verbose) IS_VERBOSE="yes"    ;;
       --fetch)      BREAK="fetch"       ;;
       --unpack)     BREAK="unpack"      ;;    
       --patch)      BREAK="patch"       ;;    
@@ -88,6 +97,10 @@ for i in ${argvs[@]}; do
       --check)      BREAK="check"       ;;
       --mkinstall)  BREAK="mkinstall"   ;;
       --package)    BREAK="package"     ;;
+      -y|--yes| \
+     -gr|--get_rdeps| \
+     -gb|--get_bdeps| \
+      -l|--list|-L|--list_installed| \
       -h|--help|-s|--search| \
       -d|--download|-r|--remove| \
       -i|--build|-is|--build-single| \
@@ -107,9 +120,11 @@ for i in ${argvs[@]}; do
     esac
 done
 
+[ "x$INSTALLED_ONLY" = "xyes" ] && extra_args="--installed"
+[ "x$UNINSTALLED_ONLY" = "xyes" ] && extra_args="--uninstalled"
+
 case "${1}" in
 -info|--info)
-    # Show build info
     grep -v ^# "/etc/ybs.conf" |sed '/^$/d'
     ;;
 
@@ -118,7 +133,21 @@ case "${1}" in
     msg_ "${args[@]} "
     msg "..."
     for i in ${args[@]}; do
-        pybs --search $i
+        pybs --search $i $extra_args
+    done
+    ;;
+
+-gr|--get_rdeps)
+    msg "=> Calculating dependencies..."
+    for i in ${args[@]}; do
+        pybs --get_rdeps $i 
+    done
+    ;;
+
+-gb|--get_bdeps)
+    msg "=> Calculating dependencies..."
+    for i in ${args[@]}; do
+        pybs --get_bdeps $i 
     done
     ;;
 
@@ -141,7 +170,6 @@ case "${1}" in
 
 -is|--build-single) 
     check_root
-    # Build single package
     msg_ "=> Installing "
     msg_ "${args[@]} "
     msg "..."
@@ -157,7 +185,6 @@ case "${1}" in
 
 -r|--remove)
     check_root
-    # Remove package
     msg_ "=> Removing "
     msg_ "${args[@]} "
     for i in ${args[@]}; do
@@ -166,7 +193,6 @@ case "${1}" in
     ;;
 
 --sync) 
-    # Sync pbslib via git
     mkdir -p $PBSLIB_PATH
     err_check "Create dir $PBSLIB_PATH failed"
 
@@ -195,7 +221,6 @@ case "${1}" in
     ;;
 
 -w|--showpbs)
-    # Show pbs file
     for i in ${args[@]}; do
         pybs --showpbs $i
     done
@@ -204,8 +229,16 @@ case "${1}" in
 -wr|--whatrequires)
     msg "=> [R] stands for runtime, [B] for build, [A] for recommoneded, [C] for conflict."
     for i in ${args[@]}; do
-         pybs --whatrequires $i
+         pybs --whatrequires $i $extra_args
     done
+    ;;
+
+-l|--list)
+    pybs --list
+    ;;
+
+-L|--list_installed)
+    pybs --list_installed
     ;;
 
 -h|--help|*)
@@ -213,5 +246,3 @@ case "${1}" in
     exit 0
     ;;
 esac
-
-# End of file

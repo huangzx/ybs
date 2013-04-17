@@ -3,14 +3,14 @@
 #
 
 import os
-import sys 
+import sys
 
 if __name__ == '__main__':
     args = sys.argv[1:]
     end = args[-1]
     end = os.path.realpath(end)
     target_dir = os.path.dirname(end)
-    os.system('mkdir -p' + ' ' + target_dir)
+    os.system('mkdir -p'+' '+target_dir)
     for i in args[0:-1]:
-        i = '"' + i + '"' 
-        os.system('mv ' + ' ' + i + ' ' + end)
+        i = '"' + i + '"'
+        os.system('mv '+' '+i+' '+end)

@@ -10,8 +10,8 @@ pre_install() {
 #
 # args: $N $V
 post_install() {
-    gnome2_install_schema "$1"
-    gnome2_install_defaut_gconf "$1 $2 $3
+    gnome2_install_schema $1
+    gnome2_install_defaut_gconf $1 $2 $3
     rarian-sk-update
     update-desktop-database
     gtk-update-icon-cache -f -q -t /usr/share/icons/hicolor/

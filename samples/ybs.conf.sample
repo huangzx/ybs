@@ -39,6 +39,11 @@ SOURCE_URI="http://pkg.startos.org/sources"
 AUTO_INSTALL="no"
 
 #
+# Ypkg install OPTs
+#
+#YPKG_OPT="-f"
+
+#
 # YPK_DEST - packages locate directory.
 # WORKING_FIELD - working directory.
 #
@@ -64,21 +69,23 @@ CURL_OPTIONS="-L"
 WGET_OPTIONS="--tries=3 --retry-connrefused --wait=2"
 
 #
-# Ypkg install OPTs
-#
-#YPKG_OPT="-f"
-
-#
 # Features are: 
 #   ccache/noccache, defaults to noccache
 # Caching pre-processor to C/C++ compilers, which often results in a 5 to 10 times speedup in common compilations. 
-#   distcc/nodistcc, default: nodistcc
+#
+#  icecc/noicecc, default: noicecc
+# yet another distribute builds base on distcc 
+#
+#  distcc/nodistcc, default: nodistcc
 # A program to distribute builds of C, C++, Objective C or Objective C++ code across several machines on a network. 
-#   upx/noupx, defaults to noupx  
+#
+#  upx/noupx, defaults to noupx  
 # Executable file compression and decompression utility 
-#   libtool/nolibtool, default: libtool
+#
+#  libtool/nolibtool, default: libtool
 # Remove *.la files
-#   strip/notrip, defaults to strip
+#
+#  strip/notrip, defaults to strip
 # Strip executable、sharedlib (.so)、staticlib (.a) and binary files 
 #
 FEATURES="ccache"

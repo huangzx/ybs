@@ -4,11 +4,12 @@
 
 gnome2_uninstall_mine() {
     local mines="$@"
+    
     if [ x"$mines" != x ] && [ -x /usr/bin/xdg-mime ];then
         for mine in $mines; do
-	    echo "Uninstalling: $mine"
-	    xdg-mime uninstall --mode system "$mine"  >/dev/null
-	done
+	        echo "Uninstalling: $mine"
+	        xdg-mime uninstall --mode system "$mine" 2>/dev/null
+	    done
     fi
 }
 

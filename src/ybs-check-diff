@@ -1,0 +1,65 @@
+#!/usr/bin/env python2
+# -*- coding: utf8 -*-
+#
+# Copyright © 2013 ivali.com
+# Author: Zhongxin Huang <zhongxin.huang@gmail.com>
+#
+
+import sys
+from ybs import ybsutils
+import argparse
+
+
+def check_diff(ypkdir, pbsdir):
+    '''
+    Args:
+     ypkdir: string, path to ypkfile directory
+     pbsdir: string, path to pbslib directory
+
+    '''
+    print("Parsing pbslib from '{}'\n".format(pbsdir))
+    pbsdir_map = ybsutils.parse_pbslib(pbsdir)
+    ypks = ybsutils.files_in_dir(ypkdir, '.ypk')
+    ypkfile = ybsutils.PbsFile()
+    for ypk in ypks:
+        ypkfile.parse(ypk)
+        name, version = ypkfile.name, ypkfile.version
+        if not name in pbsdir_map:
+            print('{}_{} found, but not in pbslib'.format(name, version))
+        else:
+            if not version in pbsdir_map[name]:
+                print('{}_{} found, but not in versions: {}'.format(name, version, ' '.join(pbsdir_map[name])))
+
+
+def main():
+    ybsutils.signal_int()
+    argvs = sys.argv[1:]
+    if not argvs:
+        argvs = ['-h']
+
+    desc = 'Checking for differences between pbsdir and ypkdir.'
+    parser = argparse.ArgumentParser(description=desc)
+    parser.add_argument('-p', '--pbsdir', nargs=1, dest='p', required=True,
+                        metavar='pbsdir', help='path to pbsdir')
+    parser.add_argument('-y', '--ypkdir', nargs=1, dest='y', required=True,
+                        metavar='ypkdir', help='path to ypkdir')
+    args = parser.parse_args(argvs)
+
+    if args.p and args.y:
+        pbsdir = ' '.join(args.p)
+        ypkdir = ' '.join(args.y)
+
+    if not ybsutils.files_in_dir(pbsdir, '.pbs'):
+        sys.stderr.write("pbsfile not found in '{}'.".format(pbsdir))
+        sys.exit(1)
+
+    if not ybsutils.files_in_dir(ypkdir, '.ypk'):
+        sys.stderr.write("ypkfile not found in '{}'.".format(ypkdir))
+        sys.exit(1)
+
+    print("Checking for differences between '{}' and '{}'\n".format(pbsdir, ypkdir))
+    check_diff(ypkdir, pbsdir)
+
+
+if __name__ == '__main__':
+    main()
