@@ -1,5 +1,5 @@
 #!/usr/bin/env python2
-# -*- coding: utf8 -*-
+# -*- coding: utf-8 -*-
 #
 # Copyright © 2013 ivali.com
 # Author: Zhongxin Huang <zhongxin.huang@gmail.com>
@@ -20,11 +20,11 @@ def find_ypk(indir, arch):
     ''' find all the ypkfile in given directory.
 
     Args:
-       indir: string, path to ypkfile directory
-       arch: string, specify ypkfile arch
+      indir: string, path to ypkfile directory
+      arch: string, specify ypkfile arch
 
     Returns:
-       list, contains ypkfile with newest version items
+      list, contains ypkfile with newest version items
 
     '''
     ypks_raw = ybsutils.files_in_dir(indir, '.ypk')
@@ -163,7 +163,7 @@ def merge_info(indir, indexdir, inlist, repo='stable'):
         os.rename('update.xml', update_file.replace('tar.xz', 'xml'))
         sha1sum = ybsutils.get_sha1sum(update_file)
         update_list.write(update_file + ' ' + str(int(os.path.getmtime(update_file))) + ' ' + sha1sum + '\n')
-    print('Generation complete')
+    print('Generation complete!')
 
 
 def get_repo(indir):

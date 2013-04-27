@@ -1,5 +1,5 @@
 #!/usr/bin/env python2
-# -*- coding: utf8 -*-
+# -*- coding: utf-8 -*-
 #
 # Copyright © 2013 ivali.com
 # Author: Zhongxin Huang <zhongxin.huang@gmail.com>
@@ -7,227 +7,27 @@
 
 import sys
 import os
-import signal
 import sqlite3
 import subprocess
 from distutils.version import LooseVersion
+import time
 from hashlib import sha1, md5
 
-__version__ = '0.1'
+__version__ = '2.0'
 __package_db__ = '/var/ypkg/db/package.db'
+__package_db_table__ = 'world'
 __depend_db__ = '/var/ybs/db/depend.db'
+__depend_db_table__ = 'universe'
 __ybs_conf__ = '/etc/ybs.conf'
 
 
-def signal_int():
-    ''' signal SIGINT handler
+def what_time(value=None):
+    '''
 
     '''
-    def _signal_handler():
-        sys.stderr.write('You pressed Ctrl+C!')
-        sys.exit(1)
-    signal.signal(signal.SIGINT, _signal_handler)
-
-
-def is_pbsfile(infile):
-    ''' check whether infile is a valid pbsfile or not
-
-    Args:
-      infile: string, path to file
-
-    '''
-    infile = os.path.basename(infile)
-    if not infile.endswith('.pbs'):
-        return False
-    if '_' not in infile:
-        return False
-    return True
-
-
-def is_installed(name):
-    '''
-    Args:
-      name: A string of pkgname
-
-    Returns:
-      None or tuple, format is: (u'name', u'version', u'repo', install_time)
-      For example:
-        (u'firefox', u'19.0', u'stable', 1361523561)
-
-    '''
-    conn = sqlite3.connect(__package_db__)
-    cur = conn.cursor()
-    cur.execute("SELECT name, version, repo, install_time FROM \
-                world Where name='{}'".format(name))
-    # Use fetchone here, because package's name is just only one.
-    result = cur.fetchone()
-    cur.close()
-    conn.close()
-    return result
-
-
-def compare_version(v1, v2):
-    ''' version compare
-
-    Args:
-      v1, v2: Two strings of version, for example:
-      '2.0', '3.0'
-      '2.0', '1.0'
-      '2.0', '2.0'
-      '2.0', '2.0-alpha'
-      '2.0', '2.0-beta'
-      '2.0', '2.0-rc'
-      '2.0', '2.0-r'
-      human readable: alpha < beta < rc < r
-
-    Returns:
-      A integer value. for example:
-      v1 is less than v2, return -1
-      v1 is equal to v2, return 0
-      v2 is greater then v2, return 1
-
-    To use:
-      >>>from ybs import ybsutils
-      >>>ybsutils.compare_version('2,0', '3.0')
-      -1
-
-    '''
-    # Splite major and rel version
-    v1 = str(v1.lower())
-    v2 = str(v2.lower())
-    v1_major = v1.split('-')[0]
-    v1_rel = v1.split('-')[1:]
-    v2_major = v2.split('-')[0]
-    v2_rel = v2.split('-')[1:]
-    # First, compare major version
-    v1_major += '.0'
-    v2_major += '.0'
-    # Be sure compare two version with same length
-    v1_major_len = len(v1_major.split('.'))
-    v2_major_len = len(v2_major.split('.'))
-    more = v1_major_len - v2_major_len
-    if more > 0:
-        v2_major += '.0' * abs(more)
-    else:
-        v1_major += '.0' * abs(more)
-    _cmp = lambda x, y: LooseVersion(x).__cmp__(y)
-    ret = _cmp(v1_major, v2_major)
-    if ret != 0:
-        return ret
-    # Second, compare rel version
-    # Note:
-    # rel version is a list
-
-    def _replacement(inlist):
-        inlist = [x.replace('alpha', 'a') for x in inlist]
-        inlist = [x.replace('beta', 'b') for x in inlist]
-        inlist = [x.replace('rc', 'c') for x in inlist]
-        return inlist
-
-    v1_rel = _replacement(v1_rel)
-    v2_rel = _replacement(v2_rel)
-    # Be sure compare two version with same length
-    v1_rel_len = len(v1_rel)
-    v2_rel_len = len(v2_rel)
-    more = v1_rel_len - v2_rel_len
-    absmore = abs(more)
-    if more > 0:
-        while absmore > 0:
-            v2_rel.append('r0')
-            absmore -= 1
-    else:
-        while absmore > 0:
-            v1_rel.append('r0')
-            absmore -= 1
-    for x, y in zip(v1_rel, v2_rel):
-        ret = _cmp(x, y)
-        if ret != 0:
-            return ret
-    return 0
-
-
-class GetNameVersion(object):
-    ''' get name, version and arch from pbs-likes file
-
-    Args:
-      infile: path to file, format examples are:
-        mysql_5.5.29-x86_64.ypk
-        mysql_5.5.29-i686.ypk
-        mysql_5.5.29-any.ypk
-        mysql_5.5.29.pbs
-        mysql_5.5.29.xml
-        mysql_5.5.29.ypk
-        mysql_5.5.29-any.filelist
-       Note:
-         '_' in version is invalid
-
-    Attributes:
-      path: string, abspath to file
-      infile: string, file name
-      arch: string, arch
-      name: string, name
-      version_major: string, version_major
-      version_rel: string, version_rel
-      version: string, version contains major and rel
-
-    Methods:
-      parse(self, infile)
-        infile: string, path to file
-
-    To use:
-      >>>from ybs import ybsutils
-      >>>foo = ybsutils.GetNameVersion()
-      >>>foo.parse('/var/ybs/pkgs/./my_sql_5.5.29-1-rc1-x86_64.ypk')
-      >>>foo.path
-      '/var/ybs/pkgs/my_sql_5.5.29-1-rc1-x86_64.ypk'
-      >>>foo.infile
-      'my_sql_5.5.29-1-rc1-x86_64.ypk'
-      >>>foo.arch
-      'x86_64'
-      >>>foo.name
-      'my_sql'
-      >>>foo.version_major
-      '5.5.29'
-      >>>foo.version
-      '5.5.29-1-rc1'
-      >>>foo.version_rel
-      '1-rc1'
-
-    '''
-    def __init__(self):
-        pass
-
-    def __dir__(self):
-        return ['path', 'infile', 'name', 'arch', 'version_major', 'version_rel', 'version']
-
-    def parse(self, infile):
-        self.path = os.path.abspath(infile)
-        self.infile = os.path.basename(infile)
-
-        infile = os.path.splitext(self.infile)[0]
-        ret = infile.split('-')
-        arches = ('i686', 'x86_64', 'any')
-        arch = ''
-        for x in arches:
-            if x == ret[-1]:
-                arch = x
-                break
-        if arch:
-            infile = '-'.join(infile.split('-')[0:-1])
-
-        infile = infile.split('_')
-        name = '_'.join(infile[0:-1])
-        version = infile[-1]
-        version_major = version.split('-')[0]
-        version_rel = '-'.join(version.split('-')[1:])
-
-        self.arch = arch
-        self.name = name
-        self.version_major = version_major
-        self.version_rel = version_rel
-        self.version = version_major + version_rel
-        if version_rel:
-            self.version = version_major + '-' + version_rel
+    if value is None:
+        value = time.time()
+    return time.strftime('%Y-%m-%d,%H:%M:%S', time.localtime(value))
 
 
 def get_checksum(infile, tool):
@@ -274,9 +74,8 @@ def get_sha1sum(infile):
       >>>from ybs import ybsutils
       >>>ybsutils.get_sha1sum('/tmp/test')
       'da39a3ee5e6b4b0d3255bfef95601890afd80709'
-
+    
     '''
-
     return get_checksum(infile, 'sha1')
 
 
@@ -293,9 +92,231 @@ def get_md5sum(infile):
       >>>from ybs import ybsutils
       >>>ybsutils.get_md5sum('/tmp/test')
       'd41d8cd98f00b204e9800998ecf8427e'
-
+    
     '''
     return get_checksum(infile, 'md5')
+
+
+def is_pbsfile_likes(infile):
+    ''' check whether infile is a valid pbsfile-likes or not
+
+    pbsfile-likes, such as:
+      mysql_5.5.29-x86_64.ypk
+      mysql_5.5.29-i686.ypk
+      mysql_5.5.29-any.ypk
+      mysql_5.5.29.pbs
+      mysql_5.5.29.xml
+      mysql_5.5.29.ypk
+      mysql_5.5.29-any.filelist
+
+    Args:
+      infile: string, path to file
+
+    '''
+    infile = os.path.basename(infile)
+    suffixes = ('.pbs', '.ypk', '.xml', '.filelist')
+    suffix = os.path.splitext(infile)[-1]
+    if not suffix in suffixes:
+        return False
+    if '_' not in infile:
+        return False
+    return True
+
+
+def is_installed(name, dbfile=__package_db__, dbtable=__package_db_table__):
+    ''' show information of installed package from dbfile
+
+    Args:
+      name: string, package name
+      dbfile: string, path to package.db which is created by ypkg
+      dbtable: string, installed package table of debfile
+
+    Returns:
+      None or tuple, format is: (u'name', u'version', u'repo', install_time)
+      For example:
+        (u'firefox', u'19.0', u'stable', 1361523561)
+
+    '''
+    conn = sqlite3.connect(dbfile)
+    cur = conn.cursor()
+    cur.execute("SELECT name, version, repo, install_time FROM {} Where name='{}'".format(dbtable, name))
+    # Use fetchone here, because package name is just only one.
+    result = cur.fetchone()
+    cur.close()
+    conn.close()
+    return result
+
+
+def compare_version(v1, v2):
+    ''' version compare
+
+    Args:
+      v1, v2: Two strings of version, for example:
+      '2.0', '3.0'
+      '2.0', '1.0'
+      '2.0', '2.0'
+      '2.0', '2.0-alpha'
+      '2.0', '2.0-beta'
+      '2.0', '2.0-rc'
+      '2.0', '2.0-r'
+      human readable: alpha < beta < rc < r
+
+    Returns:
+      string. for example:
+      v1 is less than v2, return '<'
+      v1 is equal to v2, return '='
+      v1 is greater then v2, return '>'
+
+    To use:
+      >>>from ybs import ybsutils
+      >>>ybsutils.compare_version('2.0', '3.0')
+      '<'
+      >>>ybsutils.compare_version('2.0', '1.0')
+      '>'
+      >>>ybsutils.compare_version('2.0', '2.0')
+      '='
+
+    '''
+    # Splite major and rel version
+    v1 = str(v1.lower())
+    v2 = str(v2.lower())
+    v1_major = v1.split('-')[0]
+    v1_rel = v1.split('-')[1:]
+    v2_major = v2.split('-')[0]
+    v2_rel = v2.split('-')[1:]
+
+    # First, compare major version
+    v1_major += '.0'
+    v2_major += '.0'
+    # Be sure compare two version with same length
+    v1_major_len = len(v1_major.split('.'))
+    v2_major_len = len(v2_major.split('.'))
+    more = v1_major_len - v2_major_len
+    if more > 0:
+        v2_major += '.0' * abs(more)
+    else:
+        v1_major += '.0' * abs(more)
+
+    _cmp = lambda x, y: LooseVersion(x).__cmp__(y)
+
+    ret = _cmp(v1_major, v2_major)
+    if ret != 0:
+        #return ret
+        if ret == 1:
+            return '>'
+        if ret == -1:
+            return '<'
+
+    # Second, compare rel version
+
+    def _replacement(inlist):
+        inlist = [x.replace('alpha', 'a') for x in inlist]
+        inlist = [x.replace('beta', 'b') for x in inlist]
+        inlist = [x.replace('rc', 'c') for x in inlist]
+        return inlist
+
+    # Note:
+    # rel version is a list
+    v1_rel = _replacement(v1_rel)
+    v2_rel = _replacement(v2_rel)
+
+    # Be sure compare two version with same length
+    v1_rel_len = len(v1_rel)
+    v2_rel_len = len(v2_rel)
+    more = v1_rel_len - v2_rel_len
+    absmore = abs(more)
+    if more > 0:
+        while absmore > 0:
+            v2_rel.append('r0')
+            absmore -= 1
+    else:
+        while absmore > 0:
+            v1_rel.append('r0')
+            absmore -= 1
+    for x, y in zip(v1_rel, v2_rel):
+        ret = _cmp(x, y)
+        if ret != 0:
+            #return ret
+            if ret == 1:
+                return '>'
+            if ret == -1:
+                return '<'
+    #return 0
+    return '='
+
+
+class GetNameVersion(object):
+    ''' get name, version and arch from pbs-likes file
+
+    Args:
+      infile: string, path to file
+
+    Attributes:
+      infile: string, file name
+      arch: string, arch
+      name: string, name
+      version_major: string, version_major
+      version_rel: string, version_rel
+      version: string, version contains major and rel
+
+    Methods:
+      parse(self, infile)
+        infile: string, path to file
+
+    To use:
+      >>>from ybs import ybsutils
+      >>>foo = ybsutils.GetNameVersion()
+      >>>foo.parse('my_sql_5.5.29-1-rc1-x86_64.ypk')
+      >>>foo.infile
+      'my_sql_5.5.29-1-rc1-x86_64.ypk'
+      >>>foo.arch
+      'x86_64'
+      >>>foo.name
+      'my_sql'
+      >>>foo.version_major
+      '5.5.29'
+      >>>foo.version
+      '5.5.29-1-rc1'
+      >>>foo.version_rel
+      '1-rc1'
+
+    '''
+    def __init__(self):
+        pass
+
+    def __dir__(self):
+        return ['infile', 'name', 'arch', 'version_major', 'version_rel', 'version']
+
+    def parse(self, infile):
+        self.infile = os.path.basename(infile)
+
+        if is_pbsfile_likes(infile):
+            # Strip suffix (.*)
+            infile = os.path.splitext(self.infile)[0]
+        
+        ret = infile.split('-')
+        arches = ('i686', 'x86_64', 'any')
+        arch = ''
+        for x in arches:
+            if x == ret[-1]:
+                arch = x
+                break
+        if arch:
+            infile = '-'.join(infile.split('-')[0:-1])
+
+        infile = infile.split('_')
+        name = '_'.join(infile[0:-1])
+        version = infile[-1]
+        version_major = version.split('-')[0]
+        version_rel = '-'.join(version.split('-')[1:])
+
+        self.arch = arch
+        self.name = name
+        self.version_major = version_major
+        self.version_rel = version_rel
+        self.version = version_major + version_rel
+        if version_rel:
+            self.version = version_major + '-' + version_rel
 
 
 def files_in_dir(indir, suffix, filte=None):
@@ -330,7 +351,7 @@ def files_in_dir(indir, suffix, filte=None):
             pbsfile.parse(f)
             name, version = pbsfile.name, pbsfile.version
             if name in record:
-                if compare_version(version, record[name]) != 1:
+                if compare_version(version, record[name]) != '>':
                     continue
             result_filter[name] = f
             record[name] = version
@@ -408,7 +429,7 @@ def minimum_version(inlist):
     result = inlist[0]
     for i in inlist:
         ret = compare_version(i, result)
-        if ret == -1:
+        if ret == '<':
             result = i
     return result
 

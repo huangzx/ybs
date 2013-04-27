@@ -6,8 +6,8 @@ dogroupdel() {
     local end=${!#}
     if getent group "$end" >/dev/null; then
         echo "Deleting: group $end"
-        groupdel "$@"
+        groupdel "$@" || return 1
     fi
 }
 
-dogroupdel $@
+dogroupdel "$@"

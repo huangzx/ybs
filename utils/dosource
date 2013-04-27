@@ -37,4 +37,4 @@ NOTES="$NOTES"
 "
 }
 
-main $@
+main "$@"

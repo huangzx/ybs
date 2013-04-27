@@ -6,7 +6,7 @@ doln(){
     local end=${!#}
     [ -h "$end" ] && rm "$end"
     mkdir -p "$(dirname $end)"
-    ln -sf $@
+    ln -sf "$@" || return 1
 }
 
-doln $@
+doln "$@"

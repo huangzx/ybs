@@ -5,14 +5,12 @@
 gnome2_install_schema() {
     # This is this-is-deprecated
     # return 0
-    local schemas=$@
+    local schemas="$@"
     
-    if [ x"$schemas" != x ] && [ -x /usr/bin/gconftool-2 ];then
-        for schema in $schemas; do
-	        echo "Installing: $schema"
-	        GCONF_CONFIG_SOURCE="$(gconftool-2 --get-default-source)" gconftool-2 --makefile-install-rule "$schema" 2>/dev/null
+    for schema in $schemas; do
+	    echo "Installing: $schema"
+	    GCONF_CONFIG_SOURCE="$(gconftool-2 --get-default-source)" gconftool-2 --makefile-install-rule "$schema" || return 1
 	done
-    fi
 }
 
-gnome2_install_schema $@
+gnome2_install_schema "$@"

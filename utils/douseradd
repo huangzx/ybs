@@ -10,4 +10,4 @@ douseradd() {
     fi
 }
 
-douseradd $@
+douseradd "$@"

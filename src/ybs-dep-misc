@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# -*- coding: utf8 -*-
+# -*- coding: utf-8 -*-
 #
 # Author: Zhongxin Huang <zhongxin.huang@gmail.com>
 #
@@ -7,27 +7,28 @@
 import os
 import sys
 import sqlite3
-from ybs import ybsutils
+from ybs import ybsutils, pybs
 import argparse
-import pybs
 
 
 class DepMisc(object):
     ''' ybs dependency tools miscellaneous
 
     '''
-    def __init__(self, dbfile, dbtable, deptype):
+    def __init__(self, dbfile=ybsutils.__depend_db__,
+                 dbtable=ybsutils.__depend_db_table__, dep_type='rdep'):
         ''' initial, connect to the database
 
         Args:
           dbfile: string, path to dbfile, a.k.a depend.db
           dbtable: string, db table's name
-          deptype: string, dependency type, such as rdep, bdep
+          dep_type: string, dependency type, such as 'rdep', 'bdep'
 
         '''
         self.conn = sqlite3.connect(dbfile)
         self.cur = self.conn.cursor()
-        self.deptype = deptype
+        self.dbfile = dbfile
+        self.dep_type = dep_type
         self.dbtable = dbtable
 
     def __del__(self):
@@ -41,7 +42,7 @@ class DepMisc(object):
 
         '''
         def _get_deps_from_db():
-            self.cur.execute("SELECT {} FROM {}".format(self.deptype, self.dbtable))
+            self.cur.execute("SELECT {} FROM {}".format(self.dep_type, self.dbtable))
             result = self.cur.fetchall()
             for res in result:
                 yield [x.split('(')[0] for x in res[0].split()]
@@ -67,7 +68,7 @@ class DepMisc(object):
           results: list, contains strings of dependency
 
         '''
-        self.cur.execute("SELECT {} FROM {} WHERE name = '{}'".format(self.deptype, self.dbtable, pkg))
+        self.cur.execute("SELECT {} FROM {} WHERE name = '{}'".format(self.dep_type, self.dbtable, pkg))
         results = self.cur.fetchone()
         if results:
             results = [x.split('(')[0] for x in results[0].split()]
@@ -111,7 +112,7 @@ class DepMisc(object):
 
         '''
         dot_file = os.path.join('/tmp', pkg + '.dot')
-        self._write_dot_file(dot_file, self._get_lines(pybs.ybs_get_alldeps(self.deptype, pkg)), pkg)
+        self._write_dot_file(dot_file, self._get_lines(pybs.get_deps_from_db(pkg, self.dep_type, self.dbfile, self.dbtable)), pkg)
 
     def dep_graph_universe(self):
         ''' dependency graph of database universe table, dot file
@@ -151,7 +152,7 @@ def main():
         print(ybsutils.__version__)
         sys.exit()
 
-    depmisc = DepMisc(ybsutils.__depend_db__, 'universe', 'rdep')
+    depmisc = DepMisc(dep_type='rdep')
 
     if args.r:
         depmisc.dep_rank()

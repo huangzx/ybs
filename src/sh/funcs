@@ -1,6 +1,6 @@
 #
 #  Copyright © 2013 ivali.com
-#  Maintainer: Zhongxin Huang <huangzhongxin@ivali.com>
+#  Author: Zhongxin Huang <huangzhongxin@ivali.com>
 #
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -270,20 +270,6 @@ atom_parse() {
     for x in PBSFILE PBSDIR T N V R FILESDIR; do
         export "$x"
     done
-}
-
-#
-# Compare version
-# v1 > v2 return 1
-# v1 < v2 return 2
-# v1 = v2 return 0
-atom_cmp() {
-    string1="$1"
-    string2="$2"
-    [ "x$string2" = "x" ] && return 1
-    ret=$(pybs --compare_version $string1 $string2)
-    [ "$ret" = "-1" ] && return 2
-    return $ret
 }
 
 #
@@ -724,10 +710,11 @@ ybs_mkpkg() {
     # Creat pkgdate
     fileinfo "$dir" >"$pkginfo_dir"/filelist
 
-    install=$INSTALL
-    if [ "x$install" != "x" ] && file_is_exist "$FILESDIR"/$install; then
-        docp "$FILESDIR"/"$install" "$dir"/var/ypkg/db/"$N"/
-        docp "$FILESDIR"/"$install" "$pkginfo_dir"/
+    install_script=$INSTALL
+    if [ "x$install_script" != "x" ] && file_is_exist "$FILESDIR"/$install_script; then
+        mkdir -p "$pkginfo_dir"/
+        sed 's/#LIBDIRSUFFIX#/'"$LIBDIRSUFFIX"'/g' "$FILESDIR"/"$install_script" >"$pkginfo_dir"/"$install_script"
+        docp "$pkginfo_dir"/"$install_script" "$dir"/var/ypkg/db/"$N"/
     fi
     
     build_date="$(date +%s)"
@@ -744,7 +731,7 @@ ybs_mkpkg() {
     license="$(xml_escape_convert "$LICENSE")"
     packager="$(xml_escape_convert "$PACKAGER")"
     homepage="$(xml_escape_convert "$HOMEPAGE")"
-    install="$install"
+    install_script="$install_script"
     arch="$YARCH"
     depend=$(xml_escape_convert "$RDEPEND" |xargs |tr " " ",")
     bdepend=$(xml_escape_convert "$BDEPEND" |xargs |tr " " ",")
@@ -808,7 +795,7 @@ ybs_mkpkg() {
    <homepage>$homepage</homepage>
    <rir>$rir</rir>
    <alias>$alias</alias>
-   <install>$install</install>
+   <install>$install_script</install>
 OOO
 
 if [ "x$exec" != "x" ]; then

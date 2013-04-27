@@ -1,5 +1,5 @@
 #!/usr/bin/env python2
-# -*- coding: utf8 -*-
+# -*- coding: utf-8 -*-
 #
 # Copyright © 2013 ivali.com
 # Author: Zhongxin Huang <zhongxin.huang@gmail.com>
@@ -9,63 +9,153 @@ import os
 import sys
 import sqlite3
 import argparse
-import subprocess 
+import subprocess
 from ybs import ybsutils
+import time
+
+IS_VERBOSE = False
+SHOW_TIME = False
 
 
 class ScanRdep(object):
-    ''' calculating run-time dependency of package. 
-    
+    ''' calculate run-time dependency of package.
+
     '''
-    def __init__(self, pkg):
-        ''' 
-        
+    def __init__(self):
+        pass
+
+    def _run_ypkg(self, arg, foo):
+        ''' run ypkg cli
+
         Args:
-          pkg: string, name of package
-        
+          arg: string. args for ypkg
+          foo: string. path to file
+
+        Returns:
+          list, contain string items
+
         '''
+        while True:
+            p = subprocess.Popen('ypkg'+' '+arg+' '+foo, shell=True, stdout=subprocess.PIPE)
+            # p.communicate method return a tuple like this:
+            # (stdoutdata, stderrdata)
+            stream = p.communicate()[0]
+            code = p.returncode
+            if code == 5:
+                sys.stderr.write('database is locked')
+                time.sleep(1)
+            elif code != 0:
+                sys.stderr.write("'{}' is not installed".format(self.pkg))
+                sys.exit(1)
+            elif code == 0:
+                break
+        if stream:
+            return [x for x in stream.split('\n')]
+        else:
+            return None
+
+    def getfile(self, pkg):
+        ''' get files and syslinks using 'ypkg -l'
+
+        Args:
+          pkg: string, package name
+
+        '''
+        if SHOW_TIME:
+            print("{} Step1 'ypkg -l'".format(ybsutils.what_time()))
+
+        def _is_skip(line):
+            skips = ('/usr/include/', '/usr/share/info',
+                     '/usr/share/locale/', '/usr/share/help/',
+                     '/usr/share/gtk-doc/', '/usr/share/icons/',
+                     '/usr/share/themes/', '/usr/share/man/',
+                     '/usr/share/doc/')
+            for skip in skips:
+                if skip in line:
+                    return True
+            suffixes = ('pyc', 'pyo', 'txt', 'xml', 'docbook',
+                        'cmake', 'desktop', 'xsl', 'entities',
+                        'png', 'svg', 'svgz', 'jpg', 'xpm',
+                        'gz', 'h', 'pc', 'qm', 'conf',
+                        'prf', 'decTest', 'html')
+            for suffix in suffixes: 
+                if line.endswith('.'+suffix):     
+                    return True
+            return False
+
         self.pkg = pkg
-        p = subprocess.Popen('ypkg -l '+self.pkg, shell=True, stdout=subprocess.PIPE)
-        # p.communicate method return a tuple looks likes:
-        # (stdoutdata, stderrdata)
-        stream_data = p.communicate()[0]
-        # TODO
-        # 如果是数据库锁则等待
-        if p.returncode != 0:
-            sys.stderr.write("'{}' not installed or database is locked".format(pkg))
-            sys.exit(1)
-        filelist_raw = [x for x in stream_data.split('\n')]
-        # 获得所有文件和链接 
+        filelist_raw = self._run_ypkg('-l', pkg)
         filelist = []
+        #print len(filelist_raw)
         for line in filelist_raw:
             line = line.strip()
             if line.startswith('F|') or line.startswith('S|'):
-                filelist.append(line.split('|')[-1].strip())
+                if not _is_skip(line):
+                    filelist.append(line.split('|')[-1].strip())
         if not filelist:
             sys.stderr.write("'{}' contains directory only.".format(pkg))
             sys.exit(1)
         self.filelist = filelist
-    
-    
-    def _getbin(self):
-        ''' 获得所有的可执行文件
-        
+        #print len(filelist)
+
+    def getbin(self):
+        ''' get sharedlib or executable files using 'file -b'
+
         '''
+        if SHOW_TIME:
+            print("{} Step2 'file -b'".format(ybsutils.what_time()))
+        
         binfiles = []
+        perls = []
+        perlms = []
+        pythons = []
+        shells = []
+        tcls = []
         for line in self.filelist:
-            file_result = os.popen('file -bi '+'"'+line+'"').readline()
-            if 'x-sharedlib' in file_result or 'x-executable' in file_result:
+            #file_result = os.popen('file -bi '+'"'+line+'"').readline()
+            #if 'x-sharedlib' in file_result or 'x-executable' in file_result:
+            file_result = os.popen('file -b '+'"'+line+'"').readline()
+            if 'LSB executable' in file_result or 'LSB shared object' in file_result:
                 binfiles.append(line)
+                continue
+            if 'Python script' in file_result:
+                pythons.append(line)
+                continue
+            if 'Perl script' in file_result:
+                perls.append(line)
+                continue
+            if 'shell script' in file_result:
+                shells.append(line)
+                continue
+            if 'Perl5 module source' in file_result:
+                perlms.append(line)
+                continue
+            if 'Tcl script' in file_result:
+                tcls.append(line)
+                continue
+        if IS_VERBOSE:
+            if perls:
+                print("Perl scripts:\n{}\n".format('\n'.join(perls)))
+            if pythons:
+                print("Python scripts:\n{}\n".format('\n'.join(pythons)))
+            if shells:
+                print("Shell scripts:\n{}\n".format('\n'.join(shells)))
+            if perlms:
+                print("Perl5 modules:\n{}\n".format('\n'.join(perlms)))
+            if tcls:
+                print("Tcl scripts:\n{}\n".format('\n'.join(tcls)))
         if not binfiles:
-            sys.stderr.write("'{}' contains not any sharedlib or executable files".format(self.pkg))
+            sys.stderr.write("'{}' does not contains sharedlib or executable files".format(self.pkg))
             sys.exit(1)
         self.binfiles = binfiles
 
-    
-    def _getlib(self):
-        ''' 用 ldd 获得需要的所有库文件
-        
+    def getlib(self):
+        ''' get library required files using 'ldd'
+
         '''
+        if SHOW_TIME:
+            print("{} Step3 'ldd'".format(ybsutils.what_time()))
+        
         libfiles = []
         not_found = []
         for file_ in self.binfiles:
@@ -73,14 +163,14 @@ class ScanRdep(object):
             for line in ldd_result:
                 line = line.strip()
                 if 'not found' in line:
-                    # 跳过属于自身的文件
+                    # Skip myself
                     if not [x for x in self.filelist if line.split()[0] in x]:
                         if line not in not_found:
                             not_found.append(line)
                 else:
                     if '=>' in line:
                         line = line.split()[2]
-                        # 获得绝对路径
+                        # Get realpath
                         line = os.path.realpath(line)
                         if not line in libfiles:
                             libfiles.append(line)
@@ -94,25 +184,28 @@ class ScanRdep(object):
             sys.exit(1)
         self.libfiles = libfiles
 
-    
-    def _getrdeps(self):
-        ''' 用 ypkg -S 获得依赖 
-        
+    def getrdep(self):
+        ''' get packages required using 'ypkg -S'
+
         '''
+        if SHOW_TIME:
+            print("{} Step4 'ypkg -S'".format(ybsutils.what_time()))
+        
         rdeps = []
         not_owned = []
         for file_ in self.libfiles:
-            ypkg_result = os.popen('ypkg -S --absolute '+file_).readlines()
+            #ypkg_result = os.popen('ypkg -S --absolute '+file_).readlines()
+            ypkg_result = self._run_ypkg('-S --absolute', file_)
             for line in ypkg_result:
                 line = line.strip()
-                # 非空行，ypkg -S 的输出第二行是空行
+                # Skip blank line
                 if line:
                     if 'Searching for' in line:
                         continue
                     if 'not owned by' in line:
                         if line not in not_owned:
                             not_owned.append(line)
-                    # 获得类似这样的结构：
+                    # Got string like this:
                     # glibc_2.17: F, /lib64/libc-2.17.so
                     # lm_sensors_3.3.3: F, xxxxxx
                     line = line.split(':')[0]
@@ -124,38 +217,40 @@ class ScanRdep(object):
             for x in not_owned:
                 print(x + '\n'),
             sys.exit(1)
-        # 去掉自身
+        # Strip myself
         rdeps = [x for x in rdeps[:] if x != self.pkg]
         if not rdeps:
             sys.stderr.write("'{}' needs no other packages but itself".format(self.pkg))
             sys.exit()
         print('All:')
-        for x in rdeps[0:-1]: 
+        for x in rdeps[0:-1]:
             print(x),
         print(rdeps[-1] + '\n')
         self.rdeps = rdeps
 
-    
-    def _rdeps_filted(self):
-        ''' 递归依赖 
-        
+    def rdep_filted(self):
+        ''' filter dependency
+
         '''
+        if SHOW_TIME:
+            print("{} Step5 filter".format(ybsutils.what_time()))
+        
         pkgs = self.rdeps
         conn = sqlite3.connect(ybsutils.__depend_db__)
         cur = conn.cursor()
-        # 注意: pkgs 在循环中被修改
+        # Note:
+        # pkgs is to changed in loop
         for num, pkg in enumerate(pkgs[:]):
             cur.execute("SELECT {} FROM universe WHERE name = '{}'".format('rdep', pkg))
             pkg_rdeps = cur.fetchone()
             if not pkg_rdeps:
                 continue
-            # 获得结果结构:
-            # (u'ca-certificates libssh(>=0.2) openssl zlib rtmpdump',)
-            # 转成 list
+            # Got tuple like this:
+            #   (u'ca-certificates libssh(>=0.2) openssl zlib rtmpdump',)
             pkg_rdeps = [x.split('(')[0] for x in pkg_rdeps[0].split()]
-            # 共同元素
+            # Common items
             coms = set(pkgs) & set(pkg_rdeps)
-            # 从原始完整列表里删除共同元素
+            # Strip common items from original list
             for com in coms:
                 for x in pkgs:
                     if x == com:
@@ -170,26 +265,39 @@ def main():
     argvs = sys.argv[1:]
     if not argvs:
         argvs = ['-h']
-    
-    desc = 'calculating run-time dependency of package.'
+
+    desc = 'Calculate run-time dependency of package.'
     parser = argparse.ArgumentParser(description=desc)
-    parser.add_argument('-v', '--version', action='store_true',
-                        dest='v', help='show version')
-    parser.add_argument('pkg', nargs='*', help='pkg name')
+    parser.add_argument('-V', '--version', action='store_true',
+                        dest='V', help='show version and exit')
+    parser.add_argument('-v', '--verbose', action='store_true',
+                        dest='v', help='enable verbose mode')
+    parser.add_argument('-t', '--time', action='store_true',
+                        dest='t', help='show time spend')
+    parser.add_argument('pkg', nargs='*', help='package name')
     args = parser.parse_args(argvs)
-    
-    if args.v:
+
+    if args.V:
         print(ybsutils.__version__)
         sys.exit()
 
+    if args.v:
+        global IS_VERBOSE
+        IS_VERBOSE = True
+    
+    if args.t:
+        global SHOW_TIME
+        SHOW_TIME = True
+
     if args.pkg:
         for pkg in args.pkg:
-            scanrdep = ScanRdep(pkg)
-            scanrdep._getbin()
-            scanrdep._getlib()
-            scanrdep._getrdeps()
-            scanrdep._rdeps_filted()
+            scanrdep = ScanRdep()
+            scanrdep.getfile(pkg)
+            scanrdep.getbin()
+            scanrdep.getlib()
+            scanrdep.getrdep()
+            scanrdep.rdep_filted()
 
 
-if __name__  == '__main__':
+if __name__ == '__main__':
     main()

@@ -5,8 +5,8 @@ dogroupadd() {
     local end=${!#}
     if ! getent group "$end" >/dev/null; then
         echo "Creating: group $end"
-        groupadd "$@"
+        groupadd "$@" || return 1
     fi
 }
 
-dogroupadd $@
+dogroupadd "$@"

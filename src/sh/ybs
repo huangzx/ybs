@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #  Copyright © 2013 ivali.com
-#  Maintainer: Zhongxin Huang <huangzhongxin@ivali.com>>
+#  Author: Zhongxin Huang <huangzhongxin@ivali.com>>
 #
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -29,7 +29,6 @@ ybs (StartOS Build System) is a simple command line for download and build ypk
 package from source code.
 
 Commands:
-    -h|--help               Show usage   
     -s|--search             Search package in pbslib case-insensitive
                               symbol '$' for endswith, '^' for startswith 
     -d|--download           Download source tartall of package
@@ -38,12 +37,17 @@ Commands:
    -is|--build-single       Build single package without checking dependency
     -w|--showpbs            Show avaliable pbsfile of package 
    -wr|--whatrequires       Show which packages require specify package
-    -l|--list               List all availabe packages
-    -L|--list_installed     List all installed packages
    -gr|--get_rdeps          Show run-time dependency of package
    -gb|--get_bdeps          Show build-time dependency of package
+
+Extra commands:
+    -h|--help               Show usage and exit 
+    -V|--version            Show version and exit
+    -l|--list               List all availabe packages
+    -L|--list_installed     List all installed packages
+   -cv|--compare_version    Comprare two versions
     --sync [path]           Sync pbslib via git to $PBSLIB_PATH
-    --info                  Show $0 parameters of /etc/ybs.conf
+    --info                  Show parameters of /etc/ybs.conf
 
 Options for build:
     -F|--force              Force build, although it is already installed
@@ -98,8 +102,10 @@ for i in ${argvs[@]}; do
       --mkinstall)  BREAK="mkinstall"   ;;
       --package)    BREAK="package"     ;;
       -y|--yes| \
-     -gr|--get_rdeps| \
-     -gb|--get_bdeps| \
+      -gr|--get_rdeps| \
+      -gb|--get_bdeps| \
+      -cv|--compare_version| \
+      -V|--version| \
       -l|--list|-L|--list_installed| \
       -h|--help|-s|--search| \
       -d|--download|-r|--remove| \
@@ -135,6 +141,19 @@ case "${1}" in
     for i in ${args[@]}; do
         pybs --search $i $extra_args
     done
+    ;;
+
+-cv|--compare_version)
+    msg "=> Comprare two versions..."
+    v1=${args[0]}
+    v2=${args[1]}
+    v3=${args[2]}
+    if [ "x$v1" != "x" ] && [ "x$v2" != "x" ] && [ "x$v3" = "x" ]; then
+        echo $v1 $(pybs --compare_version $v1 $v2) $v2
+        exit 0 
+    else
+        die "Please provide two versions."
+    fi
     ;;
 
 -gr|--get_rdeps)
@@ -227,7 +246,7 @@ case "${1}" in
     ;;
 
 -wr|--whatrequires)
-    msg "=> [R] stands for runtime, [B] for build, [A] for recommoneded, [C] for conflict."
+    msg "=> [R] stands for run-time, [B] for build, [A] for recommoneded, [C] for conflict."
     for i in ${args[@]}; do
          pybs --whatrequires $i $extra_args
     done
@@ -239,6 +258,11 @@ case "${1}" in
 
 -L|--list_installed)
     pybs --list_installed
+    ;;
+
+-V|--version)
+    pybs --version
+    exit 0
     ;;
 
 -h|--help|*)

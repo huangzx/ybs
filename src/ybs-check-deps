@@ -1,5 +1,5 @@
 #!/usr/bin/env python2
-# -*- coding: utf8 -*-
+# -*- coding: utf-8 -*-
 #
 # Copyright © 2013 ivali.com
 # Author: Zhongxin Huang <zhongxin.huang@gmail.com>
@@ -12,6 +12,8 @@ import argparse
 import subprocess
 
 IS_VERBOSE = False
+CHECK_ALL = False
+CHECK_INSTALLED_ONLY = False
 
 
 class CheckPbsfile(object):
@@ -31,9 +33,14 @@ class CheckPbsfile(object):
         self.pbslib_map = pbslib_map
 
     def check_depend(self):
-        ''' bound of multi-checking
+        ''' bundle of multi-checking
 
         '''
+        if CHECK_INSTALLED_ONLY:
+            if not ybsutils.is_installed(self.name):
+                return 
+        if IS_VERBOSE:
+            print('Found: {}'.format(self.pbsfile.path))
         self.check_run_depend()
         self.check_build_depend()
         self.check_recommended_depend()
@@ -90,23 +97,23 @@ class CheckPbsfile(object):
                     for ver in self.pbslib_map[dep_name]:
                         ret = ybsutils.compare_version(ver, depVersion)
                         if flag == '>=':
-                            if ret == 1 or ret == 0:
+                            if ret == '>' or ret == '=':
                                 result = 0
                                 break
                         if flag == '<=':
-                            if ret == -1 or ret == 0:
+                            if ret == '<' or ret == '=':
                                 result = 0
                                 break
                         if flag == '=':
-                            if ret == 0:
+                            if ret == '=':
                                 result = 0
                                 break
                         if flag == '>':
-                            if ret == 1:
+                            if ret == '>':
                                 result = 0
                                 break
                         if flag == '<':
-                            if ret == -1:
+                            if ret == '<':
                                 result = 0
                                 break
                     if result:
@@ -117,7 +124,6 @@ class CheckPbsfile(object):
 
 
 def main():
-    ybsutils.signal_int()
     argvs = sys.argv[1:]
     if not argvs:
         argvs = ['-h']
@@ -128,6 +134,10 @@ def main():
                         dest='V', help='show version and exit')
     parser.add_argument('-v', '--verbose', action='store_true',
                         dest='v', help='enable verbose mode')
+    parser.add_argument('-I', '--installed', action='store_true',
+                        dest='I', help='check installed package only')
+    parser.add_argument('-A', '--all', action='store_true',
+                        dest='A', help='check all pbsfile in directory, default is the latest version')
     parser.add_argument('path', nargs='*', help='path to pbsdir or pbsfile')
     args = parser.parse_args(argvs)
 
@@ -138,6 +148,14 @@ def main():
     if args.v:
         global IS_VERBOSE
         IS_VERBOSE = True
+    
+    if args.A:
+        global CHECK_ALL
+        CHECK_ALL = True
+    
+    if args.I:
+        global CHECK_INSTALLED_ONLY
+        CHECK_INSTALLED_ONLY = True
 
     print("Parsing pbslib from '{}'...".format(ybsutils.__pbslib_path__))
     pbslib_map = ybsutils.parse_pbslib(ybsutils.__pbslib_path__)
@@ -150,20 +168,21 @@ def main():
         for path in pathes:
             path = os.path.realpath(path)
             if os.path.isdir(path):
-                files = ybsutils.files_in_dir(path, 'pbs')
+                if CHECK_ALL:
+                    files = ybsutils.files_in_dir(path, 'pbs')
+                else:
+                    files = ybsutils.files_in_dir(path, 'pbs', 'version')
                 if not files:
                     sys.stderr.write("No pbsfile found in directory '{}'.\n".format(path))
                     continue
                 for file_ in files:
-                    if not ybsutils.is_pbsfile(file_):
+                    if not ybsutils.is_pbsfile_likes(file_):
                         sys.stderr.write("'{}' is a invalid pbsfile.\n".format(file_))
                         continue
-                    if IS_VERBOSE:
-                        print('Found: {}'.format(file_))
                     checkpbsfile = CheckPbsfile(file_, pbslib_map)
                     checkpbsfile.check_depend()
             elif os.path.isfile(path):
-                    if not ybsutils.is_pbsfile(path):
+                    if not ybsutils.is_pbsfile_likes(path):
                         sys.stderr.write("'{}' is a invalid pbsfile.\n".format(path))
                         continue
                     checkpbsfile = CheckPbsfile(path, pbslib_map)

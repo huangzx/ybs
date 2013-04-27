@@ -3,10 +3,7 @@
 #
 
 doinstall_catalog() {
-    local bin=$(which install-catalog)
-    if [ -x $bin ]; then
-        $bin --add $@
-    fi
+    install-catalog --add "$@" || return 1
 }
 
-doinstall_catalog $@
+doinstall_catalog "$@"

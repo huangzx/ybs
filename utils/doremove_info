@@ -5,13 +5,10 @@
 doremove_info () {
     local i infodir
     infodir='/usr/share/info'
-    [ -x /usr/bin/install-info ] || return 0
-
     echo "Remove info: $@"
-    for i in $@; do
-        install-info --delete "$infodir"/"$i" $infodir/dir 2>/dev/null
+    for i in "$@"; do
+        install-info --delete $infodir/"$i" $infodir/dir || return 1
     done
-    return 0
 }
 
-doremove_info $@
+doremove_info "$@"
