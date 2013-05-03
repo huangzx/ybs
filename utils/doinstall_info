@@ -4,9 +4,16 @@
 
 doinstall_info () {
     local i infodir="/usr/share/info"
-    echo "install info: $@"
+    echo "Install info: $@"
     for i in "$@"; do
-        install-info $infodir/"$i" $infodir/dir || return 1
+        if [ -f "$i" ]; then
+            install-info "$i" $infodir/dir || return 1
+        elif [ -f "$infodir/$i" ]; then
+            install-info "$infodir/$i" $infodir/dir || return 1
+        else
+            echo "$infodir/$i not found"
+            return 1
+        fi
     done
 }
 
