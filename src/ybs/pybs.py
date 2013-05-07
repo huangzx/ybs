@@ -7,25 +7,25 @@
 
 import os
 import sys
-from ybs import ybsutils
+import ybs.utils, ybs.settings
 import sqlite3
 import argparse
 import time
 import StringIO
 import multiprocessing
 
-
+VERSION = ybs.settings.__version__
 PROCESSES_NUM = 4
 SHOW_INSTALLED_ONLY = False
 SHOW_UNINSTALLED_ONLY = False
 INSTALL_FORCE = False
 IS_VERBOSE = False
 
-PBSLIB_PATH = ybsutils.__pbslib_path__
-DEPEND_DB = ybsutils.__depend_db__
-DEPEND_DB_TABLE = ybsutils.__depend_db_table__
-PACKAGE_DB = ybsutils.__package_db__
-PACKAGE_DB_TABLE = ybsutils.__package_db_table__
+PBSLIB_PATH = ybs.settings.__pbslib_path__
+DEPEND_DB = ybs.settings.__depend_db__
+DEPEND_DB_TABLE = ybs.settings.__depend_db_table__
+PACKAGE_DB = ybs.settings.__package_db__
+PACKAGE_DB_TABLE = ybs.settings.__package_db_table__
 
 
 def ybs_list_available(pbslib):
@@ -37,10 +37,10 @@ def ybs_list_available(pbslib):
     '''
     for key in pbslib:
         name, version = key, pbslib[key][-1]
-        installed_info = ybsutils.is_installed(name)
+        installed_info = ybs.utils.is_installed(name)
         if installed_info:
             version_installed = installed_info[1]
-            ret = ybsutils.compare_version(version_installed, version)
+            ret = ybs.utils.compare_version(version_installed, version)
             if ret == '<':
                 print('[U] {} {} -> {}'.format(name, version_installed, version))
             if ret == '>':
@@ -74,13 +74,13 @@ def ybs_status(name):
       result: tuple, looks like: (u'leafpad', u'0.8.18.1', u'', 1365583434)
 
     '''
-    result = ybsutils.is_installed(name)
+    result = ybs.utils.is_installed(name)
     if result is None:
         sys.stderr.write("'{}' not found. Be sure it is installed.\n".format(name))
         return ()
     else:
         name, version, repo, installed_time = result
-        print(' '.join((name, version, repo, ybsutils.what_time(installed_time))))
+        print(' '.join((name, version, repo, ybs.utils.what_time(installed_time))))
 
 
 def ybs_showpbs(name, pbslib):
@@ -99,7 +99,7 @@ def ybs_showpbs(name, pbslib):
         sys.stderr.write("'{}' not found in {}.\n".format(name, PBSLIB_PATH))
         sys.exit(1)
     else:
-        return ybsutils.file_in_dir(PBSLIB_PATH, name + '_' + pbslib[name][-1] + '.pbs')
+        return ybs.utils.file_in_dir(PBSLIB_PATH, name + '_' + pbslib[name][-1] + '.pbs')
 
 
 def ybs_search(name, pbslib):
@@ -129,7 +129,7 @@ def ybs_search(name, pbslib):
                 if not pkgname_lower.startswith(name):
                     continue
             version = pbslib[pkgname][-1]
-            installed_info = ybsutils.is_installed(pkgname)
+            installed_info = ybs.utils.is_installed(pkgname)
             if SHOW_INSTALLED_ONLY:
                 if not installed_info:
                     continue
@@ -141,16 +141,16 @@ def ybs_search(name, pbslib):
             installed_time = ''
             if installed_info:
                 installed_version = installed_info[1]
-                ret = ybsutils.compare_version(str(installed_version), str(version))
+                ret = ybs.utils.compare_version(str(installed_version), str(version))
                 if ret == '<':
                     flag = '[U]'
                 if ret == '>':
                     flag = '[D]'
                 if ret == '=':
                     flag = '[E]'
-                installed_time = ybsutils.what_time(installed_info[-1])
+                installed_time = ybs.utils.what_time(installed_info[-1])
             pbspath = ybs_showpbs(pkgname, pbslib)
-            pbsfile = ybsutils.PbsFile()
+            pbsfile = ybs.utils.PbsFile()
             pbsfile.parse(pbspath)
             category = pbspath.split('/')[4]
             print('''{} {}/{}
@@ -180,10 +180,10 @@ def ybs_whatrequires(name, dbtable=DEPEND_DB_TABLE, dbfile=DEPEND_DB):
     for pkg in cur.fetchall():
         pkg_name, pkg_version = pkg
         if SHOW_INSTALLED_ONLY:
-            if not ybsutils.is_installed(pkg_name):
+            if not ybs.utils.is_installed(pkg_name):
                 continue
         if SHOW_UNINSTALLED_ONLY:
-            if ybsutils.is_installed(pkg_name):
+            if ybs.utils.is_installed(pkg_name):
                 continue
         for type_ in ('rdep', '[R]'), ('bdep', '[B]'), ('redep', '[A]'), ('cdep', '[C]'):
             type_, flag = type_
@@ -192,7 +192,7 @@ def ybs_whatrequires(name, dbtable=DEPEND_DB_TABLE, dbfile=DEPEND_DB):
             # (u'gtk2(>=1.27) menu-cache startup-notification',)
             deps = [x.split('(')[0] for x in cur.fetchone()[0].split()]
             if name in deps:
-                #if ybsutils.is_installed(pkg_name):
+                #if ybs.utils.is_installed(pkg_name):
                 #    flag = flag + '[I]'
                 print('{} {} {}'.format(flag, pkg_name, pkg_version))
     cur.close()
@@ -218,7 +218,7 @@ def get_deps_from_file(infile):
       infile: string, path to pbsfile
 
     '''
-    pbsfile = ybsutils.PbsFile()
+    pbsfile = ybs.utils.PbsFile()
     pbsfile.parse(infile)
     name, version = pbsfile.name, pbsfile.version
     rdep = ' '.join(pbsfile.get('RDEPEND'))
@@ -273,7 +273,7 @@ def ybs_init_db(dbfile=DEPEND_DB, dbtable=DEPEND_DB_TABLE, processes_num=PROCESS
     conn.execute("CREATE TABLE IF NOT EXISTS {} (name TEXT, version TEXT, rdep TEXT, bdep TEXT, redep TEXT, cdep TEXT);".format(dbtable))
 
     pool = multiprocessing.Pool(processes_num)
-    files = ybsutils.files_in_dir(PBSLIB_PATH, '.pbs', filte='version')
+    files = ybs.utils.files_in_dir(PBSLIB_PATH, '.pbs', filte='version')
     result = pool.map(get_deps_from_file, files)
     pool.close()
     pool.join()
@@ -302,12 +302,12 @@ def ybs_compare_version(s1, s2):
       s2: string, verison
 
     '''
-    g = ybsutils.GetNameVersion()
+    g = ybs.utils.GetNameVersion()
     g.parse(s1)
     v1 = g.version
     g.parse(s2)
     v2 = g.version
-    return (ybsutils.compare_version(v1, v2))
+    return (ybs.utils.compare_version(v1, v2))
 
 
 def get_deps_from_db_deep(pkg, dep_type, dbfile=DEPEND_DB, dbtable=DEPEND_DB_TABLE):
@@ -384,10 +384,10 @@ def ybs_pretend(pkg, pbslib):
 
     for bdep in bdeps:
         version = pbslib[bdep][-1]
-        installed_info = ybsutils.is_installed(bdep)
+        installed_info = ybs.utils.is_installed(bdep)
         if installed_info:
             installed_version = installed_info[1]
-            ret = ybsutils.compare_version(version, installed_version)
+            ret = ybs.utils.compare_version(installed_version, version)
             if ret == '=':
                 if IS_VERBOSE or INSTALL_FORCE:
                     print('[{}] {} {}'.format('E'+flag, bdep, version))
@@ -448,7 +448,7 @@ def main():
         IS_VERBOSE = True
 
     if args.V:
-        print(ybsutils.__version__)
+        print(VERSION)
         sys.exit()
 
     if args.F:
@@ -467,7 +467,7 @@ def main():
         ybs_update_db()
 
     if args.l:
-        pbslib_map = ybsutils.parse_pbslib(PBSLIB_PATH)
+        pbslib_map = ybs.utils.parse_pbslib(PBSLIB_PATH)
         ybs_list_available(pbslib_map)
 
     if args.L:
@@ -478,17 +478,17 @@ def main():
         print(ybs_compare_version(x, y))
 
     if args.w:
-        pbslib_map = ybsutils.parse_pbslib(PBSLIB_PATH)
+        pbslib_map = ybs.utils.parse_pbslib(PBSLIB_PATH)
         for pkg in args.w:
             print(ybs_showpbs(pkg, pbslib_map))
 
     if args.s:
-        pbslib_map = ybsutils.parse_pbslib(PBSLIB_PATH)
+        pbslib_map = ybs.utils.parse_pbslib(PBSLIB_PATH)
         for pkg in args.s:
             ybs_search(pkg, pbslib_map)
 
     if args.p:
-        pbslib_map = ybsutils.parse_pbslib(PBSLIB_PATH)
+        pbslib_map = ybs.utils.parse_pbslib(PBSLIB_PATH)
         for pkg in args.p:
             ybs_pretend(pkg, pbslib_map)
 

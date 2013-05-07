@@ -7,8 +7,10 @@
 
 import sys
 import os
-from ybs import ybsutils
+import ybs.settings, ybs.utils
 import argparse
+
+VERSION = ybs.settings.__version__
 
 
 def get_info(indir):
@@ -50,7 +52,7 @@ def get_info(indir):
                 print(('D,{},{},{},{},{},{}'.format(name, size, mode, uid, gid, mtime)))
                 dcount += 1
             else:
-                md5sum = ybsutils.get_md5sum(x)
+                md5sum = ybs.utils.get_md5sum(x)
                 print(('F,{},{},{},{},{},{},{}'.format(name, size, mode, uid, gid, mtime, md5sum)))
                 fcount += 1
                 file_size_count += size
@@ -71,7 +73,7 @@ def main():
     args = parser.parse_args(argvs)
 
     if args.v:
-        print(ybsutils.__version__)
+        print(VERSION)
         sys.exit()
 
     if args.dir:

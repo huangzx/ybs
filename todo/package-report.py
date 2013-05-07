@@ -17,7 +17,7 @@ import os
 import sys
 import sqlite3
 import time
-import ybsutils
+import ybs.utils
 
 YPKDEST = '/var/ybs/packages/testing'
 YPK_DB = '/tmp/package.db'
@@ -30,7 +30,7 @@ class PackageReport(object):
     '''
     def __init__(self, ypkdir, dbfile):
         ''' '''
-        self.ypks_in_dir = ybsutils.files_in_dir(ypkdir, '.ypk', 'version')
+        self.ypks_in_dir = ybs.utils.files_in_dir(ypkdir, '.ypk', 'version')
         if not self.ypks_in_dir:
             print ":( No ypk package found in '{}'".format(ypkdir)
             sys.exit(1)

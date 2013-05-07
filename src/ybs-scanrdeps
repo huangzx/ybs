@@ -10,11 +10,12 @@ import sys
 import sqlite3
 import argparse
 import subprocess
-from ybs import ybsutils
+import ybs.utils, ybs.settings
 import time
 
 IS_VERBOSE = False
 SHOW_TIME = False
+VERSION = ybs.settings.__version__
 
 
 class ScanRdep(object):
@@ -62,7 +63,7 @@ class ScanRdep(object):
 
         '''
         if SHOW_TIME:
-            print("{} Step1 'ypkg -l'".format(ybsutils.what_time()))
+            print("{} Step1 'ypkg -l'".format(ybs.utils.what_time()))
 
         def _is_skip(line):
             skips = ('/usr/include/', '/usr/share/info',
@@ -103,7 +104,7 @@ class ScanRdep(object):
 
         '''
         if SHOW_TIME:
-            print("{} Step2 'file -b'".format(ybsutils.what_time()))
+            print("{} Step2 'file -b'".format(ybs.utils.what_time()))
         
         binfiles = []
         perls = []
@@ -154,7 +155,7 @@ class ScanRdep(object):
 
         '''
         if SHOW_TIME:
-            print("{} Step3 'ldd'".format(ybsutils.what_time()))
+            print("{} Step3 'ldd'".format(ybs.utils.what_time()))
         
         libfiles = []
         not_found = []
@@ -189,7 +190,7 @@ class ScanRdep(object):
 
         '''
         if SHOW_TIME:
-            print("{} Step4 'ypkg -S'".format(ybsutils.what_time()))
+            print("{} Step4 'ypkg -S'".format(ybs.utils.what_time()))
         
         rdeps = []
         not_owned = []
@@ -233,10 +234,10 @@ class ScanRdep(object):
 
         '''
         if SHOW_TIME:
-            print("{} Step5 filter".format(ybsutils.what_time()))
+            print("{} Step5 filter".format(ybs.utils.what_time()))
         
         pkgs = self.rdeps
-        conn = sqlite3.connect(ybsutils.__depend_db__)
+        conn = sqlite3.connect(ybs.settings.__depend_db__)
         cur = conn.cursor()
         # Note:
         # pkgs is to changed in loop
@@ -278,7 +279,7 @@ def main():
     args = parser.parse_args(argvs)
 
     if args.V:
-        print(ybsutils.__version__)
+        print(VERSION)
         sys.exit()
 
     if args.v:

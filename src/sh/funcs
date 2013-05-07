@@ -66,7 +66,7 @@ WGET_OPTIONS="${WGET_OPTIONS:=--tries=3 --retry-connrefused --wait=2}"
 CURL_OPTIONS="${CURL_OPTIONS:=-L}"
 
 # Source uri
-SOURCE_URI="${SOURCE_URI:=http://pkg.startos.org/sources}"
+SOURCE_URI="${SOURCE_URI:=http://pkg-sources.startos.org/sources}"
 
 # Install ypk after building
 AUTO_INSTALL="${AUTO_INSTALL:=no}"
@@ -923,7 +923,13 @@ ybs_pre_mkpkg() {
     [ "$upx" = "yes" ] && ybs_upx_bin "dir"
 
     # Compress man doc info
-    ybs_gzip_extra "$dir"
+    local gzip
+    gzip="yes"
+    str_isin "$FEATURES" "gzip" && gzip="yes"
+    str_isin "$FEATURES" "nogzip" && gzip="no"
+    str_isin "$OPTIONS" "gzip"  && gzip="yes"
+    str_isin "$OPTIONS" "nogzip"  && gzip="no"
+    [ "$gzip" = "yes" ] && ybs_gzip_extra "$dir"
 
     return 0
 }
@@ -1628,9 +1634,10 @@ ybs_build_raw() {
     ybs_pre_mkpkg "$PKGDIR"
     
     #
+    repo="${REPO:=stable}"
     subdir="$(echo $N |cut -b1 |tr '[A-Z]' '[a-z]')" 
     # /var/ybs/packages/testing/y/ypkg2/ypkg2_20130301-x86_64.ypk
-    target="$YPK_DEST/$subdir/$N/${N}_$V$R-$YARCH.$PACK_SUFFIX"
+    target="$YPK_DEST/$repo/$subdir/$N/${N}_$V$R-$YARCH.$PACK_SUFFIX"
     ybs_mkpkg "$PKGDIR" "$target"
     err_check "$T/${N}_$V$R make binary package failed"
     

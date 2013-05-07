@@ -9,11 +9,12 @@ import sys
 import os
 import shutil
 import xml.etree.ElementTree as ET
-from ybs import ybsutils
+import ybs.utils, ybs.settings
 import argparse
 
 IS_VERBOSE = False
 YES_TO_ALL = False
+VERSION = ybs.settings.__version__
 
 
 def find_ypk(indir, arch):
@@ -27,13 +28,13 @@ def find_ypk(indir, arch):
       list, contains ypkfile with newest version items
 
     '''
-    ypks_raw = ybsutils.files_in_dir(indir, '.ypk')
+    ypks_raw = ybs.utils.files_in_dir(indir, '.ypk')
     ypks_raw.sort()
     if not ypks_raw:
         sys.stdout.write("No ypkfile found in '{}'.\n".format(indir))
         sys.exit(1)
 
-    ypks_arch = ybsutils.files_in_dir(indir, arch + '.ypk', filte='version')
+    ypks_arch = ybs.utils.files_in_dir(indir, arch + '.ypk', filte='version')
     if not ypks_arch:
         sys.stdout.write("No '{}' ypkfile found in '{}'.\n".format(arch, indir))
         sys.exit(1)
@@ -68,7 +69,7 @@ def find_ypk(indir, arch):
         for line in filelist_new:
             f.write(line.replace(indir + '/', '') + '\n')
 
-    ypks_any = ybsutils.files_in_dir(indir, 'any' + '.ypk', filte='version')
+    ypks_any = ybs.utils.files_in_dir(indir, 'any' + '.ypk', filte='version')
     ypks_all = ypks_arch + ypks_any
     return ypks_all
 
@@ -131,7 +132,7 @@ def merge_info(indir, indexdir, inlist, repo='stable'):
             #root.find('Package/size').text = fsize
         # sha1sum
         if root.find('Package/sha') is None:
-            sha1sum = ybsutils.get_sha1sum(ypk)
+            sha1sum = ybs.utils.get_sha1sum(ypk)
             element = ET.Element('sha', {})
             element.text = sha1sum
             root.find('Package').append(element)
@@ -161,7 +162,7 @@ def merge_info(indir, indexdir, inlist, repo='stable'):
         cmd = 'tar cJf' + ' ' + update_file + ' ' + 'update.xml'
         os.system(cmd)
         os.rename('update.xml', update_file.replace('tar.xz', 'xml'))
-        sha1sum = ybsutils.get_sha1sum(update_file)
+        sha1sum = ybs.utils.get_sha1sum(update_file)
         update_list.write(update_file + ' ' + str(int(os.path.getmtime(update_file))) + ' ' + sha1sum + '\n')
     print('Generation complete!')
 
@@ -177,7 +178,7 @@ def get_repo(indir):
 
     '''
     result = []
-    file_ = os.path.join(indir, 'repos.txt')
+    file_ = os.path.join(indir, 'repo.txt')
     if os.path.isfile(file_):
         with open(file_, 'r') as f:
             for line in f:
@@ -207,13 +208,13 @@ def main():
     parser.add_argument('-y', '--yes', action='store_true',
                         dest='y', help='assume yes to all queries')
     parser.add_argument('-a', '--arch', nargs=1,
-                        metavar='arch', default=[ybsutils.__arch__],
+                        metavar='arch', default=[ybs.settings.__arch__],
                         dest='a', help='specify arch, available: i686, x86_64')
     parser.add_argument('ypkdir', nargs='*', help="path to ypkdir")
     args = parser.parse_args(argvs)
 
     if args.V:
-        print(ybsutils.__version__)
+        print(VERSION)
         sys.exit()
 
     if args.v:

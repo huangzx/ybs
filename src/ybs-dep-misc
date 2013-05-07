@@ -7,16 +7,18 @@
 import os
 import sys
 import sqlite3
-from ybs import ybsutils, pybs
+import ybs.pybs
 import argparse
+
+VERSION = ybs.settings.__version__
 
 
 class DepMisc(object):
     ''' ybs dependency tools miscellaneous
 
     '''
-    def __init__(self, dbfile=ybsutils.__depend_db__,
-                 dbtable=ybsutils.__depend_db_table__, dep_type='rdep'):
+    def __init__(self, dbfile=ybs.settings.__depend_db__,
+                 dbtable=ybs.settings.__depend_db_table__, dep_type='rdep'):
         ''' initial, connect to the database
 
         Args:
@@ -41,14 +43,14 @@ class DepMisc(object):
         ''' ranking by number of dependency required
 
         '''
-        def _get_deps_from_db():
+        def get_all_deps_from_db():
             self.cur.execute("SELECT {} FROM {}".format(self.dep_type, self.dbtable))
             result = self.cur.fetchall()
             for res in result:
                 yield [x.split('(')[0] for x in res[0].split()]
 
         dep_dict = {}
-        for each_dep in _get_deps_from_db():
+        for each_dep in get_all_deps_from_db():
             for dep in each_dep:
                 if dep in dep_dict:
                     dep_dict[dep] += 1
@@ -57,23 +59,7 @@ class DepMisc(object):
 
         for v, k in sorted([(value, key) for (key, value) in dep_dict.items()]):
             print(v, str(k))
-
-    def _get_dep_from_db(self, pkg):
-        ''' get dependency from database
-
-        Args:
-          pkg: string, pkgname
-
-        Returns:
-          results: list, contains strings of dependency
-
-        '''
-        self.cur.execute("SELECT {} FROM {} WHERE name = '{}'".format(self.dep_type, self.dbtable, pkg))
-        results = self.cur.fetchone()
-        if results:
-            results = [x.split('(')[0] for x in results[0].split()]
-        return results
-
+    
     def _write_dot_file(self, dot_file, lines, name):
         ''' write dot file
 
@@ -90,19 +76,19 @@ class DepMisc(object):
             file_.write('}')
         print('Dot file is {}\nFor converting to SVG picture, Run: dot -Tsvg {} -o {}.svg'.format(dot_file, dot_file, name))
 
-    def _get_lines(self, inter):
+    def _get_lines(self, deps):
         ''' get specified lines for dot file
 
         Args:
-          inter: interator
+          deps: interator
 
         Returns:
           string: yiled generator
 
         '''
-        for i in inter:
-            ret = ' '.join(['"' + x + '"' for x in self._get_dep_from_db(i)])
-            yield '{{ {} }} -> "{}"'.format(ret, i)
+        for i in deps:
+            tmp = ' '.join(['"' + x + '"' for x in ybs.pybs.get_deps_from_db(i, self.dep_type)])
+            yield '{{ {} }} -> "{}"'.format(tmp, i)
 
     def dep_graph(self, pkg):
         ''' dependency graph of pkg, dot file
@@ -112,7 +98,7 @@ class DepMisc(object):
 
         '''
         dot_file = os.path.join('/tmp', pkg + '.dot')
-        self._write_dot_file(dot_file, self._get_lines(pybs.get_deps_from_db(pkg, self.dep_type, self.dbfile, self.dbtable)), pkg)
+        self._write_dot_file(dot_file, self._get_lines(ybs.pybs.get_deps_from_db_deep(pkg, self.dep_type, self.dbfile, self.dbtable)), pkg)
 
     def dep_graph_universe(self):
         ''' dependency graph of database universe table, dot file
@@ -149,7 +135,7 @@ def main():
     args = parser.parse_args(argvs)
 
     if args.v:
-        print(ybsutils.__version__)
+        print(VERSION)
         sys.exit()
 
     depmisc = DepMisc(dep_type='rdep')

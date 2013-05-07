@@ -7,13 +7,14 @@
 
 import sys
 import os
-from ybs import ybsutils, pybs
+import ybs.utils, ybs.settings, ybs.pybs
 import argparse
 import multiprocessing
 
 IS_VERBOSE = False
 PBSLIB_MAP = {}
 PROCESSES_NUM = 4
+VERSION = ybs.settings.__version__
 
 
 def is_match_arch(ypk):
@@ -22,14 +23,14 @@ def is_match_arch(ypk):
       ypk: string, path to ypkfile
 
     '''
-    g = ybsutils.GetNameVersion()
-    pbsfile = ybsutils.PbsFile()
+    g = ybs.utils.GetNameVersion()
+    pbsfile = ybs.utils.PbsFile()
     if IS_VERBOSE:
         print('Found: {}'.format(ypk))
     g.parse(ypk)
     ypk_name = g.name
     ypk_arch = g.arch
-    pbsfile.parse(pybs.ybs_showpbs(ypk_name, PBSLIB_MAP))
+    pbsfile.parse(ybs.pybs.ybs_showpbs(ypk_name, PBSLIB_MAP))
     pbs_arch = ' '.join(pbsfile.get('YARCH'))
     if ypk_arch == 'any':
         if pbs_arch != 'any':
@@ -55,7 +56,7 @@ class CheckConflict(object):
         ''' ypkfiles contains common files
 
         '''
-        filelists = ybsutils.files_in_dir(self.indir, '.filelist', filte='version')
+        filelists = ybs.utils.files_in_dir(self.indir, '.filelist', filte='version')
         if not filelists:
             sys.stderr.write("filelist not found in '{}', run 'ypk-scanpackages {}' then retry.\n".format(self.indir, self.indir))
             sys.exit(1)
@@ -64,7 +65,7 @@ class CheckConflict(object):
         for filelist in filelists:
             if IS_VERBOSE:
                 print('Found: {}'.format(filelist))
-            g = ybsutils.GetNameVersion()
+            g = ybs.utils.GetNameVersion()
             g.parse(filelist)
             name, version = g.name, g.version
             record = []
@@ -93,7 +94,7 @@ class CheckConflict(object):
           mysql_5.5.29-i686.ypk, mysql_5.5.29-any.ypk
 
         '''
-        ypks = ybsutils.files_in_dir(self.indir, '.ypk')
+        ypks = ybs.utils.files_in_dir(self.indir, '.ypk')
         if not ypks:
             sys.stderr.write("ypkfile not found in '{}'.\n".format(self.indir))
             sys.exit(1)
@@ -116,7 +117,7 @@ def main():
     args = parser.parse_args(argvs)
 
     if args.V:
-        print(ybsutils.__version__)
+        print(VERSION)
         sys.exit()
 
     if args.v:
@@ -125,7 +126,7 @@ def main():
 
     if args.ypkdir:
         global PBSLIB_MAP
-        PBSLIB_MAP = ybsutils.parse_pbslib(ybsutils.__pbslib_path__)
+        PBSLIB_MAP = ybs.utils.parse_pbslib(ybs.settings.__pbslib_path__)
         dirs = args.ypkdir
 
         print("Checking for conflict ypkfiles in '{}'".format(' '.join(dirs)))

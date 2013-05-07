@@ -12,13 +12,7 @@ import subprocess
 from distutils.version import LooseVersion
 import time
 from hashlib import sha1, md5
-
-__version__ = '2.0'
-__package_db__ = '/var/ypkg/db/package.db'
-__package_db_table__ = 'world'
-__depend_db__ = '/var/ybs/db/depend.db'
-__depend_db_table__ = 'universe'
-__ybs_conf__ = '/etc/ybs.conf'
+from . import settings
 
 
 def what_time(value=None):
@@ -41,10 +35,10 @@ def get_checksum(infile, tool):
       string of checksum value
 
     To use:
-      >>>from ybs import ybsutils
-      >>>ybsutils.get_checksum('/tmp/test','sha1')
+      >>>import ybs.utils
+      >>>ybs.utils.get_checksum('/tmp/test','sha1')
       'da39a3ee5e6b4b0d3255bfef95601890afd80709'
-      >>>ybsutils.get_checksum('/tmp/test','md5')
+      >>>ybs.utils.get_checksum('/tmp/test','md5')
       'd41d8cd98f00b204e9800998ecf8427e'
     '''
     try:
@@ -71,8 +65,8 @@ def get_sha1sum(infile):
       string of sha1sum value
 
     To use:
-      >>>from ybs import ybsutils
-      >>>ybsutils.get_sha1sum('/tmp/test')
+      >>>import ybs.utils
+      >>>ybs.utils.get_sha1sum('/tmp/test')
       'da39a3ee5e6b4b0d3255bfef95601890afd80709'
     
     '''
@@ -89,8 +83,8 @@ def get_md5sum(infile):
       string of md5sum value
 
     To use:
-      >>>from ybs import ybsutils
-      >>>ybsutils.get_md5sum('/tmp/test')
+      >>>import ybs.utils
+      >>>ybs.utils.get_md5sum('/tmp/test')
       'd41d8cd98f00b204e9800998ecf8427e'
     
     '''
@@ -123,7 +117,7 @@ def is_pbsfile_likes(infile):
     return True
 
 
-def is_installed(name, dbfile=__package_db__, dbtable=__package_db_table__):
+def is_installed(name, dbfile=settings.__package_db__, dbtable=settings.__package_db_table__):
     ''' show information of installed package from dbfile
 
     Args:
@@ -168,12 +162,12 @@ def compare_version(v1, v2):
       v1 is greater then v2, return '>'
 
     To use:
-      >>>from ybs import ybsutils
-      >>>ybsutils.compare_version('2.0', '3.0')
+      >>>import ybs.utils
+      >>>ybs.utils.compare_version('2.0', '3.0')
       '<'
-      >>>ybsutils.compare_version('2.0', '1.0')
+      >>>ybs.utils.compare_version('2.0', '1.0')
       '>'
-      >>>ybsutils.compare_version('2.0', '2.0')
+      >>>ybs.utils.compare_version('2.0', '2.0')
       '='
 
     '''
@@ -264,8 +258,8 @@ class GetNameVersion(object):
         infile: string, path to file
 
     To use:
-      >>>from ybs import ybsutils
-      >>>foo = ybsutils.GetNameVersion()
+      >>>import ybs.utils
+      >>>foo = ybs.utils.GetNameVersion()
       >>>foo.parse('my_sql_5.5.29-1-rc1-x86_64.ypk')
       >>>foo.infile
       'my_sql_5.5.29-1-rc1-x86_64.ypk'
@@ -331,8 +325,8 @@ def files_in_dir(indir, suffix, filte=None):
       A list of absolute path to files
 
     To use:
-      >>>from ybs import ybsutils
-      >>>ybsutils.files_in_dir('/tmp/test', '.ypk')
+      >>>import ybs.utils
+      >>>ybs.utils.files_in_dir('/tmp/test', '.ypk')
       ['/tmp/test/HTML-Parser_3.69-x86_64.ypk', '/tmp/test/HTTP-Cookies_6.01-any.ypk']
 
     '''
@@ -369,8 +363,8 @@ def file_in_dir(indir, filename):
       list of abspath to files
 
     To use:
-      >>>from ybs import ybsutils
-      >>>ybsutils.file_in_dir('/tmp/test, 'HTML-Parser_3.69-x86_64.ypk')
+      >>>import ybs.utils
+      >>>ybs.utils.file_in_dir('/tmp/test, 'HTML-Parser_3.69-x86_64.ypk')
       ['/var/ybs/packages/h/HTML-Parser/HTML-Parser_3.69-x86_64.ypk']
 
     '''
@@ -390,8 +384,8 @@ def parse_pbslib(indir, suffix='.pbs'):
       dict mapping, keys are package names, value are versions
 
     To use:
-      >>>from ybs import ybsutils
-      >>>ybsutils.parse_pbslib('/var/ybs/pbslib')
+      >>>import ybs.utils
+      >>>ybs.utils.parse_pbslib('/var/ybs/pbslib')
       {'gtk-vnc': ['0.5.1-rc1','0.5.1','0.5.2'], 'epdfview': ['0.1.7']}
 
     '''
@@ -421,8 +415,8 @@ def minimum_version(inlist):
       string of mininum version
 
     To use:
-      >>>from ybs import ybsutils
-      >>>ybsutils.minimum_version(['1', '3', '2', '1-rc1'])
+      >>>import ybs.utils
+      >>>ybs.utils.minimum_version(['1', '3', '2', '1-rc1'])
       '1-rc1'
 
     '''
@@ -444,8 +438,8 @@ def sorted_version(inlist):
       list of sorted version
 
     To use:
-      >>>from ybs import ybsutils
-      >>>ybsutils.sorted_version(['1', '1-rc1', '1-r1'])
+      >>>import ybs.utils
+      >>>ybs.utils.sorted_version(['1', '1-rc1', '1-r1'])
       ['1-rc1', '1', '1-r1']
 
     '''
@@ -477,8 +471,8 @@ class PbsFile(object):
       get: get value of pbsfile
 
     To Use:
-      >>>from ybs import ybsutils
-      >>>pbsfile = ybsutils.PbsFile()
+      >>>import ybs.utils
+      >>>pbsfile = ybs.utils.PbsFile()
       >>>pbsfile.parse('/var/ybs/pbslib/sys-apps/ypkg2/ypkg2_20130217-rc1.pbs')
       >>>pbsfile.path
       '/var/ybs/pbslib/sys-apps/ypkg2/ypkg2_20130217.pbs'
@@ -525,50 +519,3 @@ class PbsFile(object):
             (key, _, value) = line.partition("=")
             if item == key:
                 return value.split()
-
-
-class YbsConf(object):
-    ''' ybs config class
-
-    Attributes:
-      path: string, path to ybs config file
-
-    Methods:
-      parse: parse ybs config file
-      get: get value of ybs config file
-
-    To Use:
-      >>>from ybs import ybsutils
-      >>>ybsconf = ybsutils.YbsConf()
-      >>>ybsconf.parse('/etc/ybs.conf')
-      >>>ybsconf.path
-      '/etc/ybs.conf'
-      >>>ybsconf.get('ARCH')
-      'x86_64'
-
-    '''
-    def __init__(self):
-        pass
-
-    def parse(self, infile=__ybs_conf__):
-        self.path = infile
-
-    def get(self, item):
-        with open(self.path, 'r') as f:
-            for line in f.readlines():
-                line = line.strip()
-                if not line or line.startswith('#'):
-                    continue
-                if '#' in line:
-                    line = line[0:line.index('#')]
-                (key, _, value) = line.partition("=")
-                if item == key:
-                    return value.strip('"')
-            return None
-
-
-ybsconf = YbsConf()
-ybsconf.parse(__ybs_conf__)
-
-__pbslib_path__ = ybsconf.get('PBSLIB_PATH')
-__arch__ = ybsconf.get('ARCH')

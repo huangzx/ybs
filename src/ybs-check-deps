@@ -7,13 +7,14 @@
 
 import sys
 import os
-from ybs import ybsutils
+import ybs.utils, ybs.settings
 import argparse
 import subprocess
 
 IS_VERBOSE = False
 CHECK_ALL = False
 CHECK_INSTALLED_ONLY = False
+VERSION = ybs.settings.__version__
 
 
 class CheckPbsfile(object):
@@ -27,7 +28,7 @@ class CheckPbsfile(object):
           pbslib_map: dict, map of pbslib
 
         '''
-        self.pbsfile = ybsutils.PbsFile()
+        self.pbsfile = ybs.utils.PbsFile()
         self.pbsfile.parse(infile)
         self.name, self.version = self.pbsfile.name, self.pbsfile.version
         self.pbslib_map = pbslib_map
@@ -37,7 +38,7 @@ class CheckPbsfile(object):
 
         '''
         if CHECK_INSTALLED_ONLY:
-            if not ybsutils.is_installed(self.name):
+            if not ybs.utils.is_installed(self.name):
                 return 
         if IS_VERBOSE:
             print('Found: {}'.format(self.pbsfile.path))
@@ -95,7 +96,7 @@ class CheckPbsfile(object):
                 else:
                     result = 1
                     for ver in self.pbslib_map[dep_name]:
-                        ret = ybsutils.compare_version(ver, depVersion)
+                        ret = ybs.utils.compare_version(ver, depVersion)
                         if flag == '>=':
                             if ret == '>' or ret == '=':
                                 result = 0
@@ -142,7 +143,7 @@ def main():
     args = parser.parse_args(argvs)
 
     if args.V:
-        print(ybsutils.__version__)
+        print(VERSION)
         sys.exit()
 
     if args.v:
@@ -157,8 +158,8 @@ def main():
         global CHECK_INSTALLED_ONLY
         CHECK_INSTALLED_ONLY = True
 
-    print("Parsing pbslib from '{}'...".format(ybsutils.__pbslib_path__))
-    pbslib_map = ybsutils.parse_pbslib(ybsutils.__pbslib_path__)
+    print("Parsing pbslib from '{}'...".format(ybs.settings.__pbslib_path__))
+    pbslib_map = ybs.utils.parse_pbslib(ybs.settings.__pbslib_path__)
 
     print('Checking for missing and circular dependencies...')
     print("'[R]' stands for run-time, '[B]' for build-time, '[A]' for recommended.\n")
@@ -169,20 +170,20 @@ def main():
             path = os.path.realpath(path)
             if os.path.isdir(path):
                 if CHECK_ALL:
-                    files = ybsutils.files_in_dir(path, 'pbs')
+                    files = ybs.utils.files_in_dir(path, 'pbs')
                 else:
-                    files = ybsutils.files_in_dir(path, 'pbs', 'version')
+                    files = ybs.utils.files_in_dir(path, 'pbs', 'version')
                 if not files:
                     sys.stderr.write("No pbsfile found in directory '{}'.\n".format(path))
                     continue
                 for file_ in files:
-                    if not ybsutils.is_pbsfile_likes(file_):
+                    if not ybs.utils.is_pbsfile_likes(file_):
                         sys.stderr.write("'{}' is a invalid pbsfile.\n".format(file_))
                         continue
                     checkpbsfile = CheckPbsfile(file_, pbslib_map)
                     checkpbsfile.check_depend()
             elif os.path.isfile(path):
-                    if not ybsutils.is_pbsfile_likes(path):
+                    if not ybs.utils.is_pbsfile_likes(path):
                         sys.stderr.write("'{}' is a invalid pbsfile.\n".format(path))
                         continue
                     checkpbsfile = CheckPbsfile(path, pbslib_map)

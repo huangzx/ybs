@@ -5,7 +5,7 @@
 # Author: Zhongxin Huang <zhongxin.huang@gmail.com>
 #
 
-from ybs import pybs
+import ybs.pybs
 
 if __name__ == '__main__':
-    pybs.main()
+    ybs.pybs.main()
