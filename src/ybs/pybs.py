@@ -56,11 +56,13 @@ def ybs_list_installed(dbtable=PACKAGE_DB_TABLE, dbfile=PACKAGE_DB):
 
     Args:
       dbfile: sqlite3 database created by ypkg
+    
+    Returns:
+      A dict: {pkg_name: pkg_version, ...}
 
     '''
     conn = sqlite3.connect(dbfile)
-    for res in conn.execute("SELECT name, version FROM {}".format(dbtable)):
-        print(' '.join(res))
+    return {res[0]: res[1] for res in conn.execute("SELECT name, version FROM {}".format(dbtable))}
     conn.close()
 
 
@@ -218,14 +220,17 @@ def get_deps_from_file(infile):
       infile: string, path to pbsfile
 
     '''
-    pbsfile = ybs.utils.PbsFile()
-    pbsfile.parse(infile)
-    name, version = pbsfile.name, pbsfile.version
-    rdep = ' '.join(pbsfile.get('RDEPEND'))
-    bdep = ' '.join(pbsfile.get('BDEPEND'))
-    redep = ' '.join(pbsfile.get('RECOMMENDED'))
-    cdep = ' '.join(pbsfile.get('CONFLICT'))
-    return (name, version, rdep, bdep, redep, cdep)
+    try:
+        pbsfile = ybs.utils.PbsFile()
+        pbsfile.parse(infile)
+        name, version = pbsfile.name, pbsfile.version
+        rdep = ' '.join(pbsfile.get('RDEPEND'))
+        bdep = ' '.join(pbsfile.get('BDEPEND'))
+        redep = ' '.join(pbsfile.get('RECOMMENDED'))
+        cdep = ' '.join(pbsfile.get('CONFLICT'))
+        return (name, version, rdep, bdep, redep, cdep)
+    except KeyboardInterrupt:
+        raise KeyboardInterruptError()
 
 
 def get_deps_from_db(pkg, dep_type, dbfile=DEPEND_DB, dbtable=DEPEND_DB_TABLE):
@@ -272,11 +277,16 @@ def ybs_init_db(dbfile=DEPEND_DB, dbtable=DEPEND_DB_TABLE, processes_num=PROCESS
     conn = sqlite3.connect(':memory:')
     conn.execute("CREATE TABLE IF NOT EXISTS {} (name TEXT, version TEXT, rdep TEXT, bdep TEXT, redep TEXT, cdep TEXT);".format(dbtable))
 
-    pool = multiprocessing.Pool(processes_num)
     files = ybs.utils.files_in_dir(PBSLIB_PATH, '.pbs', filte='version')
-    result = pool.map(get_deps_from_file, files)
-    pool.close()
-    pool.join()
+    pool = multiprocessing.Pool(processes_num)
+    try:
+        result = pool.map(get_deps_from_file, files)
+        pool.close()
+    except KeyboardInterrupt:
+        print 'Got ^C while pool mapping, terminate the pool'
+        pool.terminate()
+    finally:
+        pool.join()
     if len(result) != len(files):
         sys.stderr.write('Missing datas: found {}, handled {}\n'.format(len(files), len(result)))
         sys.exit(1)
@@ -302,11 +312,11 @@ def ybs_compare_version(s1, s2):
       s2: string, verison
 
     '''
-    g = ybs.utils.GetNameVersion()
-    g.parse(s1)
-    v1 = g.version
-    g.parse(s2)
-    v2 = g.version
+    get = ybs.utils.GetNameVersion()
+    get.parse(s1)
+    v1 = get.version
+    get.parse(s2)
+    v2 = get.version
     return (ybs.utils.compare_version(v1, v2))
 
 
@@ -471,7 +481,8 @@ def main():
         ybs_list_available(pbslib_map)
 
     if args.L:
-        ybs_list_installed()
+        for k, v in ybs_list_installed().viewitems():
+            print('{} {}'.format(k, v))
 
     if args.cv:
         x, y = args.cv

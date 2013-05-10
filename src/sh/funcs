@@ -770,6 +770,7 @@ ybs_mkpkg() {
         gname="genericname type=\"desktop\""
         gdescription="description type=\"desktop\""
     else
+        exec=""
         gname="genericname"
         gdescription="description"
     fi
@@ -924,7 +925,7 @@ ybs_pre_mkpkg() {
 
     # Compress man doc info
     local gzip
-    gzip="yes"
+    gzip="no"
     str_isin "$FEATURES" "gzip" && gzip="yes"
     str_isin "$FEATURES" "nogzip" && gzip="no"
     str_isin "$OPTIONS" "gzip"  && gzip="yes"

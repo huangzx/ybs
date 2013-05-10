@@ -58,7 +58,7 @@ class CheckPbsfile(object):
         # (stdoutdata, stderrdata)
         stream_data = p.communicate()[0]
         #if p.returncode != 0:
-        #    sys.stderr.write("'{}' not found in database".format(pkg))
+        #    sys.stderr.write("{} not found in database".format(pkg))
         #    sys.exit(1)
         if stream_data:
             print(stream_data)
@@ -158,7 +158,7 @@ def main():
         global CHECK_INSTALLED_ONLY
         CHECK_INSTALLED_ONLY = True
 
-    print("Parsing pbslib from '{}'...".format(ybs.settings.__pbslib_path__))
+    print("Parsing pbslib from {}...".format(ybs.settings.__pbslib_path__))
     pbslib_map = ybs.utils.parse_pbslib(ybs.settings.__pbslib_path__)
 
     print('Checking for missing and circular dependencies...')
@@ -174,22 +174,22 @@ def main():
                 else:
                     files = ybs.utils.files_in_dir(path, 'pbs', 'version')
                 if not files:
-                    sys.stderr.write("No pbsfile found in directory '{}'.\n".format(path))
+                    sys.stderr.write("No pbsfile found in directory {}.\n".format(path))
                     continue
                 for file_ in files:
                     if not ybs.utils.is_pbsfile_likes(file_):
-                        sys.stderr.write("'{}' is a invalid pbsfile.\n".format(file_))
+                        sys.stderr.write("{} is a invalid pbsfile.\n".format(file_))
                         continue
                     checkpbsfile = CheckPbsfile(file_, pbslib_map)
                     checkpbsfile.check_depend()
             elif os.path.isfile(path):
                     if not ybs.utils.is_pbsfile_likes(path):
-                        sys.stderr.write("'{}' is a invalid pbsfile.\n".format(path))
+                        sys.stderr.write("{} is a invalid pbsfile.\n".format(path))
                         continue
                     checkpbsfile = CheckPbsfile(path, pbslib_map)
                     checkpbsfile.check_depend()
             else:
-                sys.stderr.write("'{}' not found.\n".format(path))
+                sys.stderr.write("{} not found.\n".format(path))
 
 
 if __name__ == '__main__':

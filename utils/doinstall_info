@@ -5,7 +5,7 @@
 doinstall_info () {
     local i infodir="/usr/share/info"
     echo "Install info: $@"
-    for i in "$@"; do
+    for i in $@; do
         if [ -f "$i" ]; then
             install-info "$i" $infodir/dir || return 1
         elif [ -f "$infodir/$i" ]; then

@@ -14,7 +14,7 @@ install:
 	install -d -m755 ${BINDIR} ${SBINDIR} ${LIBDIR} ${DATADIR} ${PYTHONSITE} 
 	install -m644 src/sh/funcs ${LIBDIR}
 	install -m755 src/sh/ybs ${BINDIR}
-	install -m755 src/{fileinfo,pybs,ybs-*,ypk-*} ${BINDIR}
+	install -m755 src/{fileinfo,pybs,pypkg,ybs-*,ypk-*} ${BINDIR}
 	install -m644 src/ybs/*.py ${PYTHONSITE}
 	install -m755 utils/* ${SBINDIR}
 	install -m644 samples/* ${DATADIR}

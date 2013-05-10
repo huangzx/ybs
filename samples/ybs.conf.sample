@@ -88,7 +88,7 @@ WGET_OPTIONS="--tries=3 --retry-connrefused --wait=2"
 #  strip/nostrip, defaults to strip
 # Strip executable、sharedlib (.so)、staticlib (.a) and binary files 
 #
-#  gzip/nogzip, defaults to gzip
+#  gzip/nogzip, defaults to nogzip
 # Comparess /usr/share/{man,info,doc} files by gzip 
 #
 FEATURES="ccache"

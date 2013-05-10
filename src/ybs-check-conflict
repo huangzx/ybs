@@ -23,21 +23,24 @@ def is_match_arch(ypk):
       ypk: string, path to ypkfile
 
     '''
-    g = ybs.utils.GetNameVersion()
-    pbsfile = ybs.utils.PbsFile()
-    if IS_VERBOSE:
-        print('Found: {}'.format(ypk))
-    g.parse(ypk)
-    ypk_name = g.name
-    ypk_arch = g.arch
-    pbsfile.parse(ybs.pybs.ybs_showpbs(ypk_name, PBSLIB_MAP))
-    pbs_arch = ' '.join(pbsfile.get('YARCH'))
-    if ypk_arch == 'any':
-        if pbs_arch != 'any':
-            print("'{}' mismatch arch, '{}' in pbslib.".format(ypk, pbs_arch))
-    else:
-        if pbs_arch == 'any':
-            print("'{}' mismatch arch, '{}' in pbslib.".format(ypk, pbs_arch))
+    try:
+        if IS_VERBOSE:
+            print('Found: {}'.format(ypk))
+        get = ybs.utils.GetNameVersion()
+        get.parse(ypk)
+        ypk_name = get.name
+        ypk_arch = get.arch
+        pbsfile = ybs.utils.PbsFile()
+        pbsfile.parse(ybs.pybs.ybs_showpbs(ypk_name, PBSLIB_MAP))
+        pbs_arch = ' '.join(pbsfile.get('YARCH'))
+        if ypk_arch == 'any':
+            if pbs_arch != 'any':
+                print("{} mismatch arch, {} in pbslib.".format(ypk, pbs_arch))
+        else:
+            if pbs_arch == 'any':
+                print("{} mismatch arch, {} in pbslib.".format(ypk, pbs_arch))
+    except KeyboardInterrupt:
+        raise KeyboardInterruptError()
 
 
 class CheckConflict(object):
@@ -58,16 +61,18 @@ class CheckConflict(object):
         '''
         filelists = ybs.utils.files_in_dir(self.indir, '.filelist', filte='version')
         if not filelists:
-            sys.stderr.write("filelist not found in '{}', run 'ypk-scanpackages {}' then retry.\n".format(self.indir, self.indir))
+            sys.stderr.write("filelist not found in {}, run 'ypk-scanpackages {}' then retry.\n".format(self.indir, self.indir))
             sys.exit(1)
         # [(name, [files]), (name2, [files])]
         files_list = []
+        get = ybs.utils.GetNameVersion()
+        print('found {} filelists'.format(len(filelists)))
+        print('start at {}'.format(ybs.utils.what_time()))
         for filelist in filelists:
             if IS_VERBOSE:
                 print('Found: {}'.format(filelist))
-            g = ybs.utils.GetNameVersion()
-            g.parse(filelist)
-            name, version = g.name, g.version
+            get.parse(filelist)
+            name, version = get.name, get.version
             record = []
             with open(filelist, 'r') as f:
                 for line in f.readlines():
@@ -85,8 +90,9 @@ class CheckConflict(object):
                     if ret:
                         meta_name = elem[0]
                         elem_range_name = elem_range[0]
-                        print("'{}' in both '{}' '{}'".format(' '.join([x for x in ret]), meta_name, elem_range_name))
-
+                        print("{} in both {} {}".format(' '.join([x for x in ret]), meta_name, elem_range_name))
+        print('finish at {}'.format(ybs.utils.what_time()))
+    
     def conflict_arch(self):
         ''' muti arches string exist
 
@@ -96,12 +102,19 @@ class CheckConflict(object):
         '''
         ypks = ybs.utils.files_in_dir(self.indir, '.ypk')
         if not ypks:
-            sys.stderr.write("ypkfile not found in '{}'.\n".format(self.indir))
+            sys.stderr.write("ypkfile not found in {}.\n".format(self.indir))
             sys.exit(1)
+        print('found {} ypkfiles'.format(len(ypks)))
+        print('start at {}'.format(ybs.utils.what_time()))
         pool = multiprocessing.Pool(PROCESSES_NUM)
-        pool.map(is_match_arch, ypks)
-        pool.close()
-        pool.join()
+        try:
+            pool.map(is_match_arch, ypks)
+            pool.close()
+        except KeyboardInterrupt:
+            pool.terminate()
+        finally:
+            pool.join()
+        print('finish at {}'.format(ybs.utils.what_time()))
 
 
 def main():
@@ -129,15 +142,18 @@ def main():
         PBSLIB_MAP = ybs.utils.parse_pbslib(ybs.settings.__pbslib_path__)
         dirs = args.ypkdir
 
-        print("Checking for conflict ypkfiles in '{}'".format(' '.join(dirs)))
+        print("Checking for conflicts ypkfiles in {}".format(' '.join(dirs)))
         for dir_ in dirs:
             dir_ = os.path.realpath(dir_)
             if os.path.isdir(dir_):
+                print('\n* {}'.format(dir_))
                 cc = CheckConflict(dir_)
+                print('=> checking for conflicting filelist...')
                 cc.conflict_file()
+                print('=> checking for conflicting arch...')
                 cc.conflict_arch()
             else:
-                sys.stderr.write("'{}' is not a dirctory.".format(dir_))
+                sys.stderr.write("{} is not a dirctory.".format(dir_))
                 continue
 
 

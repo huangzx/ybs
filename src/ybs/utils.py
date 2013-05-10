@@ -15,6 +15,63 @@ from hashlib import sha1, md5
 from . import settings
 
 
+def is_empty_dir(indir):
+    ''' check if directory is empty, include sub directoris
+
+    Args:
+      indir: string, path to directory
+
+    Returns:
+      bool value, True or False
+
+    '''
+    for root, dirs, files in os.walk(indir):
+        if files:
+            return False
+    return True
+
+
+def run_ypkg(cmd, para, extra_para=''):
+    ''' run ypkg cli
+
+    Args:
+      cmd: string, cmd for ypkg, such as '-l'
+      para: string, para for ypkg, such as pkgname 'leafpad'
+      extra_para: string, extra para for ypkg, such '2 >/dev/null'
+
+    Returns:
+      tuple, contais two elements:
+        first element is a list of ypkg output,
+        second element is a integer, namely ypkg return code.
+    
+    To use:
+      >>> import ybs.utils
+      >>> test = ybs.utils.run_ypkg('-l', 'zlib')
+      >>> print test # Omit redundant content for file list
+      (['Contents of zlib 1.2.7:', 'D|      4096| /usr'], 0)
+    
+    '''
+    while True:
+        ypkg_cmd = 'ypkg ' + cmd + ' ' + para + ' ' + extra_para
+        p = subprocess.Popen(ypkg_cmd, shell=True, stdout=subprocess.PIPE)
+        # p.communicate method return a tuple like this:
+        # (stdoutdata, stderrdata)
+        stream = p.communicate()[0]
+        ret = p.returncode
+        if ret == 5:
+            sys.stderr.write('database is locked')
+            time.sleep(1)
+        elif ret != 0:
+            if '-l' in cmd or '--list-files' in cmd:
+                sys.stderr.write("'{}' is not installed".format(para))
+            else:
+                sys.stderr.write("'{}' execution failed".format(ypkg_cmd))
+            break
+        elif ret == 0:
+            break
+    return ([x for x in stream.split('\n') if x.strip()], ret)
+
+
 def what_time(value=None):
     '''
 
@@ -35,10 +92,10 @@ def get_checksum(infile, tool):
       string of checksum value
 
     To use:
-      >>>import ybs.utils
-      >>>ybs.utils.get_checksum('/tmp/test','sha1')
+      >>> import ybs.utils
+      >>> ybs.utils.get_checksum('/tmp/test','sha1')
       'da39a3ee5e6b4b0d3255bfef95601890afd80709'
-      >>>ybs.utils.get_checksum('/tmp/test','md5')
+      >>> ybs.utils.get_checksum('/tmp/test','md5')
       'd41d8cd98f00b204e9800998ecf8427e'
     '''
     try:
@@ -65,8 +122,8 @@ def get_sha1sum(infile):
       string of sha1sum value
 
     To use:
-      >>>import ybs.utils
-      >>>ybs.utils.get_sha1sum('/tmp/test')
+      >>> import ybs.utils
+      >>> ybs.utils.get_sha1sum('/tmp/test')
       'da39a3ee5e6b4b0d3255bfef95601890afd80709'
     
     '''
@@ -83,8 +140,8 @@ def get_md5sum(infile):
       string of md5sum value
 
     To use:
-      >>>import ybs.utils
-      >>>ybs.utils.get_md5sum('/tmp/test')
+      >>> import ybs.utils
+      >>> ybs.utils.get_md5sum('/tmp/test')
       'd41d8cd98f00b204e9800998ecf8427e'
     
     '''
@@ -162,12 +219,12 @@ def compare_version(v1, v2):
       v1 is greater then v2, return '>'
 
     To use:
-      >>>import ybs.utils
-      >>>ybs.utils.compare_version('2.0', '3.0')
+      >>> import ybs.utils
+      >>> ybs.utils.compare_version('2.0', '3.0')
       '<'
-      >>>ybs.utils.compare_version('2.0', '1.0')
+      >>> ybs.utils.compare_version('2.0', '1.0')
       '>'
-      >>>ybs.utils.compare_version('2.0', '2.0')
+      >>> ybs.utils.compare_version('2.0', '2.0')
       '='
 
     '''
@@ -258,29 +315,31 @@ class GetNameVersion(object):
         infile: string, path to file
 
     To use:
-      >>>import ybs.utils
-      >>>foo = ybs.utils.GetNameVersion()
-      >>>foo.parse('my_sql_5.5.29-1-rc1-x86_64.ypk')
-      >>>foo.infile
-      'my_sql_5.5.29-1-rc1-x86_64.ypk'
-      >>>foo.arch
+      >>> import ybs.utils
+      >>> foo = ybs.utils.GetNameVersion()
+      >>> foo.parse('mysql_5.5.29-1-rc1-x86_64.ypk')
+      >>> foo.infile
+      'mysql_5.5.29-1-rc1-x86_64.ypk'
+      >>> foo.arch
       'x86_64'
-      >>>foo.name
+      >>> foo.name
       'my_sql'
-      >>>foo.version_major
+      >>> foo.version_major
       '5.5.29'
-      >>>foo.version
+      >>> foo.version
       '5.5.29-1-rc1'
-      >>>foo.version_rel
+      >>> foo.version_rel
       '1-rc1'
 
     '''
-    def __init__(self):
-        pass
-
     def __dir__(self):
         return ['infile', 'name', 'arch', 'version_major', 'version_rel', 'version']
+    
+    def __repr__(self):
+        return "class '{}' for getting name, version or arch from pbsfile-likes file".format(self.__class__.__name__)
 
+    __str__ = __repr__
+    
     def parse(self, infile):
         self.infile = os.path.basename(infile)
 
@@ -325,8 +384,8 @@ def files_in_dir(indir, suffix, filte=None):
       A list of absolute path to files
 
     To use:
-      >>>import ybs.utils
-      >>>ybs.utils.files_in_dir('/tmp/test', '.ypk')
+      >>> import ybs.utils
+      >>> ybs.utils.files_in_dir('/tmp/test', '.ypk')
       ['/tmp/test/HTML-Parser_3.69-x86_64.ypk', '/tmp/test/HTTP-Cookies_6.01-any.ypk']
 
     '''
@@ -338,9 +397,9 @@ def files_in_dir(indir, suffix, filte=None):
     if filte is None:
         return result
     if filte == 'version':
-        pbsfile = PbsFile()
         result_filter = {}
         record = {}
+        pbsfile = PbsFile()
         for f in result:
             pbsfile.parse(f)
             name, version = pbsfile.name, pbsfile.version
@@ -363,8 +422,8 @@ def file_in_dir(indir, filename):
       list of abspath to files
 
     To use:
-      >>>import ybs.utils
-      >>>ybs.utils.file_in_dir('/tmp/test, 'HTML-Parser_3.69-x86_64.ypk')
+      >>> import ybs.utils
+      >>> ybs.utils.file_in_dir('/tmp/test, 'HTML-Parser_3.69-x86_64.ypk')
       ['/var/ybs/packages/h/HTML-Parser/HTML-Parser_3.69-x86_64.ypk']
 
     '''
@@ -381,17 +440,17 @@ def parse_pbslib(indir, suffix='.pbs'):
       indir: string, path to directory
 
     Return:
-      dict mapping, keys are package names, value are versions
+      dict mapping, keys are package names, value are versions in ascending order
 
     To use:
-      >>>import ybs.utils
-      >>>ybs.utils.parse_pbslib('/var/ybs/pbslib')
+      >>> import ybs.utils
+      >>> ybs.utils.parse_pbslib('/var/ybs/pbslib')
       {'gtk-vnc': ['0.5.1-rc1','0.5.1','0.5.2'], 'epdfview': ['0.1.7']}
 
     '''
     pbsfiles = {}
+    pbsfile = PbsFile()
     for f in files_in_dir(indir, suffix):
-        pbsfile = PbsFile()
         pbsfile.parse(f)
         name, version = pbsfile.name, pbsfile.version
         if name in pbsfiles:
@@ -415,8 +474,8 @@ def minimum_version(inlist):
       string of mininum version
 
     To use:
-      >>>import ybs.utils
-      >>>ybs.utils.minimum_version(['1', '3', '2', '1-rc1'])
+      >>> import ybs.utils
+      >>> ybs.utils.minimum_version(['1', '3', '2', '1-rc1'])
       '1-rc1'
 
     '''
@@ -438,8 +497,8 @@ def sorted_version(inlist):
       list of sorted version
 
     To use:
-      >>>import ybs.utils
-      >>>ybs.utils.sorted_version(['1', '1-rc1', '1-r1'])
+      >>> import ybs.utils
+      >>> ybs.utils.sorted_version(['1', '1-rc1', '1-r1'])
       ['1-rc1', '1', '1-r1']
 
     '''
@@ -467,50 +526,52 @@ class PbsFile(object):
       version_rel: string, rel version of package
 
     Methods:
-      parse: parse pbsfile
+      parse: 
       get: get value of pbsfile
 
     To Use:
-      >>>import ybs.utils
-      >>>pbsfile = ybs.utils.PbsFile()
-      >>>pbsfile.parse('/var/ybs/pbslib/sys-apps/ypkg2/ypkg2_20130217-rc1.pbs')
-      >>>pbsfile.path
+      >>> import ybs.utils
+      >>> pbsfile = ybs.utils.PbsFile()
+      >>> pbsfile.parse('/var/ybs/pbslib/sys-apps/ypkg2/ypkg2_20130217-rc1.pbs')
+      >>> pbsfile.path
       '/var/ybs/pbslib/sys-apps/ypkg2/ypkg2_20130217.pbs'
-      >>>pbsfile.basename
+      >>> pbsfile.basename
       'ypkg2_20130217.pbs'
-      >>>pbsfile.dirname
+      >>> pbsfile.dirname
       '/var/ybs/pbslib/sys-apps/ypkg2'
-      >>>pbsfile.name
+      >>> pbsfile.name
       'ypkg2'
-      >>>pbsfile.version
+      >>> pbsfile.version
       '20130217-rc1'
-      >>>pbsfile.version_major
+      >>> pbsfile.version_major
       '20130217'
-      >>>pbsfile.version_rel
+      >>> pbsfile.version_rel
       '-rc1'
-      >>>pbsfile.get('RDEPEND')
+      >>> pbsfile.get('RDEPEND')
       ['libarchive(>=3.0.4)', 'curl', 'pcre', 'sqlite', 'rtmpdump', 'nettle']
-      >>>pbsfile.get('LICENSE')
+      >>> pbsfile.get('LICENSE')
       ['GPL,LGPL']
 
     '''
-    def __init__(self):
-        pass
-
     def __dir__(self):
         return ['path', 'basename', 'dirname', 'name', 'version', 'version_major', 'version_rel']
 
+    def __repr__(self):
+        return "class '{}' for parsing pbsfile".format(self.__class__.__name__)
+
+    __str__ = __repr__
+    
     def parse(self, infile):
-        self.path = infile
+        self.path = os.path.realpath(infile)
         self.basename = os.path.basename(infile)
         self.dirname = os.path.dirname(infile)
-        g = GetNameVersion()
-        g.parse(infile)
-        self.name = g.name
-        self.version_major = g.version_major
-        self.version_rel = g.version_rel
-        self.version = g.version
-
+        get = GetNameVersion()
+        get.parse(infile)
+        self.name = get.name
+        self.version_major = get.version_major
+        self.version_rel = get.version_rel
+        self.version = get.version
+   
     def get(self, item):
         cmd = ['dosource', self.path, self.name, self.version_major, self.version_rel]
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)

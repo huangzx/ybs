@@ -1,0 +1,281 @@
+#!/usr/bin/env python
+#-*- coding: utf-8 -*-
+#
+# Author: Zhongxin Huang <zhongxin.huang@gmail.com>
+#
+
+import os
+import sys
+import argparse
+import multiprocessing
+import ybs.utils
+import ybs.pybs
+import ybs.settings
+import sqlite3
+
+PROCESSES_NUM = 4
+IS_DETAIL = False
+
+
+def is_skip(infile):
+    ''' skip files which should not be executable absolutly  
+    
+    Args:
+      infile: string, path to file
+    
+    Returns:
+      bool values, such as True or False
+
+    '''
+    suffixes = ('pyc', 'pyo', 'txt', 'xml', 'docbook',
+                'cmake', 'xsl', 'entities',
+                'gz', 'h', 'pc', 'qm', 'conf',
+                'prf', 'decTest', 'html')
+    for suffix in suffixes: 
+        if infile.endswith('.'+suffix):     
+            return True
+    return False
+
+
+def is_in_database(infile):
+    '''
+    Args:
+      infile: string, path to file or directoy
+
+    Returns:
+      bool values
+
+    '''
+    conn = sqlite3.connect(ybs.settings.__package_db__)
+    cur = conn.cursor()
+    cur.execute("SELECT distinct * FROM {} WHERE file = '{}'".format('world_file', infile))
+    if cur.fetchone() is None:
+        return False
+    return True
+    conn.close()
+    cur.close()
+
+
+def get_defective_file(infile):
+    '''
+    Args:
+      infile: string, path to file or directoy
+
+    '''
+    try:
+        if not is_in_database(infile):
+            print("{} not found in file database".format(infile))
+        else:
+            if IS_DETAIL:
+                if os.path.islink(infile):
+                    if not os.path.exists(os.path.realpath(infile)):
+                        print("{} is in file database, but link target is not exist".format(infile))
+                else:
+                    if not is_skip(infile):
+                        file_cmd_result = os.popen('file -b '+'"'+infile+'"').readline()
+                        if 'LSB executable' in file_cmd_result or 'LSB shared object' in file_cmd_result:
+                            for line in os.popen('ldd '+infile+' '+'2>/dev/null').readlines():
+                                line = line.strip()
+                                if 'not found' in line:
+                                    print("{} is in file database, but missing libraries {}".format(infile, line.split('=>')[0].strip()))
+    except KeyboardInterrupt:
+        raise KeyboardInterruptError()
+
+
+def mp_pool_map(func, files):
+    ''' wrapper of multiprocessing.Pool.map()
+
+    Args:
+      func: working process function object
+      files: interator, such list tuple or generator
+
+    Returns:
+      resulte: list
+
+    '''
+    pool = multiprocessing.Pool(PROCESSES_NUM)
+    try:
+        result = pool.map(func, files)
+        pool.close()
+    except KeyboardInterrupt:
+        pool.terminate()
+    finally:
+        pool.join()
+    print("Handled {} files with multiprocessing".format(len(result)))
+    return result
+
+
+def files_in_dir(indir, type='file'):
+    ''' find all the files in directory
+
+    Args:
+      indir: string, path to directory
+      type: string, type of file, such as: file, link
+
+    Returns:
+      yield generator
+
+    '''
+    for root, dirs, files in os.walk(indir):
+        if files:
+            for file_ in files:
+                absfile = (os.path.join(root, file_))
+                if type == 'file':
+                    yield absfile
+                elif type == 'link':
+                    if os.path.islink(absfile):
+                        yield absfile
+
+
+def pure_depend(string):
+    ''' convert string dependency got from database to intrator
+
+    Args:
+      string: such as 'parted(>=3.1),python'
+
+    Returns:
+      yield generator, such as 'parted'
+
+    '''
+    for each in string.split(','):
+        if '(' in each:
+            yield each.split('(')[0]
+        else:
+            yield each
+
+
+class Pypkg(object):
+    ''' class of pypkg
+
+    '''
+    def __init__(self):
+        ''' '''
+        self.conn = sqlite3.connect(ybs.settings.__package_db__)
+        self.cur = self.conn.cursor()
+        self.pkgs_installed = ybs.pybs.ybs_list_installed()
+        self.len_pkgs_installed = len(self.pkgs_installed)
+
+    def __del__(self):
+        ''' '''
+        self.cur.close()
+        self.conn.close()
+
+    def defective_file(self, inpath):
+        ''' checking for defective files
+        Args:
+          inpath: string, path to directory or file
+
+        '''
+        if os.path.isdir(inpath):
+            mp_pool_map(get_defective_file, files_in_dir(inpath, type='file'))
+        else:
+            get_defective_file(inpath)
+
+    def cur_exec_fetch(self, type_, table, pkg, fetch='one'):
+        ''' exec sqlite3 cursor commands
+
+        Args:
+          type_: string
+          table: string, table of database
+          pkg: string, pkgname
+          fetch: string, fetcher behavior, 'one' represent fetchone, 'all' represent fetchall
+
+        '''
+        self.cur.execute("SELECT {} FROM {} WHERE name = '{}'".format(type_, table, pkg))
+        if fetch == 'one':
+            return self.cur.fetchone()
+        elif fetch == 'all':
+            return self.cur.fetchone()
+
+    def defective_pkg(self):
+        ''' find defective installed packages
+
+        '''
+        print('{} packages installed'.format(self.len_pkgs_installed))
+        for pkg in self.pkgs_installed:
+            res = self.cur_exec_fetch('name', 'universe', pkg)
+            if res is None:
+                print('{} not found in universe'.format(pkg))
+
+            res = self.cur_exec_fetch('data_conflict', 'world_data', pkg)
+            if res is not None and res[0]:
+                for cp in pure_depend(res[0]):
+                    if cp in self.pkgs_installed:
+                        print('{} is conflict with {},'.format(cp, pkg)),
+                        print('and it was not installed')
+
+            res = self.cur_exec_fetch('data_depend', 'world_data', pkg)
+            if res is not None and res[0]:
+                for ip in pure_depend(res[0]):
+                    if not ip in self.pkgs_installed:
+                            print('{} missing runtime dependency {}'.format(pkg, ip))
+
+            res = self.cur_exec_fetch('data_replace', 'world_data', pkg)
+            if res is not None and res[0]:
+                for rp in pure_depend(res[0]):
+                    if rp in self.pkgs_installed:
+                        print('{} can be replaced by {},'.format(rp, pkg)),
+                        print('but it was not installed')
+
+    def yget_info(self):
+        ''' show content of yget profiles
+
+        '''
+        profiles = []
+        if os.path.isfile('/etc/yget.conf'):
+            profiles.append('/etc/yget.conf')
+        profiles_extra = ybs.utils.files_in_dir('/etc/yget.conf.d', '.conf')
+        if profiles_extra:
+            profiles.extend(profiles_extra)
+        if profiles:
+            for each in profiles:
+                print("{}:\n{}".format(each, open(each, 'r').read()))
+
+
+def main():
+    argvs = sys.argv[1:]
+    if not argvs:
+        argvs = ['-h']
+    desc = 'The extra tools for ypkg2.'
+    parser = argparse.ArgumentParser(description=desc)
+    parser.add_argument('-c', '--info', action='store_true',
+                        dest='c', help='show content of yget profile(s)')
+    parser.add_argument('-d', '--detail', action='store_true',
+                        dest='d', help='find more details of the defective files')
+    parser.add_argument('-f', '--defective_file', action='store_true',
+                        dest='f', help='find the defective files')
+    parser.add_argument('-p', '--defective_pkg', action='store_true',
+                        dest='p', help='find the defective installed packages')
+    parser.add_argument('path', nargs='*', help='path to directory(s) for file(s)')
+    args = parser.parse_args(argvs)
+
+    pypkg = Pypkg()
+
+    if args.f:
+        if args.d:
+            global IS_DETAIL
+            IS_DETAIL = True
+        if not args.path:
+            sys.stderr.write('please specify path to directory(s) for file(s)')
+            sys.exit(1)
+        else:
+            for path in args.path:
+                path = os.path.realpath(path)
+                if os.path.exists(path):
+                    if os.path.isdir(path) and ybs.utils.is_empty_dir(path):
+                        sys.stderr.write('{} and sub directory(s) is empty.\n'.format(path))
+                        continue
+                    print('Checking for defective files for {}, please wait...'.format(path))
+                    pypkg.defective_file(path)
+                else:
+                    sys.stderr.write('{} is not exist.\n'.format(path))
+                    continue
+
+    if args.p:
+        pypkg.defective_pkg()
+
+    if args.c:
+        pypkg.yget_info()
+
+if __name__ == '__main__':
+    main()

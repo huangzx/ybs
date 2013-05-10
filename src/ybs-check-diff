@@ -49,14 +49,14 @@ def main():
         ypkdir = ' '.join(args.y)
 
     if not ybs.utils.files_in_dir(pbsdir, '.pbs'):
-        sys.stderr.write("pbsfile not found in '{}'.".format(pbsdir))
+        sys.stderr.write("pbsfile not found in {}.".format(pbsdir))
         sys.exit(1)
 
     if not ybs.utils.files_in_dir(ypkdir, '.ypk'):
-        sys.stderr.write("ypkfile not found in '{}'.".format(ypkdir))
+        sys.stderr.write("ypkfile not found in {}.".format(ypkdir))
         sys.exit(1)
 
-    print("Checking for differences between '{}' and '{}'\n".format(pbsdir, ypkdir))
+    print("Checking for differences between {} and {}\n".format(pbsdir, ypkdir))
     check_diff(ypkdir, pbsdir)
 
 

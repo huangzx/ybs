@@ -24,18 +24,15 @@ class YbsConf(object):
       get: get value of ybs config file
 
     To Use:
-      >>>import ybs.utils
-      >>>ybsconf = ybs.utils.YbsConf()
-      >>>ybsconf.parse('/etc/ybs.conf')
-      >>>ybsconf.path
+      >>> import ybs.settings
+      >>> ybsconf = ybs.settings.YbsConf()
+      >>> ybsconf.parse('/etc/ybs.conf')
+      >>> ybsconf.path
       '/etc/ybs.conf'
-      >>>ybsconf.get('ARCH')
+      >>> ybsconf.get('ARCH')
       'x86_64'
 
     '''
-    def __init__(self):
-        pass
-
     def parse(self, infile=__ybs_conf__):
         self.path = infile
 

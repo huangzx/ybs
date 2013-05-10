@@ -9,7 +9,6 @@ import os
 import sys
 import sqlite3
 import argparse
-import subprocess
 import ybs.utils, ybs.settings
 import time
 
@@ -24,37 +23,7 @@ class ScanRdep(object):
     '''
     def __init__(self):
         pass
-
-    def _run_ypkg(self, arg, foo):
-        ''' run ypkg cli
-
-        Args:
-          arg: string. args for ypkg
-          foo: string. path to file
-
-        Returns:
-          list, contain string items
-
-        '''
-        while True:
-            p = subprocess.Popen('ypkg'+' '+arg+' '+foo, shell=True, stdout=subprocess.PIPE)
-            # p.communicate method return a tuple like this:
-            # (stdoutdata, stderrdata)
-            stream = p.communicate()[0]
-            code = p.returncode
-            if code == 5:
-                sys.stderr.write('database is locked')
-                time.sleep(1)
-            elif code != 0:
-                sys.stderr.write("'{}' is not installed".format(self.pkg))
-                sys.exit(1)
-            elif code == 0:
-                break
-        if stream:
-            return [x for x in stream.split('\n')]
-        else:
-            return None
-
+    
     def getfile(self, pkg):
         ''' get files and syslinks using 'ypkg -l'
 
@@ -85,11 +54,11 @@ class ScanRdep(object):
             return False
 
         self.pkg = pkg
-        filelist_raw = self._run_ypkg('-l', pkg)
+        ypkg_result, ypkg_ret = ybs.utils.run_ypkg('-l', pkg)
+        if ypkg_ret != 0:
+            sys.exit(1)
         filelist = []
-        #print len(filelist_raw)
-        for line in filelist_raw:
-            line = line.strip()
+        for line in ypkg_result:
             if line.startswith('F|') or line.startswith('S|'):
                 if not _is_skip(line):
                     filelist.append(line.split('|')[-1].strip())
@@ -97,8 +66,7 @@ class ScanRdep(object):
             sys.stderr.write("'{}' contains directory only.".format(pkg))
             sys.exit(1)
         self.filelist = filelist
-        #print len(filelist)
-
+    
     def getbin(self):
         ''' get sharedlib or executable files using 'file -b'
 
@@ -196,10 +164,10 @@ class ScanRdep(object):
         not_owned = []
         for file_ in self.libfiles:
             #ypkg_result = os.popen('ypkg -S --absolute '+file_).readlines()
-            ypkg_result = self._run_ypkg('-S --absolute', file_)
+            ypkg_result, ypkg_ret = ybs.utils.run_ypkg('-S --absolute', '"'+file_+'"')
+            if ypkg_ret != 0:
+                sys.exit(1)
             for line in ypkg_result:
-                line = line.strip()
-                # Skip blank line
                 if line:
                     if 'Searching for' in line:
                         continue
