@@ -5,7 +5,7 @@
 # Author: Zhongxin Huang <zhongxin.huang@gmail.com>
 #
 
-__version__ = '2.0'
+__version__ = '3.0'
 __package_db__ = '/var/ypkg/db/package.db'
 __package_db_table__ = 'world'
 __depend_db__ = '/var/ybs/db/depend.db'

@@ -6,7 +6,8 @@
 #
 
 import sys
-import ybs.utils, ybs.settings
+import ybs.utils
+import ybs.settings
 import argparse
 
 
@@ -19,7 +20,7 @@ def check_diff(ypkdir, pbsdir):
     '''
     print("Parsing pbslib from '{}'\n".format(pbsdir))
     pbsdir_map = ybs.utils.parse_pbslib(pbsdir)
-    ypks = ybs.utils.files_in_dir(ypkdir, '.ypk')
+    ypks = ybs.utils.pkgs_in_dir(ypkdir, '.ypk')
     ypkfile = ybs.utils.PbsFile()
     for ypk in ypks:
         ypkfile.parse(ypk)
@@ -48,11 +49,11 @@ def main():
         pbsdir = ' '.join(args.p)
         ypkdir = ' '.join(args.y)
 
-    if not ybs.utils.files_in_dir(pbsdir, '.pbs'):
+    if not ybs.utils.pkgs_in_dir(pbsdir, '.pbs'):
         sys.stderr.write("pbsfile not found in {}.".format(pbsdir))
         sys.exit(1)
 
-    if not ybs.utils.files_in_dir(ypkdir, '.ypk'):
+    if not ybs.utils.pkgs_in_dir(ypkdir, '.ypk'):
         sys.stderr.write("ypkfile not found in {}.".format(ypkdir))
         sys.exit(1)
 

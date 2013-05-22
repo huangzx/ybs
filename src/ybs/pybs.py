@@ -7,12 +7,14 @@
 
 import os
 import sys
-import ybs.utils, ybs.settings
+import ybs.utils
+import ybs.settings
 import sqlite3
 import argparse
 import time
 import StringIO
 import multiprocessing
+import re
 
 VERSION = ybs.settings.__version__
 PROCESSES_NUM = 4
@@ -37,7 +39,7 @@ def ybs_list_available(pbslib):
     '''
     for key in pbslib:
         name, version = key, pbslib[key][-1]
-        installed_info = ybs.utils.is_installed(name)
+        installed_info = ybs.utils.installed_info(name)
         if installed_info:
             version_installed = installed_info[1]
             ret = ybs.utils.compare_version(version_installed, version)
@@ -56,7 +58,7 @@ def ybs_list_installed(dbtable=PACKAGE_DB_TABLE, dbfile=PACKAGE_DB):
 
     Args:
       dbfile: sqlite3 database created by ypkg
-    
+
     Returns:
       A dict: {pkg_name: pkg_version, ...}
 
@@ -68,7 +70,7 @@ def ybs_list_installed(dbtable=PACKAGE_DB_TABLE, dbfile=PACKAGE_DB):
 
 def ybs_status(name):
     ''' Display information of packages installed
-    
+
     Args:
       name: string
 
@@ -76,7 +78,7 @@ def ybs_status(name):
       result: tuple, looks like: (u'leafpad', u'0.8.18.1', u'', 1365583434)
 
     '''
-    result = ybs.utils.is_installed(name)
+    result = ybs.utils.installed_info(name)
     if result is None:
         sys.stderr.write("'{}' not found. Be sure it is installed.\n".format(name))
         return ()
@@ -112,58 +114,42 @@ def ybs_search(name, pbslib):
       pbslib: dict, map of pbslib
 
     '''
-    name = name.lower()
-    suffix_match = False
-    prefix_match = False
-    if name.endswith('$'):
-        suffix_match = True
-        name = name.rstrip('$')
-    if name.startswith('^'):
-        prefix_match = True
-        name = name.lstrip('^')
-    for pkgname in pbslib:
-        pkgname_lower = pkgname.lower()
-        if name in pkgname_lower:
-            if suffix_match:
-                if not pkgname_lower.endswith(name):
-                    continue
-            if prefix_match:
-                if not pkgname_lower.startswith(name):
-                    continue
-            version = pbslib[pkgname][-1]
-            installed_info = ybs.utils.is_installed(pkgname)
-            if SHOW_INSTALLED_ONLY:
-                if not installed_info:
-                    continue
-            if SHOW_UNINSTALLED_ONLY:
-                if installed_info:
-                    continue
-            flag = '[N]'
-            installed_version = 'None'
-            installed_time = ''
+    pattern = re.compile(name, flags=re.IGNORECASE)
+    for pkg_name in (pkg for pkg in pbslib if pattern.search(pkg)):
+        pkg_version = pbslib[pkg_name][-1]
+        installed_info = ybs.utils.installed_info(pkg_name)
+        if SHOW_INSTALLED_ONLY:
+            if not installed_info:
+                continue
+        if SHOW_UNINSTALLED_ONLY:
             if installed_info:
-                installed_version = installed_info[1]
-                ret = ybs.utils.compare_version(str(installed_version), str(version))
-                if ret == '<':
-                    flag = '[U]'
-                if ret == '>':
-                    flag = '[D]'
-                if ret == '=':
-                    flag = '[E]'
-                installed_time = ybs.utils.what_time(installed_info[-1])
-            pbspath = ybs_showpbs(pkgname, pbslib)
-            pbsfile = ybs.utils.PbsFile()
-            pbsfile.parse(pbspath)
-            category = pbspath.split('/')[4]
-            print('''{} {}/{}
-      Installed: {} {}
-      Available: {}
-      Homepage: {}
-      Description: {}
-                  '''.format(flag, category, pkgname, installed_version,
-                             installed_time, ', '.join(pbslib[pkgname]),
-                             (' '.join(pbsfile.get('HOMEPAGE'))),
-                             (' '.join(pbsfile.get('DESCRIPTION')))))
+                continue
+        flag = '[N]'
+        installed_version = 'None'
+        installed_time = ''
+        if installed_info:
+            installed_version = installed_info[1]
+            ret = ybs.utils.compare_version(str(installed_version), str(pkg_version))
+            if ret == '<':
+                flag = '[U]'
+            if ret == '>':
+                flag = '[D]'
+            if ret == '=':
+                flag = '[E]'
+            installed_time = ybs.utils.what_time(installed_info[-1])
+        pbspath = ybs_showpbs(pkg_name, pbslib)
+        pbsfile = ybs.utils.PbsFile()
+        pbsfile.parse(pbspath)
+        category = pbspath.split('/')[4]
+        print('''{} {}/{}
+  Installed: {} {}
+  Available: {}
+  Homepage: {}
+  Description: {}
+              '''.format(flag, category, pkg_name, installed_version,
+                         installed_time, ', '.join(pbslib[pkg_name]),
+                         (' '.join(pbsfile.get('HOMEPAGE'))),
+                         (' '.join(pbsfile.get('DESCRIPTION')))))
 
 
 def ybs_whatrequires(name, dbtable=DEPEND_DB_TABLE, dbfile=DEPEND_DB):
@@ -182,10 +168,10 @@ def ybs_whatrequires(name, dbtable=DEPEND_DB_TABLE, dbfile=DEPEND_DB):
     for pkg in cur.fetchall():
         pkg_name, pkg_version = pkg
         if SHOW_INSTALLED_ONLY:
-            if not ybs.utils.is_installed(pkg_name):
+            if not ybs.utils.installed_info(pkg_name):
                 continue
         if SHOW_UNINSTALLED_ONLY:
-            if ybs.utils.is_installed(pkg_name):
+            if ybs.utils.installed_info(pkg_name):
                 continue
         for type_ in ('rdep', '[R]'), ('bdep', '[B]'), ('redep', '[A]'), ('cdep', '[C]'):
             type_, flag = type_
@@ -194,7 +180,7 @@ def ybs_whatrequires(name, dbtable=DEPEND_DB_TABLE, dbfile=DEPEND_DB):
             # (u'gtk2(>=1.27) menu-cache startup-notification',)
             deps = [x.split('(')[0] for x in cur.fetchone()[0].split()]
             if name in deps:
-                #if ybs.utils.is_installed(pkg_name):
+                #if ybs.utils.installed_info(pkg_name):
                 #    flag = flag + '[I]'
                 print('{} {} {}'.format(flag, pkg_name, pkg_version))
     cur.close()
@@ -277,7 +263,7 @@ def ybs_init_db(dbfile=DEPEND_DB, dbtable=DEPEND_DB_TABLE, processes_num=PROCESS
     conn = sqlite3.connect(':memory:')
     conn.execute("CREATE TABLE IF NOT EXISTS {} (name TEXT, version TEXT, rdep TEXT, bdep TEXT, redep TEXT, cdep TEXT);".format(dbtable))
 
-    files = ybs.utils.files_in_dir(PBSLIB_PATH, '.pbs', filte='version')
+    files = ybs.utils.pkgs_in_dir(PBSLIB_PATH, '.pbs', filter_by='version')
     pool = multiprocessing.Pool(processes_num)
     try:
         result = pool.map(get_deps_from_file, files)
@@ -308,8 +294,8 @@ def ybs_compare_version(s1, s2):
     ''' Compare version
 
     Args:
-      s1: string, verison
-      s2: string, verison
+      s1: string, version
+      s2: string, version
 
     '''
     get = ybs.utils.GetNameVersion()
@@ -334,7 +320,7 @@ def get_deps_from_db_deep(pkg, dep_type, dbfile=DEPEND_DB, dbtable=DEPEND_DB_TAB
     '''
     conn = sqlite3.connect(dbfile)
     cur = conn.cursor()
-    
+
     def _do_get(inlist):
         result = []
         for pkg in inlist:
@@ -394,7 +380,7 @@ def ybs_pretend(pkg, pbslib):
 
     for bdep in bdeps:
         version = pbslib[bdep][-1]
-        installed_info = ybs.utils.is_installed(bdep)
+        installed_info = ybs.utils.installed_info(bdep)
         if installed_info:
             installed_version = installed_info[1]
             ret = ybs.utils.compare_version(installed_version, version)
@@ -415,10 +401,10 @@ def main():
         argvs = ['-h']
 
     parser = argparse.ArgumentParser(description='Backend of ybs')
-    parser.add_argument('-V', '--version', action='store_true',
-                        dest='V', help='show version')
-    parser.add_argument('-v', '--verbose', action='store_true',
-                        dest='v', help='enable verbose mode')
+    parser.add_argument('-v', '--version', action='store_true',
+                        dest='v', help='show version')
+    parser.add_argument('-V', '--verbose', action='store_true',
+                        dest='V', help='enable verbose mode')
     parser.add_argument('-F', '--force', action='store_true',
                         dest='F', help='force build flag')
     parser.add_argument('-I', '--installed', action='store_true',
@@ -429,23 +415,23 @@ def main():
                         dest='l', help='list all availabe packages')
     parser.add_argument('-L', '--list_installed', action='store_true',
                         dest='L', help='list all installed packages')
-    parser.add_argument('-t', '--status', nargs='*', metavar='pkg',
+    parser.add_argument('-t', '--status', nargs='+', metavar='pkg',
                         dest='t', help='show information of package installed')
-    parser.add_argument('-s', '--search', nargs='*', metavar='pkg',
+    parser.add_argument('-s', '--search', nargs='+', metavar='pkg',
                         dest='s', help='search package in pbslib')
-    parser.add_argument('-p', '--pretend', nargs='*', metavar='pkg',
+    parser.add_argument('-p', '--pretend', nargs='+', metavar='pkg',
                         dest='p', help='instead of actually build, display what to do')
-    parser.add_argument('-w', '--showpbs', nargs='*', metavar='pkg',
+    parser.add_argument('-w', '--showpbs', nargs='+', metavar='pkg',
                         dest='w', help='show available pbsfile in pbsdir')
-    parser.add_argument('-gr', '--get_rdeps', nargs='*', metavar='pkg',
+    parser.add_argument('-gr', '--get_rdeps', nargs='+', metavar='pkg',
                         dest='gr', help='show run-time dependency of package')
-    parser.add_argument('-grd', '--get_rdeps_deep', nargs='*', metavar='pkg',
+    parser.add_argument('-grd', '--get_rdeps_deep', nargs='+', metavar='pkg',
                         dest='grd', help='show run-time dependency tree of package')
-    parser.add_argument('-gb', '--get_bdeps', nargs='*', metavar='pkg',
+    parser.add_argument('-gb', '--get_bdeps', nargs='+', metavar='pkg',
                         dest='gb', help='show build-time dependency of package')
-    parser.add_argument('-gbd', '--get_bdeps_deep', nargs='*', metavar='pkg',
+    parser.add_argument('-gbd', '--get_bdeps_deep', nargs='+', metavar='pkg',
                         dest='gbd', help='show build-time dependency tree of package')
-    parser.add_argument('-wr', '--whatrequires', nargs='*', metavar='pkg',
+    parser.add_argument('-wr', '--whatrequires', nargs='+', metavar='pkg',
                         dest='wr', help='show what require given package')
     parser.add_argument('-u', '--update_db', action='store_true',
                         dest='u', help='update dependency database')
@@ -453,11 +439,11 @@ def main():
                         dest='cv', help='comprare two version strings')
     args = parser.parse_args(argvs)
 
-    if args.v:
+    if args.V:
         global IS_VERBOSE
         IS_VERBOSE = True
 
-    if args.V:
+    if args.v:
         print(VERSION)
         sys.exit()
 
@@ -506,13 +492,13 @@ def main():
     if args.t:
         for pkg in args.t:
             ybs_status(pkg)
-    
+
     if args.gb:
         ybs_init_db()
         for pkg in args.gb:
             for x in get_deps_from_db(pkg, dep_type='bdep'):
                 print(x),
-    
+
     if args.gbd:
         ybs_init_db()
         for pkg in args.gbd:
@@ -524,7 +510,7 @@ def main():
         for pkg in args.gr:
             for x in get_deps_from_db(pkg, dep_type='rdep'):
                 print(x),
-    
+
     if args.grd:
         ybs_init_db()
         for pkg in args.grd:

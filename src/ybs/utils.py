@@ -22,7 +22,7 @@ def is_empty_dir(indir):
       indir: string, path to directory
 
     Returns:
-      bool value, True or False
+      boolean value, True or False
 
     '''
     for root, dirs, files in os.walk(indir):
@@ -174,7 +174,7 @@ def is_pbsfile_likes(infile):
     return True
 
 
-def is_installed(name, dbfile=settings.__package_db__, dbtable=settings.__package_db_table__):
+def installed_info(name, dbfile=settings.__package_db__, dbtable=settings.__package_db_table__):
     ''' show information of installed package from dbfile
 
     Args:
@@ -191,7 +191,7 @@ def is_installed(name, dbfile=settings.__package_db__, dbtable=settings.__packag
     conn = sqlite3.connect(dbfile)
     cur = conn.cursor()
     cur.execute("SELECT name, version, repo, install_time FROM {} Where name='{}'".format(dbtable, name))
-    # Use fetchone here, because package name is just only one.
+    # Use fetchone here, because installed package name is just only one.
     result = cur.fetchone()
     cur.close()
     conn.close()
@@ -372,7 +372,38 @@ class GetNameVersion(object):
             self.version = version_major + '-' + version_rel
 
 
-def files_in_dir(indir, suffix, filte=None):
+def xfiles_in_dir(indir, suffix=None, type_='file'):
+    ''' find all the files in directory
+    
+    you can specify suffix as '.xx' or type as one of 'file' and 'link'
+    
+    Args:
+      indir: string, path to directory
+      type: string, type of file, such as: file, link
+      suffix: string, the suffix of file
+
+    Returns:
+      yield generator
+
+    '''
+    res = ''
+    if not is_empty_dir(indir):
+        for root, dirs, files in os.walk(indir):
+            for file_ in files:
+                absfile = (os.path.join(root, file_))
+                if type_ == 'file' and os.path.isfile(absfile):
+                    res = absfile
+                if type_ == 'link' and os.path.islink(absfile):
+                    res = absfile
+                if res:
+                    if suffix is not None:
+                        if res.endswith(suffix):
+                            yield res
+                    else:
+                        yield res
+
+
+def pkgs_in_dir(indir, suffix, filter_by=None):
     ''' find all the files with suffix in directory.
 
     Args:
@@ -385,18 +416,14 @@ def files_in_dir(indir, suffix, filte=None):
 
     To use:
       >>> import ybs.utils
-      >>> ybs.utils.files_in_dir('/tmp/test', '.ypk')
+      >>> ybs.utils.pkgs_in_dir('/tmp/test', '.ypk')
       ['/tmp/test/HTML-Parser_3.69-x86_64.ypk', '/tmp/test/HTTP-Cookies_6.01-any.ypk']
 
     '''
-    result = []
-    for root, dirs, files in os.walk(indir):
-        for f in files:
-            if f.endswith(suffix):
-                result.append(os.path.join(root, f))
-    if filte is None:
+    result = [x for x in xfiles_in_dir(indir, suffix)]
+    if filter_by is None:
         return result
-    if filte == 'version':
+    if filter_by == 'version':
         result_filter = {}
         record = {}
         pbsfile = PbsFile()
@@ -450,7 +477,7 @@ def parse_pbslib(indir, suffix='.pbs'):
     '''
     pbsfiles = {}
     pbsfile = PbsFile()
-    for f in files_in_dir(indir, suffix):
+    for f in pkgs_in_dir(indir, suffix):
         pbsfile.parse(f)
         name, version = pbsfile.name, pbsfile.version
         if name in pbsfiles:

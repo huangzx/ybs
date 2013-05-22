@@ -9,7 +9,8 @@ import sys
 import os
 import shutil
 import xml.etree.ElementTree as ET
-import ybs.utils, ybs.settings
+import ybs.utils
+import ybs.settings
 import argparse
 
 IS_VERBOSE = False
@@ -28,13 +29,13 @@ def find_ypk(indir, arch):
       list, contains ypkfile with newest version items
 
     '''
-    ypks_raw = ybs.utils.files_in_dir(indir, '.ypk')
+    ypks_raw = ybs.utils.pkgs_in_dir(indir, '.ypk')
     ypks_raw.sort()
     if not ypks_raw:
         sys.stdout.write("No ypkfile found in '{}'.\n".format(indir))
         sys.exit(1)
 
-    ypks_arch = ybs.utils.files_in_dir(indir, arch + '.ypk', filte='version')
+    ypks_arch = ybs.utils.pkgs_in_dir(indir, arch + '.ypk', filter_by='version')
     if not ypks_arch:
         sys.stdout.write("No '{}' ypkfile found in '{}'.\n".format(arch, indir))
         sys.exit(1)
@@ -69,7 +70,7 @@ def find_ypk(indir, arch):
         for line in filelist_new:
             f.write(line.replace(indir + '/', '') + '\n')
 
-    ypks_any = ybs.utils.files_in_dir(indir, 'any' + '.ypk', filte='version')
+    ypks_any = ybs.utils.pkgs_in_dir(indir, 'any' + '.ypk', filter_by='version')
     ypks_all = ypks_arch + ypks_any
     return ypks_all
 
@@ -201,10 +202,10 @@ def main():
         "and creates index files, used by yget."
     )
     parser = argparse.ArgumentParser(description=desc)
-    parser.add_argument('-V', '--version', action='store_true',
-                        dest='V', help='show version')
-    parser.add_argument('-v', '--verbose', action='store_true',
-                        dest='v', help='enable verbose mode')
+    parser.add_argument('-v', '--version', action='store_true',
+                        dest='v', help='show version')
+    parser.add_argument('-V', '--verbose', action='store_true',
+                        dest='V', help='enable verbose mode')
     parser.add_argument('-y', '--yes', action='store_true',
                         dest='y', help='assume yes to all queries')
     parser.add_argument('-a', '--arch', nargs=1,
@@ -213,11 +214,11 @@ def main():
     parser.add_argument('ypkdir', nargs='*', help="path to ypkdir")
     args = parser.parse_args(argvs)
 
-    if args.V:
+    if args.v:
         print(VERSION)
         sys.exit()
 
-    if args.v:
+    if args.V:
         global IS_VERBOSE
         IS_VERBOSE = True
 

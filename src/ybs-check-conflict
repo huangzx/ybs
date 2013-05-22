@@ -7,7 +7,9 @@
 
 import sys
 import os
-import ybs.utils, ybs.settings, ybs.pybs
+import ybs.utils
+import ybs.settings
+import ybs.pybs
 import argparse
 import multiprocessing
 
@@ -59,7 +61,7 @@ class CheckConflict(object):
         ''' ypkfiles contains common files
 
         '''
-        filelists = ybs.utils.files_in_dir(self.indir, '.filelist', filte='version')
+        filelists = ybs.utils.pkgs_in_dir(self.indir, '.filelist', filter_by='version')
         if not filelists:
             sys.stderr.write("filelist not found in {}, run 'ypk-scanpackages {}' then retry.\n".format(self.indir, self.indir))
             sys.exit(1)
@@ -100,7 +102,7 @@ class CheckConflict(object):
           mysql_5.5.29-i686.ypk, mysql_5.5.29-any.ypk
 
         '''
-        ypks = ybs.utils.files_in_dir(self.indir, '.ypk')
+        ypks = ybs.utils.pkgs_in_dir(self.indir, '.ypk')
         if not ypks:
             sys.stderr.write("ypkfile not found in {}.\n".format(self.indir))
             sys.exit(1)
@@ -124,16 +126,16 @@ def main():
 
     desc = 'Checking for conflicts in ypk package directory.'
     parser = argparse.ArgumentParser(description=desc)
-    parser.add_argument('-V', '--version', action='store_true', dest='V', help='show version and exit')
-    parser.add_argument('-v', '--verbose', action='store_true', dest='v', help='enable verbose mode')
+    parser.add_argument('-v', '--version', action='store_true', dest='v', help='show version and exit')
+    parser.add_argument('-V', '--verbose', action='store_true', dest='V', help='enable verbose mode')
     parser.add_argument('ypkdir', nargs='*', help='path to ypkdir directory')
     args = parser.parse_args(argvs)
 
-    if args.V:
+    if args.v:
         print(VERSION)
         sys.exit()
 
-    if args.v:
+    if args.V:
         global IS_VERBOSE
         IS_VERBOSE = True
 

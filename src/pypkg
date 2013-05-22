@@ -48,7 +48,7 @@ def is_in_database(infile):
     '''
     conn = sqlite3.connect(ybs.settings.__package_db__)
     cur = conn.cursor()
-    cur.execute("SELECT distinct * FROM {} WHERE file = '{}'".format('world_file', infile))
+    cur.execute("SELECT DISTINCT * FROM {} WHERE file = '{}'".format('world_file', infile))
     if cur.fetchone() is None:
         return False
     return True
@@ -68,7 +68,7 @@ def get_defective_file(infile):
         else:
             if IS_DETAIL:
                 if os.path.islink(infile):
-                    if not os.path.exists(os.path.realpath(infile)):
+                    if not os.path.lexists(infile):
                         print("{} is in file database, but link target is not exist".format(infile))
                 else:
                     if not is_skip(infile):
@@ -105,29 +105,7 @@ def mp_pool_map(func, files):
     return result
 
 
-def files_in_dir(indir, type='file'):
-    ''' find all the files in directory
-
-    Args:
-      indir: string, path to directory
-      type: string, type of file, such as: file, link
-
-    Returns:
-      yield generator
-
-    '''
-    for root, dirs, files in os.walk(indir):
-        if files:
-            for file_ in files:
-                absfile = (os.path.join(root, file_))
-                if type == 'file':
-                    yield absfile
-                elif type == 'link':
-                    if os.path.islink(absfile):
-                        yield absfile
-
-
-def pure_depend(string):
+def xpure_depend(string):
     ''' convert string dependency got from database to intrator
 
     Args:
@@ -167,7 +145,7 @@ class Pypkg(object):
 
         '''
         if os.path.isdir(inpath):
-            mp_pool_map(get_defective_file, files_in_dir(inpath, type='file'))
+            mp_pool_map(get_defective_file, ybs.utils.xfiles_in_dir(inpath, type_='file'))
         else:
             get_defective_file(inpath)
 
@@ -199,20 +177,20 @@ class Pypkg(object):
 
             res = self.cur_exec_fetch('data_conflict', 'world_data', pkg)
             if res is not None and res[0]:
-                for cp in pure_depend(res[0]):
+                for cp in xpure_depend(res[0]):
                     if cp in self.pkgs_installed:
                         print('{} is conflict with {},'.format(cp, pkg)),
                         print('and it was not installed')
 
             res = self.cur_exec_fetch('data_depend', 'world_data', pkg)
             if res is not None and res[0]:
-                for ip in pure_depend(res[0]):
+                for ip in xpure_depend(res[0]):
                     if not ip in self.pkgs_installed:
                             print('{} missing runtime dependency {}'.format(pkg, ip))
 
             res = self.cur_exec_fetch('data_replace', 'world_data', pkg)
             if res is not None and res[0]:
-                for rp in pure_depend(res[0]):
+                for rp in xpure_depend(res[0]):
                     if rp in self.pkgs_installed:
                         print('{} can be replaced by {},'.format(rp, pkg)),
                         print('but it was not installed')
@@ -224,7 +202,7 @@ class Pypkg(object):
         profiles = []
         if os.path.isfile('/etc/yget.conf'):
             profiles.append('/etc/yget.conf')
-        profiles_extra = ybs.utils.files_in_dir('/etc/yget.conf.d', '.conf')
+        profiles_extra = [x for x in ybs.utils.ybs.utils.xfiles_in_dir('/etc/yget.conf.d', '.conf')]
         if profiles_extra:
             profiles.extend(profiles_extra)
         if profiles:

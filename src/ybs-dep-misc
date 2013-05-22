@@ -76,7 +76,7 @@ class DepMisc(object):
             for line in lines:
                 file_.write(line + '\n')
             file_.write('}')
-        print('Dot file is {}\nFor converting to {} picture, Run: dot -T{} {} -o {}'.format(dot_file, SUFFIX, SUFFIX, dot_file, os.path.join(TMPDIR, name+'.'+SUFFIX)))
+        print('Dot file is {}\nFor converting to {} picture, install graphviz and run:\ndot -T{} {} -o {}'.format(dot_file, SUFFIX, SUFFIX, dot_file, os.path.join(TMPDIR, name+'.'+SUFFIX)))
 
     def _get_lines(self, deps):
         ''' get specified lines for dot file
@@ -124,7 +124,7 @@ def main():
     if not argvs:
         argvs = ['-h']
 
-    desc = 'dependent tools miscellaneous, part of ybs.'
+    desc = 'Tools miscellaneous of dependency, part of ybs.'
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('-v', '--version', action='store_true',
                         dest='v', help='show version')
@@ -132,7 +132,7 @@ def main():
                         dest='r', help='show dependency ranking and exit')
     parser.add_argument('-u', '--universe', action='store_true',
                         dest='u', help='show dependency graph of universe')
-    parser.add_argument('-g', '--graph', nargs='*', metavar='pkg',
+    parser.add_argument('-g', '--graph', nargs='+', metavar='pkg',
                         dest='g', help='show dependency graph of pacakge')
     args = parser.parse_args(argvs)
 

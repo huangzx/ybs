@@ -7,7 +7,8 @@
 
 import sys
 import os
-import ybs.utils, ybs.settings
+import ybs.utils
+import ybs.settings
 import argparse
 import subprocess
 
@@ -38,7 +39,7 @@ class CheckPbsfile(object):
 
         '''
         if CHECK_INSTALLED_ONLY:
-            if not ybs.utils.is_installed(self.name):
+            if not ybs.utils.installed_info(self.name):
                 return 
         if IS_VERBOSE:
             print('Found: {}'.format(self.pbsfile.path))
@@ -131,10 +132,10 @@ def main():
 
     desc = 'Checking for missing and circular dependecies of pbsdir or pbsfile.'
     parser = argparse.ArgumentParser(description=desc)
-    parser.add_argument('-V', '--version', action='store_true',
-                        dest='V', help='show version and exit')
-    parser.add_argument('-v', '--verbose', action='store_true',
-                        dest='v', help='enable verbose mode')
+    parser.add_argument('-v', '--version', action='store_true',
+                        dest='v', help='show version and exit')
+    parser.add_argument('-V', '--verbose', action='store_true',
+                        dest='V', help='enable verbose mode')
     parser.add_argument('-I', '--installed', action='store_true',
                         dest='I', help='check installed package only')
     parser.add_argument('-A', '--all', action='store_true',
@@ -142,11 +143,11 @@ def main():
     parser.add_argument('path', nargs='*', help='path to pbsdir or pbsfile')
     args = parser.parse_args(argvs)
 
-    if args.V:
+    if args.v:
         print(VERSION)
         sys.exit()
 
-    if args.v:
+    if args.V:
         global IS_VERBOSE
         IS_VERBOSE = True
     
@@ -170,9 +171,9 @@ def main():
             path = os.path.realpath(path)
             if os.path.isdir(path):
                 if CHECK_ALL:
-                    files = ybs.utils.files_in_dir(path, 'pbs')
+                    files = ybs.utils.pkgs_in_dir(path, '.pbs')
                 else:
-                    files = ybs.utils.files_in_dir(path, 'pbs', 'version')
+                    files = ybs.utils.pkgs_in_dir(path, '.pbs', filter_by='version')
                 if not files:
                     sys.stderr.write("No pbsfile found in directory {}.\n".format(path))
                     continue

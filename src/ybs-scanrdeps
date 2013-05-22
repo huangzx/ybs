@@ -9,7 +9,8 @@ import os
 import sys
 import sqlite3
 import argparse
-import ybs.utils, ybs.settings
+import ybs.utils
+import ybs.settings
 import time
 
 IS_VERBOSE = False
@@ -237,20 +238,20 @@ def main():
 
     desc = 'Calculate run-time dependency of package.'
     parser = argparse.ArgumentParser(description=desc)
-    parser.add_argument('-V', '--version', action='store_true',
-                        dest='V', help='show version and exit')
-    parser.add_argument('-v', '--verbose', action='store_true',
-                        dest='v', help='enable verbose mode')
+    parser.add_argument('-v', '--version', action='store_true',
+                        dest='v', help='show version and exit')
+    parser.add_argument('-V', '--verbose', action='store_true',
+                        dest='V', help='enable verbose mode')
     parser.add_argument('-t', '--time', action='store_true',
                         dest='t', help='show time spend')
     parser.add_argument('pkg', nargs='*', help='package name')
     args = parser.parse_args(argvs)
 
-    if args.V:
+    if args.v:
         print(VERSION)
         sys.exit()
 
-    if args.v:
+    if args.V:
         global IS_VERBOSE
         IS_VERBOSE = True
     

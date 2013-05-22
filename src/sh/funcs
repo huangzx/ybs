@@ -857,7 +857,7 @@ ybs_check_cleanup () {
     dir="$1"
 
     # These dir(s) in PKGDIR is invalid
-    for i in tmp root proc sys var/run var/lock; do    
+    for i in tmp root proc sys var/run var/lock var/tmp; do    
         [ -d $dir/${i} ] && rm -rf $dir/${i}
     done
     
@@ -870,7 +870,9 @@ ybs_check_cleanup () {
     done
     
     # Cleanup files unused or would be created in install script
-    rm $dir/{usr/share/mime/mime.cache,usr/share/applications/mimeinfo.cache} 2>/dev/null
+    rm $dir/usr/share/info/dir 2>/dev/null
+    rm $dir/usr/share/mime/mime.cache 2>/dev/null
+    rm $dir/usr/share/applications/mimeinfo.cache 2>/dev/null
     chmod 644 $dir/usr/share/applications/*.desktop 2>/dev/null
     find $dir/usr/share/fonts -type f -name "fonts.dir" -exec rm {} \;  2>/dev/null
     find $dir/usr/share/fonts -type f -name "fonts.scale" -exec rm {} \; 2>/dev/null
@@ -1214,7 +1216,7 @@ doconfig() {
     if file_is_exist CMakeLists.txt; then
         command="mkdir -p build"
         command1="cd build"
-        command2="cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=/usr/lib"$LIBDIRSUFFIX" -DLIB_INSTALL_DIR=/usr/lib"$LIBDIRSUFFIX" -DLIB_SUFFIX="$LIBDIRSUFFIX" $@ .." 
+        command2="cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=/usr/lib$LIBDIRSUFFIX -DLIB_INSTALL_DIR=/usr/lib$LIBDIRSUFFIX -DLIB_SUFFIX=$LIBDIRSUFFIX $@ .." 
         msg "=> $command; $command1; $command2"
         eval $command
         eval $command1

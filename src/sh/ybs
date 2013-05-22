@@ -29,8 +29,7 @@ ybs (StartOS Build System) is a simple command line for download and build ypk
 package from source code.
 
 Commands:
-    -s|--search             Search package in pbslib case-insensitive
-                              symbol '$' for endswith, '^' for startswith 
+    -s|--search             Search package in pbslib
     -d|--download           Download source tartall of package
     -r|--remove             Remove package (same as ypkg -C foo)
     -i|--build              Build package and dependencies
